@@ -118,9 +118,9 @@ enum QuestionMix: String, CaseIterable {
 
     var color: Color {
         switch self {
-        case .recall: return Color(hex: 0xCFC6B4)
-        case .explain: return Color(hex: 0x7FAE93)
-        case .reasoning: return Color(hex: 0x2E5E46)
+        case .recall: return Color(hex: 0xA89C84)
+        case .explain: return Color(hex: 0x4F9A72)
+        case .reasoning: return Color(hex: 0x173F2D)
         }
     }
 

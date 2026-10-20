@@ -952,6 +952,8 @@ struct QuestionsSection: View {
     /// whether students understood). The pills choose what the list shows.
     private typealias QItem = (entry: AudioQuestionLogEntry, mix: QuestionMix)
 
+    /// Terracotta, so a check can never be read as a question.
+    private static let checkColor = Color(hex: 0xB4593A)
     private static let checkWho = ["everyone": "Asked everyone", "few": "A few answered", "asked_if_understood": "Asked if they understood"]
     private static let checkActed = ["adjusted": "You went back over it", "confirmed": "You confirmed and moved on"]
 
@@ -1039,7 +1041,7 @@ struct QuestionsSection: View {
         let dash: [CGFloat] = c.loop?.who == "asked_if_understood" ? [3, 2] : []
         return Button { showChecks = true } label: {
             Circle().fill(AppTheme.card)
-                .overlay(Circle().strokeBorder(AppTheme.forest, style: StrokeStyle(lineWidth: 2.5, dash: dash)))
+                .overlay(Circle().strokeBorder(Self.checkColor, style: StrokeStyle(lineWidth: 2.5, dash: dash)))
                 .frame(width: 13, height: 13)
                 .overlay(Circle().stroke(AppTheme.card, lineWidth: 2).padding(-1))
         }
@@ -1057,7 +1059,7 @@ struct QuestionsSection: View {
             }
             if checks > 0 {
                 qcPill("Checks for understanding", checks, on: checksOn,
-                       swatch: AnyView(Circle().strokeBorder(checksOn ? AppTheme.cream : AppTheme.forest, lineWidth: 2).frame(width: 11, height: 11))) {
+                       swatch: AnyView(Circle().strokeBorder(checksOn ? AppTheme.cream : Self.checkColor, lineWidth: 2).frame(width: 11, height: 11))) {
                     showChecks = true
                 }
             }

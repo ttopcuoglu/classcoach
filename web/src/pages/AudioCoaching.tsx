@@ -5424,9 +5424,9 @@ function withoutAddressedNames(text: string): string {
 }
 
 const MIX = {
-  recall: { label: 'Recall', color: '#CFC6B4', desc: 'One right answer, retrieved from memory.' },
-  explain: { label: 'Explain', color: '#7FAE93', desc: 'Students put an idea in their own words — why or how.' },
-  reasoning: { label: 'Reasoning', color: '#2E5E46', desc: 'Asked students to justify, compare or judge.' },
+  recall: { label: 'Recall', color: '#A89C84', desc: 'One right answer, retrieved from memory.' },
+  explain: { label: 'Explain', color: '#4F9A72', desc: 'Students put an idea in their own words — why or how.' },
+  reasoning: { label: 'Reasoning', color: '#173F2D', desc: 'Asked students to justify, compare or judge.' },
 } as const
 type MixKey = keyof typeof MIX
 const KIND_TO_MIX: Record<string, MixKey> = { recall: 'recall', explain: 'explain', justify: 'reasoning', compare: 'reasoning', evaluate: 'reasoning' }
@@ -5656,7 +5656,7 @@ function QuestionsChecksPart({
       key: 'checks',
       label: 'Checks for understanding',
       n: checks.length,
-      swatch: <i className="inline-block h-3 w-3 rounded-full border-2 border-forest" />,
+      swatch: <i className="inline-block h-3 w-3 rounded-full border-2 border-[#B4593A]" />,
     },
   ]
   const ring = (who: string | undefined) => (who === 'asked_if_understood' ? 'border-dashed' : '')
@@ -5687,7 +5687,7 @@ function QuestionsChecksPart({
         {[
           // A white edge keeps dots that fall close together readable as separate.
           { label: 'Questions', items: questions.map((q, i) => ({ i, t: q.timestampSec, on: pick === q.mix, node: <i className="block h-3.5 w-3.5 rounded-full ring-2 ring-cream-card" style={{ background: MIX[q.mix].color }} /> })) },
-          { label: 'Checks', items: checks.map((c, i) => ({ i: 1000 + i, t: c.timestampSec, on: pick === 'checks', node: <i className={`block h-3.5 w-3.5 rounded-full border-[2.5px] border-forest bg-cream-card ring-2 ring-cream-card ${ring(c.loop?.who)}`} /> })) },
+          { label: 'Checks', items: checks.map((c, i) => ({ i: 1000 + i, t: c.timestampSec, on: pick === 'checks', node: <i className={`block h-3.5 w-3.5 rounded-full border-[2.5px] border-[#B4593A] bg-cream-card ring-2 ring-cream-card ${ring(c.loop?.who)}`} /> })) },
         ].map((lane) => (
           <div key={lane.label} className="grid h-9 grid-cols-[72px_1fr] items-center">
             <span className="text-xs font-semibold text-ink-soft">{lane.label}</span>
