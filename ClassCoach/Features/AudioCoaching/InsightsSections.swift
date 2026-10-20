@@ -1248,13 +1248,13 @@ struct ContentSection: View {
         let subject = session.lessonContent?.subject ?? session.contentNotes?.subject ?? "this subject"
         let keyTerms = session.lessonContent?.keyTerms ?? []
         let options = [
-            PickOption(key: "opened", label: "Opened it up",
+            PickOption(key: "opened", label: "Examples & explanations",
                        desc: "How you introduced the content and made it approachable \u{2014} examples, analogies, meanings, thinking aloud.",
-                       items: explanations.map { EvidenceLine(tag: $0.kind.flatMap { Self.explanationLabel[$0] } ?? "Opened it up", quote: $0.quote, timestampSec: $0.timestampSec) }),
-            PickOption(key: "tied", label: "Tied it together",
+                       items: explanations.map { EvidenceLine(tag: $0.kind.flatMap { Self.explanationLabel[$0] } ?? "Example or explanation", quote: $0.quote, timestampSec: $0.timestampSec) }),
+            PickOption(key: "tied", label: "Linking ideas",
                        desc: "How you linked parts of the lesson to each other, to earlier learning, and to why it matters.",
-                       items: (moves?.connections ?? []).map { EvidenceLine(tag: $0.kind.flatMap { Self.connectionLabel[$0] } ?? "Tied it together", quote: $0.quote, timestampSec: $0.timestampSec) }),
-            PickOption(key: "connections", label: "Connections", desc: "Links you made to other texts, lessons, or students\u{2019} lives.",
+                       items: (moves?.connections ?? []).map { EvidenceLine(tag: $0.kind.flatMap { Self.connectionLabel[$0] } ?? "Linked ideas", quote: $0.quote, timestampSec: $0.timestampSec) }),
+            PickOption(key: "connections", label: "Real-world connections", desc: "Links you made to other texts, lessons, or students\u{2019} lives.",
                        items: (session.lessonContent?.connections ?? []).map { EvidenceLine(tag: "Connection", quote: $0.quote, timestampSec: $0.timestampSec) }),
         ]
         let lessonCount = options.reduce(0) { $0 + $1.items.count }

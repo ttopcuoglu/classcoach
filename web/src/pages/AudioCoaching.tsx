@@ -4060,7 +4060,7 @@ type PickOption = {
 }
 
 /// A row of pill buttons, one per category, and the chosen category's items
-/// below — "Opened it up · 4", tap to switch.
+/// below — "Examples & explanations · 4", tap to switch.
 function CategoryPicker({ options, tone, hint }: { options: PickOption[]; tone: 'forest' | 'lavender'; hint?: string }) {
   const shown = options.filter((o) => o.items.length > 0)
   const [selected, setSelected] = useState(shown[0]?.key ?? '')
@@ -4078,7 +4078,7 @@ function CategoryPicker({ options, tone, hint }: { options: PickOption[]; tone: 
               type="button"
               aria-pressed={active}
               onClick={() => setSelected(o.key)}
-              className={`flex min-h-[40px] items-center gap-2 rounded-full border-[1.5px] px-4 text-sm font-semibold ${active ? 'text-cream' : 'border-hairline bg-cream-card text-ink'}`}
+              className={`flex min-h-[40px] items-center gap-2 rounded-full border-[1.5px] px-4 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-terracotta/40 ${active ? 'text-cream' : 'border-hairline bg-cream-card text-ink'}`}
               style={active ? { background: on.bg, borderColor: on.bg } : undefined}
             >
               {o.label}
@@ -4237,19 +4237,19 @@ function LessonContentTab({
   const lessonOptions: PickOption[] = [
     {
       key: 'opened',
-      label: 'Opened it up',
+      label: 'Examples & explanations',
       desc: 'How you introduced the content and made it approachable — examples, analogies, meanings, thinking aloud.',
-      items: explanations.map((e) => ({ tag: EXPLANATION_LABEL[e.kind] ?? 'Opened it up', quote: e.quote, timestampSec: e.timestampSec })),
+      items: explanations.map((e) => ({ tag: EXPLANATION_LABEL[e.kind] ?? 'Example or explanation', quote: e.quote, timestampSec: e.timestampSec })),
     },
     {
       key: 'tied',
-      label: 'Tied it together',
+      label: 'Linking ideas',
       desc: 'How you linked parts of the lesson to each other, to earlier learning, and to why it matters.',
-      items: ties.map((c) => ({ tag: CONNECTION_LABEL[c.kind] ?? 'Tied it together', quote: c.quote, timestampSec: c.timestampSec })),
+      items: ties.map((c) => ({ tag: CONNECTION_LABEL[c.kind] ?? 'Linked ideas', quote: c.quote, timestampSec: c.timestampSec })),
     },
     {
       key: 'connections',
-      label: 'Connections',
+      label: 'Real-world connections',
       desc: 'Links you made to other texts, lessons, or students’ lives.',
       items: connections.map((c) => ({ tag: 'Connection', quote: c.quote, timestampSec: c.timestampSec })),
     },
