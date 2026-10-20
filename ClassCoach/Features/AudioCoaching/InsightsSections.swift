@@ -1028,11 +1028,11 @@ struct QuestionsSection: View {
 
     private func qcQuestionDot(_ q: QItem, on: Bool) -> some View {
         Button { selected = q.mix; showChecks = false } label: {
+            // A white edge keeps dots that fall close together readable.
             Circle().fill(q.mix.color).frame(width: 13, height: 13)
+                .overlay(Circle().stroke(AppTheme.card, lineWidth: 2))
         }
         .buttonStyle(.plain)
-        // Full colour always; the chosen kind a touch larger.
-        .scaleEffect(on ? 1.25 : 1)
     }
 
     private func qcCheckRing(_ c: AudioCfuEntry, on: Bool) -> some View {
@@ -1041,9 +1041,9 @@ struct QuestionsSection: View {
             Circle().fill(AppTheme.card)
                 .overlay(Circle().strokeBorder(AppTheme.forest, style: StrokeStyle(lineWidth: 2.5, dash: dash)))
                 .frame(width: 13, height: 13)
+                .overlay(Circle().stroke(AppTheme.card, lineWidth: 2).padding(-1))
         }
         .buttonStyle(.plain)
-        .scaleEffect(on ? 1.25 : 1)
     }
 
     private func qcPills(count: @escaping (QuestionMix) -> Int, checks: Int, checksOn: Bool, current: QuestionMix) -> some View {

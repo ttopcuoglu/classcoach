@@ -5685,8 +5685,9 @@ function QuestionsChecksPart({
       {/* One timeline: questions above, checks below. */}
       <div className="rounded-2xl border border-hairline bg-cream-card px-4 py-3.5">
         {[
-          { label: 'Questions', items: questions.map((q, i) => ({ i, t: q.timestampSec, on: pick === q.mix, node: <i className="block h-3.5 w-3.5 rounded-full" style={{ background: MIX[q.mix].color }} /> })) },
-          { label: 'Checks', items: checks.map((c, i) => ({ i: 1000 + i, t: c.timestampSec, on: pick === 'checks', node: <i className={`block h-3.5 w-3.5 rounded-full border-[2.5px] border-forest bg-cream-card ${ring(c.loop?.who)}`} /> })) },
+          // A white edge keeps dots that fall close together readable as separate.
+          { label: 'Questions', items: questions.map((q, i) => ({ i, t: q.timestampSec, on: pick === q.mix, node: <i className="block h-3.5 w-3.5 rounded-full ring-2 ring-cream-card" style={{ background: MIX[q.mix].color }} /> })) },
+          { label: 'Checks', items: checks.map((c, i) => ({ i: 1000 + i, t: c.timestampSec, on: pick === 'checks', node: <i className={`block h-3.5 w-3.5 rounded-full border-[2.5px] border-forest bg-cream-card ring-2 ring-cream-card ${ring(c.loop?.who)}`} /> })) },
         ].map((lane) => (
           <div key={lane.label} className="grid h-9 grid-cols-[72px_1fr] items-center">
             <span className="text-xs font-semibold text-ink-soft">{lane.label}</span>
@@ -5701,9 +5702,10 @@ function QuestionsChecksPart({
                     setPick(it.i >= 1000 ? 'checks' : questions[it.i].mix)
                     setHot(it.i)
                   }}
-                  className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 transition-transform"
-                  // Every mark in full colour; the chosen kind a touch larger.
-                  style={{ left: x(it.t), transform: `translate(-50%, -50%) scale(${hot === it.i ? 1.5 : it.on ? 1.2 : 1})` }}
+                  // The button is the dot's own size, so the dot sits on the line.
+                  className="absolute top-1/2 grid h-3.5 w-3.5 place-items-center leading-none outline-none transition-transform"
+                  // Every mark in full colour and size; only the one tapped grows.
+                  style={{ left: x(it.t), transform: `translate(-50%, -50%) scale(${hot === it.i ? 1.5 : 1})` }}
                 >
                   {it.node}
                 </button>
@@ -5735,7 +5737,7 @@ function QuestionsChecksPart({
                   setPick(pl.key)
                   setHot(null)
                 }}
-                className={`flex min-h-[40px] items-center gap-2 rounded-full border-[1.5px] px-4 text-sm font-semibold ${on ? 'border-forest bg-forest text-cream' : 'border-hairline bg-cream-card text-ink'}`}
+                className={`flex min-h-[40px] items-center gap-2 rounded-full border-[1.5px] px-4 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-terracotta/40 ${on ? 'border-forest bg-forest text-cream' : 'border-hairline bg-cream-card text-ink'}`}
               >
                 {pl.swatch}
                 {pl.label}
