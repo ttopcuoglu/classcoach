@@ -907,7 +907,9 @@ struct QuestionsSection: View {
     let hardLook: AnyView?
     let onDiscuss: () -> Void
 
+    /// Which kind the list shows: a question kind, or nil-with-checks.
     @State private var selected: QuestionMix?
+    @State private var showChecks = false
     @State private var showUnfollowed = false
 
     private static let mixLabel: [QuestionMix: String] = [.recall: "Recall", .explain: "Explain", .reasoning: "Reasoning"]
@@ -940,116 +942,216 @@ struct QuestionsSection: View {
             ],
             hardLook: hardLook, onDiscuss: onDiscuss
         ) {
-            questionsPart(questions, count: count)
-            checksPart
+            questionsChecksPart(questions, count: count)
             followUpsPart(heard: heard, followed: followed, showRate: showRate)
         }
     }
 
-    @ViewBuilder
-    private func questionsPart(_ questions: [(entry: AudioQuestionLogEntry, mix: QuestionMix)], count: @escaping (QuestionMix) -> Int) -> some View {
-        let beyond = count(.explain) + count(.reasoning)
-        let current = selected ?? (count(.reasoning) > 0 ? .reasoning : count(.explain) > 0 ? .explain : .recall)
-        let present = QuestionMix.allCases.filter { count($0) > 0 }
-        VStack(alignment: .leading, spacing: 12) {
-            PartHeading(title: "Your questions", count: "\(questions.count) questions")
-            if questions.isEmpty {
-                Text("No questions were heard in this lesson.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-            } else {
-                Text(beyond == 0 ? "All \(questions.count) asked students to recall something."
-                     : "\(beyond) of \(questions.count) went beyond recall: " + [
-                        count(.explain) > 0 ? "\(count(.explain)) asked students to explain" : nil,
-                        count(.reasoning) > 0 ? "\(count(.reasoning)) to justify or compare" : nil,
-                     ].compactMap { $0 }.joined(separator: ", ") + ".")
-                    .font(.body.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                GeometryReader { geo in
-                    HStack(spacing: 5) {
-                        ForEach(present, id: \.self) { k in
-                            Button { selected = k } label: {
-                                RoundedRectangle(cornerRadius: 8).fill(k.color)
-                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(current == k ? AppTheme.forest : .clear, lineWidth: 3).padding(-4))
-                            }
-                            .buttonStyle(.plain)
-                            .frame(width: max(8, (geo.size.width - CGFloat(present.count - 1) * 5) * CGFloat(count(k)) / CGFloat(questions.count)))
-                            .accessibilityLabel("\(Self.mixLabel[k]!), \(count(k)) of \(questions.count)")
-                        }
-                    }
-                }
-                .frame(height: 40)
-                .padding(.horizontal, 4)
-                HStack(spacing: 14) {
-                    ForEach(QuestionMix.allCases, id: \.self) { k in
-                        HStack(spacing: 5) {
-                            RoundedRectangle(cornerRadius: 2).fill(k.color).frame(width: 11, height: 11)
-                            (Text("\(Self.mixLabel[k]!) ") + Text("\(count(k))").bold())
-                        }
-                    }
-                }
-                .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                let sel = questions.filter { $0.mix == current }
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("\(Self.mixLabel[current]!) \u{00B7} \(sel.count) of \(questions.count)").font(.subheadline.weight(.bold)).foregroundStyle(AppTheme.forest)
-                        Spacer()
-                        Text("Tap a segment to see its questions").font(.caption2).foregroundStyle(AppTheme.textSecondary)
-                    }
-                    Text(Self.mixDesc[current]!).font(.caption).foregroundStyle(AppTheme.textSecondary)
-                    ForEach(Array(sel.enumerated()), id: \.offset) { _, q in
-                        EvidenceRow(line: EvidenceLine(tag: Self.mixLabel[current]!, quote: q.entry.text, timestampSec: q.entry.timestampSec))
-                    }
-                }
-                .padding(14)
-                .background(AppTheme.cream, in: RoundedRectangle(cornerRadius: 18))
-                let byName = questions.filter { Redaction.withoutAddressedNames($0.entry.text) != $0.entry.text }.count
-                FlowLayout(spacing: 8) {
-                    Text("Who you asked").bold()
-                    Text("\(questions.count - byName) open to anyone").padding(.horizontal, 10).padding(.vertical, 4).background(AppTheme.cream, in: Capsule())
-                    if byName > 0 {
-                        Text("\(byName) to a student by name").padding(.horizontal, 10).padding(.vertical, 4).background(AppTheme.cream, in: Capsule())
-                    }
-                }
-                .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-            }
-        }
-    }
+    /// Your questions and checks on one lesson timeline: questions as dots in
+    /// their kind's colour, checks as rings (dashed when they only asked
+    /// whether students understood). The pills choose what the list shows.
+    private typealias QItem = (entry: AudioQuestionLogEntry, mix: QuestionMix)
 
     private static let checkWho = ["everyone": "Asked everyone", "few": "A few answered", "asked_if_understood": "Asked if they understood"]
     private static let checkActed = ["adjusted": "You went back over it", "confirmed": "You confirmed and moved on"]
 
-    /// Who each check asked and what you said next — never whether students
-    /// understood. Ones the read found were not checks are left out.
+    private var qcChecks: [AudioCfuEntry] { (session.cfuLog ?? []).filter { $0.loop?.who != "not_a_check" } }
+
     @ViewBuilder
-    private var checksPart: some View {
-        let checks = (session.cfuLog ?? []).filter { $0.loop?.who != "not_a_check" }
-        if !checks.isEmpty {
-            let read = checks.filter { $0.loop != nil }
-            let n = { (who: String) in read.filter { $0.loop?.who == who }.count }
-            let acted = read.filter { $0.loop?.acted != nil }.count
-            let parts = [
-                n("everyone") > 0 ? "\(n("everyone")) of \(checks.count) asked everyone to show or say an answer" : nil,
-                n("few") > 0 ? "\(n("few")) \(n("few") == 1 ? "was" : "were") answered by a few" : nil,
-                n("asked_if_understood") > 0 ? "\(n("asked_if_understood")) asked whether they understood" : nil,
-            ].compactMap { $0 }
-            VStack(alignment: .leading, spacing: 12) {
-                PartHeading(title: "Your checks for understanding", count: "\(checks.count) check\(checks.count == 1 ? "" : "s")")
-                if !read.isEmpty {
-                    Text(parts.joined(separator: "; ") + ". "
-                         + (acted > 0 ? "You said what you\u{2019}d do with the answers \(acted) time\(acted == 1 ? "" : "s")." : "No response to the answers was heard."))
-                        .font(.body.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
+    private func questionsChecksPart(_ questions: [QItem], count: @escaping (QuestionMix) -> Int) -> some View {
+        let checks = qcChecks
+        let checksOn = showChecks || questions.isEmpty
+        let current: QuestionMix = selected ?? (count(.reasoning) > 0 ? .reasoning : count(.explain) > 0 ? .explain : .recall)
+        VStack(alignment: .leading, spacing: 12) {
+            PartHeading(title: "Your questions and checks",
+                        count: "\(questions.count) question\(questions.count == 1 ? "" : "s") \u{00B7} \(checks.count) check\(checks.count == 1 ? "" : "s")")
+            if questions.isEmpty && checks.isEmpty {
+                Text("No questions or checks for understanding were heard in this lesson.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+            } else {
+                Text(qcFinding(questions, checks, count: count))
+                    .font(.body.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                qcTimeline(questions, checks, checksOn: checksOn, current: current)
+                qcPills(count: count, checks: checks.count, checksOn: checksOn, current: current)
+                qcList(questions, checks, checksOn: checksOn, current: current)
+                if !questions.isEmpty { qcWhoAsked(questions) }
+            }
+        }
+    }
+
+    private func qcFinding(_ questions: [QItem], _ checks: [AudioCfuEntry], count: (QuestionMix) -> Int) -> String {
+        let beyond = count(.explain) + count(.reasoning)
+        let everyone = checks.filter { $0.loop?.who == "everyone" }.count
+        var q: String
+        if questions.isEmpty { q = "No questions were heard. " }
+        else if beyond == 0 { q = "All \(questions.count) questions asked students to recall something. " }
+        else { q = "\(beyond) of \(questions.count) questions went beyond recall. " }
+        if checks.isEmpty { return q + "No checks for understanding were heard." }
+        var c = "You checked for understanding \(checks.count) time\(checks.count == 1 ? "" : "s")"
+        if everyone > 0 { c += ", " + (everyone == checks.count ? "each" : "\(everyone) of them") + " asking everyone" }
+        return q + c + "."
+    }
+
+    private func qcDuration(_ questions: [QItem], _ checks: [AudioCfuEntry]) -> Double {
+        if let d = session.durationSec { return d }
+        let times = questions.map { $0.entry.timestampSec } + checks.map { $0.timestampSec }
+        return max(60, times.max() ?? 60)
+    }
+
+    private func qcTimeline(_ questions: [QItem], _ checks: [AudioCfuEntry], checksOn: Bool, current: QuestionMix) -> some View {
+        let duration = qcDuration(questions, checks)
+        return VStack(spacing: 4) {
+            qcLane("Questions") { width in
+                ForEach(Array(questions.enumerated()), id: \.offset) { _, q in
+                    self.qcQuestionDot(q, on: !checksOn && current == q.mix)
+                        .position(x: self.qx(q.entry.timestampSec, duration, width), y: 14)
                 }
+            }
+            qcLane("Checks") { width in
                 ForEach(Array(checks.enumerated()), id: \.offset) { _, c in
-                    let tag = [c.loop.flatMap { Self.checkWho[$0.who] } ?? "Check for understanding",
-                               c.loop?.acted.flatMap { Self.checkActed[$0.how] }].compactMap { $0 }.joined(separator: " \u{00B7} ")
-                    // The check in your words; what you said next, beneath it.
-                    EvidenceRow(line: EvidenceLine(tag: tag,
-                                                   text: "\u{201C}\(Redaction.withoutAddressedNames(c.text))\u{201D}",
-                                                   quote: c.loop?.acted?.text, timestampSec: c.timestampSec),
-                                fill: AppTheme.cream)
+                    self.qcCheckRing(c, on: checksOn)
+                        .position(x: self.qx(c.timestampSec, duration, width), y: 14)
+                }
+            }
+            HStack {
+                Text("0:00")
+                Spacer()
+                Text(mmss(duration))
+            }
+            .font(.caption2).foregroundStyle(AppTheme.textSecondary)
+            .padding(.leading, 70)
+        }
+        .padding(12)
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(AppTheme.hairline))
+    }
+
+    private func qcQuestionDot(_ q: QItem, on: Bool) -> some View {
+        Button { selected = q.mix; showChecks = false } label: {
+            Circle().fill(q.mix.color).frame(width: 13, height: 13)
+        }
+        .buttonStyle(.plain)
+        .opacity(on ? 1 : 0.3)
+    }
+
+    private func qcCheckRing(_ c: AudioCfuEntry, on: Bool) -> some View {
+        let dash: [CGFloat] = c.loop?.who == "asked_if_understood" ? [3, 2] : []
+        return Button { showChecks = true } label: {
+            Circle().fill(AppTheme.card)
+                .overlay(Circle().strokeBorder(AppTheme.forest, style: StrokeStyle(lineWidth: 2.5, dash: dash)))
+                .frame(width: 13, height: 13)
+        }
+        .buttonStyle(.plain)
+        .opacity(on ? 1 : 0.3)
+    }
+
+    private func qcPills(count: @escaping (QuestionMix) -> Int, checks: Int, checksOn: Bool, current: QuestionMix) -> some View {
+        FlowLayout(spacing: 8) {
+            ForEach(QuestionMix.allCases.filter { count($0) > 0 }, id: \.self) { k in
+                qcPill(Self.mixLabel[k]!, count(k), on: !checksOn && current == k,
+                       swatch: AnyView(Circle().fill(k.color).frame(width: 11, height: 11))) {
+                    selected = k
+                    showChecks = false
+                }
+            }
+            if checks > 0 {
+                qcPill("Checks for understanding", checks, on: checksOn,
+                       swatch: AnyView(Circle().strokeBorder(checksOn ? AppTheme.cream : AppTheme.forest, lineWidth: 2).frame(width: 11, height: 11))) {
+                    showChecks = true
                 }
             }
         }
+    }
+
+    private func qcChecksDesc(_ checks: [AudioCfuEntry]) -> String {
+        let askedIf = checks.filter { $0.loop?.who == "asked_if_understood" }.count
+        let acted = checks.filter { $0.loop?.acted != nil }.count
+        var d = "Moments you asked students to show or say what they understood"
+        if askedIf > 0 { d += " \u{2014} \(askedIf) only asked whether they understood" }
+        d += ". "
+        d += acted > 0 ? "You said what you\u{2019}d do with the answers \(acted) time\(acted == 1 ? "" : "s")." : "No response to the answers was heard."
+        return d
+    }
+
+    private func qcCheckLine(_ c: AudioCfuEntry) -> EvidenceLine {
+        let who = c.loop.flatMap { Self.checkWho[$0.who] } ?? "Check for understanding"
+        let did = c.loop?.acted.flatMap { Self.checkActed[$0.how] }
+        let tag = [who, did].compactMap { $0 }.joined(separator: " \u{00B7} ")
+        return EvidenceLine(tag: tag, text: "\u{201C}\(Redaction.withoutAddressedNames(c.text))\u{201D}",
+                            quote: c.loop?.acted?.text, timestampSec: c.timestampSec)
+    }
+
+    @ViewBuilder
+    private func qcList(_ questions: [QItem], _ checks: [AudioCfuEntry], checksOn: Bool, current: QuestionMix) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if checksOn {
+                Text("Checks for understanding \u{00B7} \(checks.count)").font(.subheadline.weight(.bold)).foregroundStyle(AppTheme.forest)
+                Text(qcChecksDesc(checks)).font(.caption).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(Array(checks.enumerated()), id: \.offset) { _, c in
+                    EvidenceRow(line: qcCheckLine(c))
+                }
+            } else {
+                let sel = questions.filter { $0.mix == current }
+                let label = Self.mixLabel[current] ?? ""
+                Text("\(label) \u{00B7} \(sel.count) of \(questions.count)").font(.subheadline.weight(.bold)).foregroundStyle(AppTheme.forest)
+                Text(Self.mixDesc[current] ?? "").font(.caption).foregroundStyle(AppTheme.textSecondary)
+                ForEach(Array(sel.enumerated()), id: \.offset) { _, q in
+                    EvidenceRow(line: EvidenceLine(tag: label, quote: q.entry.text, timestampSec: q.entry.timestampSec))
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.cream, in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    private func qcWhoAsked(_ questions: [QItem]) -> some View {
+        let byName = questions.filter { Redaction.withoutAddressedNames($0.entry.text) != $0.entry.text }.count
+        return FlowLayout(spacing: 8) {
+            Text("Who you asked").bold()
+            Text("\(questions.count - byName) open to anyone").padding(.horizontal, 10).padding(.vertical, 4).background(AppTheme.cream, in: Capsule())
+            if byName > 0 {
+                Text("\(byName) to a student by name").padding(.horizontal, 10).padding(.vertical, 4).background(AppTheme.cream, in: Capsule())
+            }
+        }
+        .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+    }
+
+    private func qx(_ t: Double, _ duration: Double, _ width: CGFloat) -> CGFloat {
+        min(width - 7, max(7, width * CGFloat(t / duration)))
+    }
+
+    private func qcLane<C: View>(_ label: String, @ViewBuilder content: @escaping (CGFloat) -> C) -> some View {
+        HStack(spacing: 8) {
+            Text(label).font(.caption2.weight(.semibold)).foregroundStyle(AppTheme.textSecondary).frame(width: 62, alignment: .leading)
+            GeometryReader { geo in
+                ZStack(alignment: .topLeading) {
+                    Path { p in p.move(to: CGPoint(x: 0, y: 14)); p.addLine(to: CGPoint(x: geo.size.width, y: 14)) }
+                        .stroke(AppTheme.hairline, lineWidth: 2)
+                    content(geo.size.width)
+                }
+            }
+            .frame(height: 28)
+        }
+    }
+
+    private func qcPill(_ label: String, _ n: Int, on: Bool, swatch: AnyView, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                swatch
+                Text(label)
+                Text("\(n)").font(.caption2.weight(.bold))
+                    .padding(.horizontal, 6).padding(.vertical, 1)
+                    .background(on ? Color.white.opacity(0.2) : AppTheme.cream, in: Capsule())
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(on ? AppTheme.cream : AppTheme.textPrimary)
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(on ? AppTheme.forest : AppTheme.card, in: Capsule())
+            .overlay(Capsule().strokeBorder(on ? Color.clear : AppTheme.hairline, lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

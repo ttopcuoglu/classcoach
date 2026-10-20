@@ -5464,8 +5464,6 @@ function QuestioningCheckingTab({
   const moves = session.teachingMoves
   const questions = classifyQuestions(session)
   const count = (k: MixKey) => questions.filter((q) => q.mix === k).length
-  const beyond = count('explain') + count('reasoning')
-  const [selected, setSelected] = useState<MixKey>(count('reasoning') > 0 ? 'reasoning' : count('explain') > 0 ? 'explain' : 'recall')
   const byName = questions.filter((q) => q.byName).length
 
   // Follow-ups: one dot per heard answer, filled where you followed up.
@@ -5501,7 +5499,6 @@ function QuestioningCheckingTab({
       }
     : null
   const goal = showRate && followed! < heard! ? `Goal: ${Math.min(heard!, followed! + 2)} of ${heard} answers followed up, up from ${followed}.` : null
-  const sel = questions.filter((q) => q.mix === selected)
 
   return (
     <SectionShell
@@ -5531,75 +5528,9 @@ function QuestioningCheckingTab({
         </>
       }
     >
-      {/* Your questions: the mix as one bar; a segment shows its questions. */}
-      <div className="flex flex-col gap-4 border-t border-dashed border-hairline pt-5">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="font-heading text-xl font-bold text-forest">Your questions</p>
-          <span className="text-sm text-ink-soft">{questions.length} questions</span>
-        </div>
-        {questions.length === 0 ? (
-          <p className="text-sm text-ink-soft">No questions were heard in this lesson.</p>
-        ) : (
-          <>
-            <p className="text-base font-semibold text-ink">
-              {beyond === 0
-                ? `All ${questions.length} asked students to recall something.`
-                : `${beyond} of ${questions.length} went beyond recall: ${[
-                    count('explain') > 0 ? `${count('explain')} asked students to explain` : null,
-                    count('reasoning') > 0 ? `${count('reasoning')} to justify or compare` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(', ')}.`}
-            </p>
-            <div className="flex h-11 gap-1.5" role="group" aria-label="Question mix">
-              {(Object.keys(MIX) as MixKey[])
-                .filter((k) => count(k) > 0)
-                .map((k, i, arr) => (
-                  <button
-                    key={k}
-                    type="button"
-                    aria-pressed={selected === k}
-                    aria-label={`${MIX[k].label}, ${count(k)} of ${questions.length}`}
-                    onClick={() => setSelected(k)}
-                    className={`${i === 0 ? 'rounded-l-xl' : 'rounded-l'} ${i === arr.length - 1 ? 'rounded-r-xl' : 'rounded-r'} outline outline-[3px] outline-offset-2 ${selected === k ? 'outline-forest' : 'outline-transparent'}`}
-                    style={{ flex: count(k), background: MIX[k].color }}
-                  />
-                ))}
-            </div>
-            <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-ink">
-              {(Object.keys(MIX) as MixKey[]).map((k) => (
-                <span key={k} className="flex items-center gap-2">
-                  <i className="inline-block h-3 w-3 rounded-sm" style={{ background: MIX[k].color }} />
-                  {MIX[k].label} <b>{count(k)}</b>
-                </span>
-              ))}
-            </div>
-            <div className="flex flex-col gap-3 rounded-2xl bg-cream p-4" aria-live="polite">
-              <div className="flex items-baseline justify-between gap-3">
-                <b className="text-sm text-forest">
-                  {MIX[selected].label} · {sel.length} of {questions.length}
-                </b>
-                <span className="text-xs text-ink-soft">Tap a segment to see its questions</span>
-              </div>
-              <p className="-mt-1 text-sm text-ink-soft">{MIX[selected].desc}</p>
-              {sel.map((q, i) => (
-                <div key={i} className="flex items-baseline justify-between gap-4 rounded-xl bg-cream-card px-3.5 py-3 text-sm text-ink">
-                  <span>“{q.quote}”</span>
-                  <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(q.timestampSec)}</span>
-                </div>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center gap-3 text-sm text-ink">
-              <b>Who you asked</b>
-              <span className="rounded-full bg-cream px-3 py-1">{questions.length - byName} open to anyone</span>
-              {byName > 0 && <span className="rounded-full bg-cream px-3 py-1">{byName} to a student by name</span>}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Your checks for understanding: who each asked, and what you did next. */}
-      <ChecksPart session={session} />
+      {/* Your questions and checks, on one lesson timeline; a key item shows
+          its moments. */}
+      <QuestionsChecksPart session={session} questions={questions} byName={byName} />
 
       {/* Your follow-ups: a dot per answer heard, filled where you followed up. */}
       <div className="flex flex-col gap-4 border-t border-dashed border-hairline pt-5">
@@ -5663,50 +5594,195 @@ const CHECK_WHO: Record<string, string> = {
 }
 const CHECK_ACTED: Record<string, string> = { adjusted: 'You went back over it', confirmed: 'You confirmed and moved on' }
 
-/// Questioning & Checking's checks for understanding: who each asked, and
-/// what you said next. Ones the read found were not checks are left out.
-/// Never a claim that students understood.
-function ChecksPart({ session }: { session: AudioSessionWithSegments }) {
+type QPick = MixKey | 'checks'
+type QMoment = { t: number; quote: string; tag?: string; then?: string | null }
+
+/// Your questions and checks for understanding on one lesson timeline: each
+/// question a dot in its kind's colour, each check a ring (solid when it asked
+/// everyone, dashed when it asked whether they understood). The key's pills
+/// choose which moments the list below shows; a dot shows its own. Checks the
+/// read found were not checks are left out. Never a claim that students
+/// understood.
+function QuestionsChecksPart({
+  session,
+  questions,
+  byName,
+}: {
+  session: AudioSessionWithSegments
+  questions: ReturnType<typeof classifyQuestions>
+  byName: number
+}) {
   const checks = (session.cfuLog ?? []).filter((c) => c.loop?.who !== 'not_a_check')
-  if (checks.length === 0) return null
-  const read = checks.filter((c) => c.loop)
-  const n = (who: string) => read.filter((c) => c.loop!.who === who).length
-  const acted = read.filter((c) => c.loop!.acted).length
-  const parts = [
-    n('everyone') > 0 ? `${n('everyone')} of ${checks.length} asked everyone to show or say an answer` : null,
-    n('few') > 0 ? `${n('few')} ${n('few') === 1 ? 'was' : 'were'} answered by a few` : null,
-    n('asked_if_understood') > 0 ? `${n('asked_if_understood')} asked whether they understood` : null,
-  ].filter(Boolean)
+  const count = (k: MixKey) => questions.filter((q) => q.mix === k).length
+  const beyond = count('explain') + count('reasoning')
+  const [pick, setPick] = useState<QPick>(
+    count('reasoning') > 0 ? 'reasoning' : count('explain') > 0 ? 'explain' : questions.length > 0 ? 'recall' : 'checks',
+  )
+  const [hot, setHot] = useState<number | null>(null)
+  if (questions.length === 0 && checks.length === 0) {
+    return (
+      <div className="flex flex-col gap-2 border-t border-dashed border-hairline pt-5">
+        <p className="font-heading text-xl font-bold text-forest">Your questions and checks</p>
+        <p className="text-sm text-ink-soft">No questions or checks for understanding were heard in this lesson.</p>
+      </div>
+    )
+  }
+  const duration = session.durationSec ?? Math.max(60, ...questions.map((q) => q.timestampSec), ...checks.map((c) => c.timestampSec))
+  const x = (sec: number) => `${Math.min(98.5, Math.max(1.5, (sec / duration) * 100)).toFixed(2)}%`
+  const everyone = checks.filter((c) => c.loop?.who === 'everyone').length
+  const askedIf = checks.filter((c) => c.loop?.who === 'asked_if_understood').length
+  const acted = checks.filter((c) => c.loop?.acted).length
+
+  const moments: QMoment[] =
+    pick === 'checks'
+      ? checks.map((c) => ({
+          t: c.timestampSec,
+          quote: withoutAddressedNames(c.text),
+          tag: [c.loop ? CHECK_WHO[c.loop.who] : 'Check for understanding', c.loop?.acted ? CHECK_ACTED[c.loop.acted.how] : null]
+            .filter(Boolean)
+            .join(' · '),
+          then: c.loop?.acted?.text ? withoutAddressedNames(c.loop.acted.text) : null,
+        }))
+      : questions.filter((q) => q.mix === pick).map((q) => ({ t: q.timestampSec, quote: q.quote }))
+
+  const pills: { key: QPick; label: string; n: number; swatch: React.ReactNode }[] = [
+    ...(Object.keys(MIX) as MixKey[]).map((k) => ({
+      key: k as QPick,
+      label: MIX[k].label,
+      n: count(k),
+      swatch: <i className="inline-block h-3 w-3 rounded-full" style={{ background: MIX[k].color }} />,
+    })),
+    {
+      key: 'checks',
+      label: 'Checks for understanding',
+      n: checks.length,
+      swatch: <i className="inline-block h-3 w-3 rounded-full border-2 border-forest" />,
+    },
+  ]
+  const ring = (who: string | undefined) => (who === 'asked_if_understood' ? 'border-dashed' : '')
+
   return (
     <div className="flex flex-col gap-4 border-t border-dashed border-hairline pt-5">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="font-heading text-xl font-bold text-forest">Your checks for understanding</p>
+        <p className="font-heading text-xl font-bold text-forest">Your questions and checks</p>
         <span className="text-sm text-ink-soft">
-          {checks.length} check{checks.length === 1 ? '' : 's'}
+          {questions.length} question{questions.length === 1 ? '' : 's'} · {checks.length} check{checks.length === 1 ? '' : 's'}
         </span>
       </div>
-      {read.length > 0 && (
-        <p className="text-base font-semibold text-ink">
-          {parts.join('; ')}.{' '}
-          {acted > 0 ? `You said what you'd do with the answers ${acted} time${acted === 1 ? '' : 's'}.` : 'No response to the answers was heard.'}
-        </p>
-      )}
-      <div className="flex flex-col gap-2">
-        {checks.map((c, i) => (
-          <div key={i} className="flex items-baseline justify-between gap-4 rounded-xl bg-cream px-3.5 py-3 text-sm text-ink">
-            <div>
-              <span className="mb-1 block text-xs font-semibold text-ink-soft">
-                {[c.loop ? CHECK_WHO[c.loop.who] : 'Check for understanding', c.loop?.acted ? CHECK_ACTED[c.loop.acted.how] : null]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
-              “{withoutAddressedNames(c.text)}”
-              {c.loop?.acted?.text && <span className="mt-1 block text-ink-soft">Then: “{withoutAddressedNames(c.loop.acted.text)}”</span>}
+      <p className="text-base font-semibold text-ink">
+        {questions.length === 0
+          ? 'No questions were heard. '
+          : beyond === 0
+            ? `All ${questions.length} questions asked students to recall something. `
+            : `${beyond} of ${questions.length} questions went beyond recall. `}
+        {checks.length === 0
+          ? 'No checks for understanding were heard.'
+          : `You checked for understanding ${checks.length} time${checks.length === 1 ? '' : 's'}${
+              everyone > 0 ? `, ${everyone === checks.length ? 'each' : `${everyone} of them`} asking everyone` : ''
+            }.`}
+      </p>
+
+      {/* One timeline: questions above, checks below. */}
+      <div className="rounded-2xl border border-hairline bg-cream-card px-4 py-3.5">
+        {[
+          { label: 'Questions', items: questions.map((q, i) => ({ i, t: q.timestampSec, on: pick === q.mix, node: <i className="block h-3.5 w-3.5 rounded-full" style={{ background: MIX[q.mix].color }} /> })) },
+          { label: 'Checks', items: checks.map((c, i) => ({ i: 1000 + i, t: c.timestampSec, on: pick === 'checks', node: <i className={`block h-3.5 w-3.5 rounded-full border-[2.5px] border-forest bg-cream-card ${ring(c.loop?.who)}`} /> })) },
+        ].map((lane) => (
+          <div key={lane.label} className="grid h-9 grid-cols-[72px_1fr] items-center">
+            <span className="text-xs font-semibold text-ink-soft">{lane.label}</span>
+            <div className="relative h-full">
+              <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 bg-hairline" />
+              {lane.items.map((it) => (
+                <button
+                  key={it.i}
+                  type="button"
+                  aria-label={`${formatTime(it.t)}`}
+                  onClick={() => {
+                    setPick(it.i >= 1000 ? 'checks' : questions[it.i].mix)
+                    setHot(it.i)
+                  }}
+                  className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 transition-transform"
+                  style={{ left: x(it.t), opacity: it.on ? 1 : 0.3, transform: `translate(-50%, -50%) scale(${hot === it.i ? 1.4 : 1})` }}
+                >
+                  {it.node}
+                </button>
+              ))}
             </div>
-            <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(c.timestampSec)}</span>
           </div>
         ))}
+        <div className="grid grid-cols-[72px_1fr] text-xs text-ink-soft">
+          <span />
+          <div className="flex justify-between">
+            <span>0:00</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+        </div>
       </div>
+
+      {/* The key, as the choice of what the list shows. */}
+      <div className="flex flex-wrap gap-2" role="group">
+        {pills
+          .filter((pl) => pl.n > 0)
+          .map((pl) => {
+            const on = pick === pl.key
+            return (
+              <button
+                key={pl.key}
+                type="button"
+                aria-pressed={on}
+                onClick={() => {
+                  setPick(pl.key)
+                  setHot(null)
+                }}
+                className={`flex min-h-[40px] items-center gap-2 rounded-full border-[1.5px] px-4 text-sm font-semibold ${on ? 'border-forest bg-forest text-cream' : 'border-hairline bg-cream-card text-ink'}`}
+              >
+                {pl.swatch}
+                {pl.label}
+                <span className={`rounded-full px-2 text-xs ${on ? 'bg-white/20 text-cream' : 'bg-cream text-ink-soft'}`}>{pl.n}</span>
+              </button>
+            )
+          })}
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-2xl bg-cream p-4" aria-live="polite">
+        <div className="flex items-baseline justify-between gap-3">
+          <b className="text-sm text-forest">
+            {pick === 'checks' ? `Checks for understanding · ${checks.length}` : `${MIX[pick].label} · ${moments.length} of ${questions.length}`}
+          </b>
+          <span className="text-xs text-ink-soft">Tap a dot, or a kind above</span>
+        </div>
+        <p className="-mt-1 text-sm text-ink-soft">
+          {pick === 'checks'
+            ? `Moments you asked students to show or say what they understood${askedIf > 0 ? ` — ${askedIf} only asked whether they understood` : ''}. ${
+                acted > 0 ? `You said what you'd do with the answers ${acted} time${acted === 1 ? '' : 's'}.` : 'No response to the answers was heard.'
+              }`
+            : MIX[pick].desc}
+        </p>
+        {moments.map((m, i) => {
+          const isHot = hot != null && (pick === 'checks' ? hot - 1000 === i : questions.indexOf(questions.filter((q) => q.mix === pick)[i]) === hot)
+          return (
+            <div
+              key={i}
+              className={`flex items-baseline justify-between gap-4 rounded-xl px-3.5 py-3 text-sm text-ink ${isHot ? 'bg-cream-card ring-2 ring-forest' : 'bg-cream-card'}`}
+            >
+              <div>
+                {m.tag && <span className="mb-1 block text-xs font-semibold text-ink-soft">{m.tag}</span>}
+                “{m.quote}”
+                {m.then && <span className="mt-1 block text-ink-soft">Then: “{m.then}”</span>}
+              </div>
+              <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(m.t)}</span>
+            </div>
+          )
+        })}
+      </div>
+
+      {questions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 text-sm text-ink">
+          <b>Who you asked</b>
+          <span className="rounded-full bg-cream px-3 py-1">{questions.length - byName} open to anyone</span>
+          {byName > 0 && <span className="rounded-full bg-cream px-3 py-1">{byName} to a student by name</span>}
+        </div>
+      )}
     </div>
   )
 }
