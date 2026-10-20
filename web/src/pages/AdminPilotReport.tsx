@@ -413,7 +413,7 @@ export default function AdminPilotReport() {
                 <span>By grade & subject · all lessons to date</span>
                 <span className="text-right">Teacher talk</span>
                 <span className="text-right">Wait time</span>
-                <span className="text-right">Higher-order Qs</span>
+                <span className="text-right">Beyond recall</span>
               </div>
               {groups.map((g) =>
                 g.suppressed ? null : (
@@ -434,7 +434,7 @@ export default function AdminPilotReport() {
                       {shown(g.metrics.avgWaitTimeSec, g.metrics.waitTimeConfidence, (v) => `${v.toFixed(1)}s`)}
                     </span>
                     <span className="text-right text-ink">
-                      {shown(g.metrics.higherOrderPct, g.metrics.higherOrderConfidence, (v) => `${v}%`)}
+                      {shown(g.metrics.beyondRecallPct, g.metrics.questionMixConfidence, (v) => `${v}%`)}
                     </span>
                   </div>
                 ),
@@ -442,7 +442,7 @@ export default function AdminPilotReport() {
             </div>
             <p className="mt-2 text-xs text-ink-soft">
               Read across a row to see where a need is concentrated. Lower teacher talk, and higher wait time and
-              higher-order questions, are the good directions. Groups under 5 teachers are combined so no one can be
+              more questions beyond recall, are the good directions. Groups under 5 teachers are combined so no one can be
               singled out.
             </p>
           </>

@@ -1526,8 +1526,8 @@ function buildTalkInsight(data: InstructionalAverages): string | null {
 }
 
 function buildQuestioningInsight(data: InstructionalAverages): string | null {
-  if (data.higherOrderConfidence === 'full' && data.higherOrderPct != null && data.higherOrderPct < 30) {
-    return `Higher-order questions are a stretch area staff-wide (${data.higherOrderPct}% of questions) — a good theme for a shared PD session on questioning technique.`
+  if (data.questionMixConfidence === 'full' && data.beyondRecallPct != null && data.beyondRecallPct < 30) {
+    return `Most questions staff-wide ask for recall — ${data.beyondRecallPct}% went beyond it — a good theme for a shared PD session on questioning technique.`
   }
   if (data.cfuConfidence === 'full' && data.cfuRatePct != null && data.cfuRatePct < 50) {
     return `Checks for understanding show up in only ${data.cfuRatePct}% of eligible sessions staff-wide — worth reinforcing as a quick, low-lift routine.`
@@ -1542,8 +1542,8 @@ function buildQuestioningInsight(data: InstructionalAverages): string | null {
   if (data.waitTime2Confidence === 'full' && data.avgWaitTime2Sec != null && data.avgWaitTime2Sec < 1) {
     return `Staff wait ${data.avgWaitTime2Sec.toFixed(1)}s on average after a student finishes answering before speaking again — there is no room in that for a follow-up, which is worth naming before asking anyone to ask more of them.`
   }
-  if (data.higherOrderConfidence === 'full' && data.higherOrderPct != null && data.higherOrderPct >= 40) {
-    return `Higher-order questioning is a real strength staff-wide (${data.higherOrderPct}% of questions) — worth naming and reinforcing.`
+  if (data.questionMixConfidence === 'full' && data.beyondRecallPct != null && data.beyondRecallPct >= 40) {
+    return `Questions that go beyond recall are a real strength staff-wide (${data.beyondRecallPct}% of questions) — worth naming and reinforcing.`
   }
   return null
 }
@@ -1690,6 +1690,39 @@ function TalkParticipationCard({ data, insight }: { data: InstructionalAverages;
   )
 }
 
+// The teacher-side colours and wording for the three kinds (MIX in
+// AudioCoaching.tsx), so the bar reads the same as on a lesson.
+const QUESTION_MIX = [
+  { key: 'recall', label: 'Recall', color: '#A89C84', desc: 'One right answer, retrieved from memory.' },
+  { key: 'explain', label: 'Explain', color: '#4F9A72', desc: 'Students put an idea in their own words — why or how.' },
+  { key: 'reasoning', label: 'Reasoning', color: '#173F2D', desc: 'Asked students to justify, compare or judge.' },
+] as const
+
+function QuestionMixBar({ mix }: { mix: InstructionalAverages['questionMix'] }) {
+  const total = mix.recall + mix.explain + mix.reasoning
+  if (total === 0) return null
+  return (
+    <div className="border-b border-hairline/60 pb-3">
+      <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full" role="img" aria-label="Question mix">
+        {QUESTION_MIX.filter((k) => mix[k.key] > 0).map((k) => (
+          <i key={k.key} className="rounded-sm" style={{ flex: mix[k.key], background: k.color }} />
+        ))}
+      </div>
+      <ul className="mt-2.5 flex flex-col gap-1.5">
+        {QUESTION_MIX.map((k) => (
+          <li key={k.key} className="flex items-baseline gap-2 text-xs">
+            <i className="inline-block h-2.5 w-2.5 shrink-0 translate-y-px rounded-full" style={{ background: k.color }} />
+            <span className="font-semibold text-ink">{k.label}</span>
+            <span className="text-ink-soft">
+              {mix[k.key]} · {Math.round((mix[k.key] / total) * 100)}% — {k.desc}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function QuestioningCheckingCard({ data, insight }: { data: InstructionalAverages; insight?: string | null }) {
   return (
     <AdminCard
@@ -1701,13 +1734,18 @@ function QuestioningCheckingCard({ data, insight }: { data: InstructionalAverage
     >
       <div className="flex flex-col">
         <StatRow
-          label="Higher-order questions"
-          goal="Questions that ask students to explain, compare or reason. 40% or more is a staff strength."
-          value={data.higherOrderPct != null ? `${data.higherOrderPct}%` : '—'}
-          sampleNote={sampleOr(data.higherOrderSampleSize, 'questions')}
-          confidence={data.higherOrderConfidence}
-          tooltip="Percentage of all detected questions that use higher-order starters (why, explain, compare, justify) rather than simple recall."
+          label="Questions beyond recall"
+          goal="Questions that asked students to explain, justify, compare or judge. 40% or more is a staff strength."
+          value={data.beyondRecallPct != null ? `${data.beyondRecallPct}%` : '—'}
+          sampleNote={
+            data.questionMixQuestions > 0
+              ? `based on ${data.questionMixQuestions} questions across ${data.questionMixLessons} lesson${data.questionMixLessons === 1 ? '' : 's'}`
+              : 'not enough data yet'
+          }
+          confidence={data.questionMixConfidence}
+          tooltip="Each question a teacher left with students, sorted the same way as the Questioning & Checking section of their own Lesson Debrief: recall, explain, or reasoning."
         />
+        {data.questionMixConfidence !== 'none' && <QuestionMixBar mix={data.questionMix} />}
         <StatRow
           label="Average wait time after a question"
           goal="A good sign: 3 seconds or more, so more students have time to think."
@@ -1934,10 +1972,10 @@ function BreakdownCard({ n, selectedOrgId }: { n: number; selectedOrgId: string 
                     confidence={entry.metrics.paceConfidence}
                   />
                   <StatRow
-                    label="Higher-order questions"
-                    value={entry.metrics.higherOrderPct != null ? `${entry.metrics.higherOrderPct}%` : '—'}
-                    sampleNote={sampleOr(entry.metrics.higherOrderSampleSize, 'questions')}
-                    confidence={entry.metrics.higherOrderConfidence}
+                    label="Questions beyond recall"
+                    value={entry.metrics.beyondRecallPct != null ? `${entry.metrics.beyondRecallPct}%` : '—'}
+                    sampleNote={sampleOr(entry.metrics.questionMixQuestions, 'questions')}
+                    confidence={entry.metrics.questionMixConfidence}
                   />
                   <StatRow
                     label="Avg. wait time"

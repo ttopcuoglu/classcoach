@@ -177,6 +177,13 @@ export type InstructionalAverages = {
   cfuRatePct: number | null
   cfuSampleSize: number
   cfuConfidence: DataConfidence
+  // What the questions asked of students, in the three kinds a teacher sees
+  // on Questioning & Checking (server/src/lib/questionMix.ts).
+  questionMix: { recall: number; explain: number; reasoning: number }
+  beyondRecallPct: number | null
+  questionMixQuestions: number
+  questionMixLessons: number
+  questionMixConfidence: DataConfidence
 }
 
 export type ClimateAverages = {
@@ -215,6 +222,10 @@ export type BreakdownHeadlineMetrics = {
   higherOrderPct: number | null
   higherOrderSampleSize: number
   higherOrderConfidence: DataConfidence
+  beyondRecallPct: number | null
+  questionMixQuestions: number
+  questionMixLessons: number
+  questionMixConfidence: DataConfidence
   avgRedirectionPer10Min: number | null
   redirectionFrequencySampleSize: number
   redirectionConfidence: DataConfidence

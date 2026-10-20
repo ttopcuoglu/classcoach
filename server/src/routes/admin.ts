@@ -13,6 +13,7 @@ import {
 import { mergeBreakdownGroups } from '../lib/breakdownGroups.ts'
 import { splitByCoverage } from '../lib/transcriptCoverage.ts'
 import { prisma } from '../lib/prisma.ts'
+import { staffQuestionMix } from '../lib/questionMix.ts'
 import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
 import { stripe } from '../lib/stripe.ts'
 
@@ -140,6 +141,8 @@ type HeadlineMetricsRow = {
   avgWaitTimeSec: number | null
   durationSec: number | null
   metricsDetail: unknown
+  questionLog: unknown
+  teachingMoves: unknown
 }
 
 function metricsOf(s: HeadlineMetricsRow): Record<string, unknown> {
@@ -189,6 +192,8 @@ function computeHeadlineMetrics(sessions: HeadlineMetricsRow[]) {
     }
   }
 
+  const questionMix = staffQuestionMix(sessions)
+
   return {
     avgWaitTimeSec: median(waitTimes),
     waitTimeSampleSize: waitTimes.length,
@@ -206,6 +211,10 @@ function computeHeadlineMetrics(sessions: HeadlineMetricsRow[]) {
       higherOrderDenominator > 0 ? Math.round((higherOrderNumerator / higherOrderDenominator) * 100) : null,
     higherOrderSampleSize: higherOrderDenominator,
     higherOrderConfidence: dataConfidence(higherOrderDenominator),
+    beyondRecallPct: questionMix.beyondRecallPct,
+    questionMixQuestions: questionMix.questions,
+    questionMixLessons: questionMix.lessons,
+    questionMixConfidence: dataConfidence(questionMix.lessons),
     avgRedirectionPer10Min: median(redirectionFrequencies),
     redirectionFrequencySampleSize: redirectionFrequencies.length,
     redirectionConfidence: dataConfidence(redirectionFrequencies.length),
@@ -520,6 +529,8 @@ async function computeOverview(req: Request, res: Response) {
       cfuCount: true,
       durationSec: true,
       metricsDetail: true,
+      questionLog: true,
+      teachingMoves: true,
       lessonContent: true,
       contentNotes: true,
       gradeLevel: true,
@@ -698,6 +709,13 @@ async function computeOverview(req: Request, res: Response) {
   const cfuEligible = filteredAudioSessions.filter((s) => (s.durationSec ?? 0) >= MIN_DURATION_FOR_CFU_DETECTION_SEC)
   const cfuSessionsWithCheck = cfuEligible.filter((s) => (s.cfuCount ?? 0) > 0)
 
+  // What the questions asked of students, in the three kinds a teacher sees
+  // on Questioning & Checking (lib/questionMix.ts), so "beyond recall" here
+  // is the same arithmetic as the "X of Y" on each lesson. Confidence rests
+  // on lessons rather than questions, since one lesson's questions lean
+  // together.
+  const questionMix = staffQuestionMix(filteredAudioSessions)
+
   const talkSampleSize = Math.min(teacherTalkPcts.length, studentTalkPcts.length)
   const instructionalAverages = {
     totalAnalyzedSessions: filteredAudioSessions.length,
@@ -730,6 +748,11 @@ async function computeOverview(req: Request, res: Response) {
     cfuRatePct: cfuEligible.length > 0 ? Math.round((cfuSessionsWithCheck.length / cfuEligible.length) * 100) : null,
     cfuSampleSize: cfuEligible.length,
     cfuConfidence: dataConfidence(cfuEligible.length),
+    questionMix: questionMix.counts,
+    beyondRecallPct: questionMix.beyondRecallPct,
+    questionMixQuestions: questionMix.questions,
+    questionMixLessons: questionMix.lessons,
+    questionMixConfidence: dataConfidence(questionMix.lessons),
   }
 
   // Classroom climate and management — the same redirection/transition/
@@ -815,8 +838,8 @@ async function computeOverview(req: Request, res: Response) {
   if (instructionalAverages.cfuRatePct != null && instructionalAverages.cfuConfidence !== 'none' && instructionalAverages.cfuRatePct >= 70) {
     strengthCandidates.push({ label: 'Checks for understanding', value: instructionalAverages.cfuRatePct, confidence: instructionalAverages.cfuConfidence })
   }
-  if (instructionalAverages.higherOrderPct != null && instructionalAverages.higherOrderConfidence !== 'none' && instructionalAverages.higherOrderPct >= 40) {
-    strengthCandidates.push({ label: 'Higher-order questioning', value: instructionalAverages.higherOrderPct, confidence: instructionalAverages.higherOrderConfidence })
+  if (instructionalAverages.beyondRecallPct != null && instructionalAverages.questionMixConfidence !== 'none' && instructionalAverages.beyondRecallPct >= 40) {
+    strengthCandidates.push({ label: 'Questions beyond recall', value: instructionalAverages.beyondRecallPct, confidence: instructionalAverages.questionMixConfidence })
   }
   if (instructionalAverages.realLifeConnectionRatePct != null && instructionalAverages.realLifeConnectionConfidence !== 'none' && instructionalAverages.realLifeConnectionRatePct >= 60) {
     strengthCandidates.push({ label: 'Real-life examples and connections', value: instructionalAverages.realLifeConnectionRatePct, confidence: instructionalAverages.realLifeConnectionConfidence })
@@ -921,6 +944,10 @@ adminRouter.get('/overview/export', async (req, res) => {
     ['Avg. teacher speaking pace (words a minute)', data.instructionalAverages.avgTeacherPaceWpm],
     ['Avg. teacher talk %', data.instructionalAverages.avgTeacherTalkPct],
     ['Higher-order questions %', data.instructionalAverages.higherOrderPct],
+    ['Questions beyond recall %', data.instructionalAverages.beyondRecallPct],
+    ['Recall questions', data.instructionalAverages.questionMix.recall],
+    ['Explain questions', data.instructionalAverages.questionMix.explain],
+    ['Reasoning questions', data.instructionalAverages.questionMix.reasoning],
     ['Checks for understanding rate %', data.instructionalAverages.cfuRatePct],
     ['Avg. redirections per 10 min', data.climateAverages.avgRedirectionPer10Min],
     ['Positive tone %', data.climateAverages.positiveTonePct],
@@ -955,6 +982,8 @@ adminRouter.get('/overview/breakdown', async (req, res) => {
       avgWaitTimeSec: true,
       durationSec: true,
       metricsDetail: true,
+      questionLog: true,
+      teachingMoves: true,
       gradeLevel: true,
       classSubject: true,
     },

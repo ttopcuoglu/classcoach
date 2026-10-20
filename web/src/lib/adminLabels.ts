@@ -25,7 +25,7 @@ export const PRIORITY_MEANING: Record<string, string> = {
 // Strengths come from the server with the percentage the name refers to.
 export const STRENGTH_MEANING: Record<string, string> = {
   'Checks for understanding': 'of lessons included at least one check for understanding.',
-  'Higher-order questioning': 'of questions asked students to explain, compare or reason.',
+  'Questions beyond recall': 'of questions asked students to explain, justify, compare or judge, not just recall.',
   'Real-life examples and connections': 'of lessons connected the content to real life or earlier learning.',
   'Calm classroom management': 'of lessons needed no redirections at all.',
   'Clear directions': 'of lessons included at least one clear, specific direction.',
