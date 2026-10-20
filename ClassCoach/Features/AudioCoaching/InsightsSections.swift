@@ -201,6 +201,8 @@ struct PickOption {
     var note: String? = nil
     /// A note that needs more than a line of text, shown where `note` is.
     var noteView: AnyView? = nil
+    /// Shown even with no items, when "nothing found" is itself the answer.
+    var alwaysShow = false
 }
 
 /// A row of pills, one per category, and the chosen category's moments below
@@ -211,7 +213,7 @@ struct CategoryPickerView: View {
     @State private var selected: String?
 
     var body: some View {
-        let shown = options.filter { !$0.items.isEmpty }
+        let shown = options.filter { !$0.items.isEmpty || $0.alwaysShow }
         if let current = shown.first(where: { $0.key == selected }) ?? shown.first {
             VStack(alignment: .leading, spacing: 12) {
                 FlowLayout(spacing: 8) {
@@ -1450,7 +1452,18 @@ struct RoutinesSection: View {
         let keep = specific.first.map { KeepLine(text: "You named what was right, not just \u{201C}good\u{201D}.", quote: $0.text, timestampSec: $0.timestampSec) }
             ?? actionable.first.map { KeepLine(text: "Your redirection told students what to do.", quote: $0.quote, timestampSec: $0.timestampSec) }
             ?? complete.first.map { KeepLine(text: "Your directions named what to do, the steps, how long, and what to hand in.", quote: $0.quote, timestampSec: $0.timestampSec) }
-        let total = directionRows.count + redirectRows.count + encourageRows.count
+        // Repeated redirections: the read the section shows when the report
+        // has it; older reports keep the Keeping learning on track view until
+        // they are re-read.
+        let repeated = esc?.repeatedRedirections
+        let redirectionItems = repeated.map { r in
+            r.corrections.map { c in
+                EvidenceLine(tag: c.label ?? "Redirection",
+                             text: c.quote == nil ? "Too short or unclear to quote on its own." : nil,
+                             quote: c.quote, timestampSec: c.timestampSec)
+            }
+        } ?? onTrackRows
+        let total = directionRows.count + redirectionItems.count + encourageRows.count
 
         return SectionCard(
             section: .routines, note: session.climateNarrative, keep: keep, tryNext: session.nextSteps?.climate,
@@ -1465,7 +1478,7 @@ struct RoutinesSection: View {
                 Text("How your words set up the work, kept it on track, and encouraged students.")
                     .font(.body.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
-                if total == 0 {
+                if total == 0 && repeated == nil {
                     Text("No directions, redirections or feedback to a student were found in this lesson.")
                         .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                 } else {
@@ -1473,7 +1486,13 @@ struct RoutinesSection: View {
                         PickOption(key: "directions", label: "Directions & routines",
                                    desc: "Directions for starting work, changing activities, materials, getting help and finishing \u{2014} and which of the four parts each named.",
                                    items: directionRows, finding: directionFinding, chips: byType),
-                        PickOption(key: "redirection", label: "Keeping learning on track",
+                        repeated.map { r in
+                            PickOption(key: "redirection", label: "Repeated redirections",
+                                       desc: "Your words correcting behavior, each filed under what it was about. One correction tells little; the same one coming back is worth a second look.",
+                                       items: redirectionItems, finding: r.headline,
+                                       noteView: AnyView(RepeatedRedirectionsPanel(read: r)),
+                                       alwaysShow: r.state != "unread" || !redirectionItems.isEmpty)
+                        } ?? PickOption(key: "redirection", label: "Keeping learning on track",
                                    desc: "Your words addressing behavior, apart from corrections about the content. One reminder tells little; what is worth a second look is the same reminder coming back, or an explanation that kept stopping.",
                                    items: onTrackRows, finding: redirectFinding,
                                    note: onTrackNote == nil ? escalationNote : nil, noteView: onTrackNote),
@@ -1546,7 +1565,10 @@ struct OnTrackFindings: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 10) {
-                ForEach(Array(episodes.enumerated()), id: \.offset) { _, e in EpisodeCard(episode: e) }
+                ForEach(Array(episodes.enumerated()), id: \.offset) { _, e in
+                    PatternCard(title: e.title, lead: e.lead, unclear: "The wording here was too unclear to quote.",
+                                pattern: e.pattern, more: e.more ?? [], nextStep: e.nextStep)
+                }
                 ForEach(Array(loneInterruptions.enumerated()), id: \.offset) { _, i in
                     let quote = i.quote.map { " (\u{201C}\($0.replacingOccurrences(of: "[.!?]+$", with: "", options: .regularExpression))\u{201D})" } ?? ""
                     Text("At \(mmss(i.timestampSec ?? 0)) you paused an explanation to address behavior\(quote) and went straight back to it. Once on its own, that is a routine reminder.")
@@ -1558,24 +1580,64 @@ struct OnTrackFindings: View {
     }
 }
 
-private struct EpisodeCard: View {
-    let episode: AudioOnTrackEpisode
+/// Repeated redirections — mirrors `AudioCoaching.tsx`'s
+/// `RepeatedRedirectionsPanel`: one card per expectation the teacher returned
+/// to, then whether the teacher's voice was heard throughout. No next step,
+/// no claim that a correction failed, and no count in the copy.
+struct RepeatedRedirectionsPanel: View {
+    let read: AudioRepeatedRedirections
+
+    var body: some View {
+        if read.state == "unread" {
+            Text("This part of the lesson couldn\u{2019}t be read for this report.")
+                .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(Array(read.findings.enumerated()), id: \.offset) { _, f in
+                    PatternCard(title: f.title, lead: f.lead, unclear: "The wording here was too short or unclear to quote.",
+                                pattern: f.pattern, more: f.more ?? [], nextStep: nil)
+                }
+                if let note = read.coverageNote, !note.isEmpty {
+                    Text(note).font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if !read.corrections.isEmpty {
+                    Text("Behavior corrections in this lesson")
+                        .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+                        .padding(.top, 4)
+                }
+            }
+        }
+    }
+}
+
+/// One pattern: a title, the lead teacher quote and its time, what the
+/// pattern was, the other quotes behind "More evidence", and a next step
+/// only when there is one. Shared by both readings of Climate & Routines.
+private struct PatternCard: View {
+    let title: String?
+    let lead: AudioEscalationRepeat?
+    let unclear: String
+    let pattern: String?
+    let more: [AudioEscalationRepeat]
+    let nextStep: String?
     @State private var showMore = false
 
     var body: some View {
-        let more = (episode.more ?? []).filter { !($0.quote ?? "").isEmpty }
+        let more = self.more.filter { !($0.quote ?? "").isEmpty }
         VStack(alignment: .leading, spacing: 8) {
-            if let title = episode.title {
+            if let title {
                 Text(title).font(.subheadline.weight(.bold)).foregroundStyle(AppTheme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let lead = episode.lead {
+            if let lead {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Group {
                         if let q = lead.quote {
                             Text("\u{201C}\(q)\u{201D}").foregroundStyle(AppTheme.textPrimary)
                         } else {
-                            Text("The wording here was too unclear to quote.").foregroundStyle(AppTheme.textSecondary)
+                            Text(unclear).foregroundStyle(AppTheme.textSecondary)
                         }
                     }
                     .font(.subheadline).fixedSize(horizontal: false, vertical: true)
@@ -1585,7 +1647,7 @@ private struct EpisodeCard: View {
                     }
                 }
             }
-            if let pattern = episode.pattern {
+            if let pattern {
                 Text(pattern).font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1610,7 +1672,7 @@ private struct EpisodeCard: View {
                     }
                 }
             }
-            if let next = episode.nextStep, !next.isEmpty {
+            if let next = nextStep, !next.isEmpty {
                 (Text("Next step: ").bold().foregroundColor(AppTheme.forest) + Text(next).foregroundColor(AppTheme.textPrimary))
                     .font(.subheadline)
                     .fixedSize(horizontal: false, vertical: true)

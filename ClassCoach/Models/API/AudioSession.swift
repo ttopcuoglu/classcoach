@@ -240,6 +240,64 @@ struct AudioOnTrackEpisode: Decodable, Identifiable {
     let nextStep: String?
 }
 
+/// "Did the teacher repeatedly address the same behavior?" — mirrors
+/// `web/src/lib/api.ts`'s `AudioRepeatedRedirections`
+/// (server/src/lib/repeatedRedirections.ts). All copy is written on the
+/// server and iOS only renders it; it never claims a correction failed and
+/// never carries a count. Decoded as leniently as `AudioEscalation`: every
+/// field optional, strings rather than enums, and arrays that drop a bad
+/// element instead of failing.
+struct AudioRepeatedRedirections: Decodable {
+    struct Stretch: Decodable {
+        let startSec: Double?
+        let endSec: Double?
+    }
+
+    struct Finding: Decodable {
+        let expectation: String?
+        /// "stretch" | "recurring"
+        let kind: String?
+        let startSec: Double?
+        let endSec: Double?
+        let title: String?
+        let pattern: String?
+        let lead: AudioEscalationRepeat?
+        let more: [AudioEscalationRepeat]?
+    }
+
+    struct Correction: Decodable {
+        let quote: String?
+        let timestampSec: Double?
+        let expectation: String?
+        let label: String?
+    }
+
+    /// "found" | "none" | "not_measurable" | "unread"
+    let state: String?
+    /// The answer, in bold. Null when found: the findings are the answer.
+    let headline: String?
+    let coverageNote: String?
+    let heardThroughout: Bool?
+    let silentStretches: [Stretch]
+    let findings: [Finding]
+    let corrections: [Correction]
+
+    private enum CodingKeys: String, CodingKey {
+        case state, headline, coverageNote, heardThroughout, silentStretches, findings, corrections
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        state = try? c.decodeIfPresent(String.self, forKey: .state)
+        headline = try? c.decodeIfPresent(String.self, forKey: .headline)
+        coverageNote = try? c.decodeIfPresent(String.self, forKey: .coverageNote)
+        heardThroughout = try? c.decodeIfPresent(Bool.self, forKey: .heardThroughout)
+        silentStretches = (try? c.decodeIfPresent([LossyDecodable<Stretch>].self, forKey: .silentStretches))?.compactMap(\.value) ?? []
+        findings = (try? c.decodeIfPresent([LossyDecodable<Finding>].self, forKey: .findings))?.compactMap(\.value) ?? []
+        corrections = (try? c.decodeIfPresent([LossyDecodable<Correction>].self, forKey: .corrections))?.compactMap(\.value) ?? []
+    }
+}
+
 /// Decodes one array element, or nil if that element is malformed, so a
 /// single bad row costs that row rather than the array.
 struct LossyDecodable<T: Decodable>: Decodable {
@@ -265,9 +323,12 @@ struct AudioEscalation: Decodable {
     let episodes: [AudioOnTrackEpisode]?
     /// Every ask that broke into an explanation, which then resumed.
     let interruptions: [AudioEscalationRepeat]?
+    /// What Climate & Routines shows when present. Nil on reads made before
+    /// it, which keep the Keeping learning on track view.
+    let repeatedRedirections: AudioRepeatedRedirections?
 
     private enum CodingKeys: String, CodingKey {
-        case state, reason, peakRung, clusters, repeatedAsks, capturedSharePct, episodes, interruptions
+        case state, reason, peakRung, clusters, repeatedAsks, capturedSharePct, episodes, interruptions, repeatedRedirections
     }
 
     /// Hand-written so that nothing new can take the whole section down: a
@@ -284,6 +345,7 @@ struct AudioEscalation: Decodable {
         capturedSharePct = try? c.decodeIfPresent(Int.self, forKey: .capturedSharePct)
         episodes = (try? c.decodeIfPresent([LossyDecodable<AudioOnTrackEpisode>].self, forKey: .episodes))?.compactMap(\.value)
         interruptions = (try? c.decodeIfPresent([LossyDecodable<AudioEscalationRepeat>].self, forKey: .interruptions))?.compactMap(\.value)
+        repeatedRedirections = try? c.decodeIfPresent(AudioRepeatedRedirections.self, forKey: .repeatedRedirections)
     }
 
     /// How much force the teacher had brought to bear, in the same words the
