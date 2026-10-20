@@ -79,6 +79,7 @@ import {
   type TalkBalanceJudgment,
   leadingSilenceNote,
   CONVERSATIONAL_WPM,
+  speechRateMetric,
 } from '../lib/reportConfidence'
 import { buildNextTimeItems, type NoticeCandidate } from '../lib/reportHighlights'
 
@@ -2620,11 +2621,27 @@ function SummaryTab({
   const studentPct = session.studentTalkPct
   const silencePct =
     teacherPct != null && studentPct != null ? Math.max(0, Math.round((100 - teacherPct - studentPct) * 10) / 10) : null
+  // The rest of the recording split the way Talk & Participation splits it:
+  // sound the microphone caught but couldn't turn into words, and quiet.
+  // Older recordings have no sound reading to split by, and keep the one
+  // combined tile rather than two empty ones.
+  const nonSpeech = nonSpeechSplit(session.metricsDetail, session.durationSec)
+  const split = silencePct != null && nonSpeech && nonSpeech.quietPct + nonSpeech.unresolvedPct > 0 ? nonSpeech : null
+  const soundPct = split ? Math.round(((silencePct! * split.unresolvedPct) / (split.quietPct + split.unresolvedPct)) * 10) / 10 : null
+  const quietPct = split && soundPct != null ? Math.max(0, Math.round((silencePct! - soundPct) * 10) / 10) : null
+  const wpm = session.metricsDetail?.teacherWordsPerMinute ?? null
   const tawt = tawtOf(session)
   const tiles: { label: string; metric: ConfidentMetric; unit?: string; accent: Accent }[] = [
     { label: 'You spoke', metric: getPresenceMetric(teacherPct), unit: '%', accent: ACCENTS.terracotta },
     { label: 'Students spoke', metric: getPresenceMetric(studentPct), unit: '%', accent: ACCENTS.gold },
-    { label: 'Silence / other', metric: getPresenceMetric(silencePct), unit: '%', accent: ACCENTS.mint },
+    ...(split
+      ? [
+          { label: 'Sound, no words', metric: getPresenceMetric(soundPct), unit: '%', accent: ACCENTS.mint },
+          { label: 'Quiet', metric: getPresenceMetric(quietPct), unit: '%', accent: ACCENTS.mint },
+        ]
+      : [{ label: 'Silence / other', metric: getPresenceMetric(silencePct), unit: '%', accent: ACCENTS.mint }]),
+    // Words a minute of the teacher's own speaking time, as Talk & Participation shows it.
+    { label: 'Pace', metric: speechRateMetric(wpm != null ? Math.round(wpm) : null), unit: 'wpm', accent: ACCENTS.forest },
     { label: 'Questions', metric: getCountMetric({ count: session.questionCount, recordedSec: session.durationSec ?? 0 }), accent: ACCENTS.mint },
     // Teacher-Anchored Wait Time, the same number Questioning & Checking shows.
     {
@@ -2751,7 +2768,7 @@ function SummaryTab({
       )}
 
       {/* The lesson's numbers. Insights, a tab away, has each one in full. */}
-      <div className="grid break-inside-avoid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className={`grid break-inside-avoid grid-cols-2 gap-3 ${tiles.length % 4 === 0 || tiles.length === 7 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
         {tiles.map((t) => {
           const confident = isConfidentState(t.metric.state)
           return (
