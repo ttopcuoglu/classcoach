@@ -47,6 +47,11 @@ export type Quoted = { quote: string; timestampSec: number }
 /// the one move most worth noticing leaves no trace at all.
 export type SelfAnswered = Quoted
 
+/// A question about logistics rather than the learning: "does everyone have a
+/// Chromebook?", "where is it?". Not counted as a question anywhere; listed
+/// so the report can say what it set aside, and why.
+export type Housekeeping = Quoted
+
 /// What answering would have required of a student. Finer than the
 /// recall/higher-order split, and additive: it labels examples for the
 /// report to show, and never touches the counts classroomMoves produces.
@@ -67,6 +72,8 @@ export type ConnectionKind = 'prior' | 'purpose' | 'closing'
 
 export type TeachingMoves = {
   selfAnswered: SelfAnswered[]
+  /// Absent on lessons read before it existed.
+  housekeeping?: Housekeeping[]
   questionKinds: (Quoted & { kind: QuestionKind })[]
   directions: (Quoted & { parts: DirectionPart[] })[]
   explanations: (Quoted & { kind: ExplanationKind })[]
@@ -78,6 +85,7 @@ export type TeachingMoves = {
 
 export const EMPTY_MOVES: TeachingMoves = {
   selfAnswered: [],
+  housekeeping: [],
   questionKinds: [],
   directions: [],
   explanations: [],
@@ -87,9 +95,11 @@ export const EMPTY_MOVES: TeachingMoves = {
   connections: [],
 }
 
-const SYSTEM_PROMPT = `You are reading the teacher's side of a classroom recording. Find eight kinds of moment in THEIR words. Copy the teacher's sentence EXACTLY as it appears, and give the timestamp of the line it came from.
+const SYSTEM_PROMPT = `You are reading the teacher's side of a classroom recording. Find nine kinds of moment in THEIR words. Copy the teacher's sentence EXACTLY as it appears, and give the timestamp of the line it came from.
 
 SELF-ANSWERED QUESTIONS — the teacher asks something and answers it themselves without a student speaking: "So why did wages rise? Because there were fewer workers." List the question and its answer together as one sentence, the way they said it. This is not a fault; it is a move worth seeing.
+
+HOUSEKEEPING QUESTIONS — questions about logistics, not the learning: "does everyone have a Chromebook?", "where is it?", "who doesn't have a pencil?", "can everyone see the board?". The teacher's sentence as they said it. Not a question about the content, so never also a question kind.
 
 QUESTION KINDS — for questions the teacher LEFT with students, what answering would have required. A question ASKS FOR AN ANSWER and leaves it with the student. These are NOT questions, whatever their punctuation:
 - an imperative — "circle one of the reasons", "write down three causes" — that is a DIRECTION;
@@ -133,6 +143,9 @@ Write nothing outside these tags. One per line in the given shape, or NONE:
 <self_answered>
 sentence @ m:ss
 </self_answered>
+<housekeeping>
+sentence @ m:ss
+</housekeeping>
 <question_kinds>
 sentence @ m:ss | recall or explain or justify or compare or evaluate
 </question_kinds>
@@ -203,6 +216,7 @@ export function parseTeachingMoves(text: string, segments: Segment[]): TeachingM
 
   return {
     selfAnswered: plain('self_answered'),
+    housekeeping: plain('housekeeping'),
     questionKinds: read('question_kinds').map((q) => ({
       quote: q.quote,
       timestampSec: q.timestampSec,
@@ -243,6 +257,7 @@ export function parseTeachingMoves(text: string, segments: Segment[]): TeachingM
 export function countMoves(moves: TeachingMoves): number {
   return (
     moves.selfAnswered.length +
+    (moves.housekeeping?.length ?? 0) +
     moves.questionKinds.length +
     moves.directions.length +
     moves.explanations.length +

@@ -19,6 +19,7 @@ const SEGMENTS: Segment[] = [
   seg('Teacher', 'Who can build on what she just said?', 130),
   seg('Teacher', 'Eyes up front, pencils down.', 160),
   seg('Teacher', 'Remember last week when we did slopes?', 190),
+  seg('Teacher', 'Does everyone have a Chromebook out?', 220),
   seg('Student', 'Because there were fewer people left to do the work', 25),
 ]
 
@@ -58,6 +59,12 @@ test('NONE is a real answer in every category', () => {
     SEGMENTS,
   )
   assert.equal(countMoves(moves), 0)
+})
+
+test('a housekeeping question is kept on its own list, with the transcript timestamp', () => {
+  const moves = parseTeachingMoves(reply('<housekeeping>\nDoes everyone have a Chromebook out? @ 3:40\n</housekeeping>'), SEGMENTS)
+  assert.deepEqual(moves.housekeeping, [{ quote: 'Does everyone have a Chromebook out?', timestampSec: 220 }])
+  assert.equal(countMoves(moves), 1)
 })
 
 test('the same moment listed twice is one moment', () => {

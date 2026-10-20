@@ -12,6 +12,7 @@ import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { UPLOAD_STAGE, transcribeEstimateSec, transcribeHint, transcribeStage } from '../lib/transcribeStages'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
+import { questionTags } from '../lib/questionTags'
 import { setPlanningPrefill } from '../lib/communicationsPrefill'
 import { MIN_STRETCH_TO_SHOW_SEC, longestTeacherStretch } from '../lib/teacherStretch'
 import { createPlaybackQueue, primeAudioElement, splitIntoSentences, type PlaybackQueue } from '../lib/voicePlayback'
@@ -5495,6 +5496,18 @@ function QuestioningCheckingTab({
   const [showUnfollowed, setShowUnfollowed] = useState(false)
   const showRate = heard != null && followed != null && heard >= 3
 
+  // Questions you answered yourself: you asked, and the answer came from you
+  // before a student had the chance. Its own count, because each one is a
+  // question students were not given time to answer.
+  const selfAnswered = moves?.selfAnswered ?? []
+  const [showSelfAnswered, setShowSelfAnswered] = useState(false)
+  // Also heard: question marks that asked nothing of students. Tags are
+  // counted from the transcript (lib/questionTags); housekeeping comes from
+  // the moves read, on lessons read since it existed.
+  const tags = questionTags(session.segments ?? [])
+  const housekeeping = moves?.housekeeping ?? []
+  const [showAlsoHeard, setShowAlsoHeard] = useState(false)
+
   const reasoningFirst = questions.find((q) => q.mix === 'reasoning') ?? questions.find((q) => q.mix === 'explain')
   const keep: KeepLine | null = reasoningFirst
     ? {
@@ -5522,7 +5535,8 @@ function QuestioningCheckingTab({
           <p className="text-sm text-ink-soft">
             Questions are the ones you asked and left with students — not "okay?", "right?" or "are we ready?". Each is
             sorted by what answering it asked for: recall, explaining why or how, or reasoning (justifying, comparing,
-            judging).
+            judging). A question you answered yourself before a student could is counted on its own, and tags like "right?"
+            and housekeeping questions are listed but not counted.
           </p>
           <p className="text-sm text-ink-soft">
             A check is a moment you asked students to show or say what they understood. Each says who it asked and what you
@@ -5539,6 +5553,62 @@ function QuestioningCheckingTab({
       {/* Your questions and checks, on one lesson timeline; a key item shows
           its moments. */}
       <QuestionsChecksPart session={session} questions={questions} byName={byName} />
+
+      {/* Questions you answered yourself, counted on their own. */}
+      {selfAnswered.length > 0 && (
+        <div className="flex flex-col gap-3 border-t border-dashed border-hairline pt-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="font-heading text-xl font-bold text-forest">Questions you answered yourself</p>
+            <span className="font-heading text-2xl font-extrabold text-forest">{selfAnswered.length}</span>
+          </div>
+          <p className="text-base font-semibold text-ink">
+            {selfAnswered.length === 1
+              ? 'Once, you asked a question and gave the answer before a student could.'
+              : `${selfAnswered.length} times, you asked a question and gave the answer before a student could.`}
+          </p>
+          {(showSelfAnswered ? selfAnswered : selfAnswered.slice(0, 2)).map((q, i) => (
+            <div key={i} className="flex items-baseline justify-between gap-4 rounded-xl bg-cream px-3.5 py-3 text-sm text-ink">
+              <span>“{withoutAddressedNames(q.quote)}”</span>
+              <span className="shrink-0 font-mono text-xs text-ink-soft">{formatTime(q.timestampSec)}</span>
+            </div>
+          ))}
+          {selfAnswered.length > 2 && (
+            <button type="button" onClick={() => setShowSelfAnswered((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-terracotta/40">
+              {showSelfAnswered ? 'Show fewer' : `Show all ${selfAnswered.length}`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Also heard: question marks that were not questions. Not counted. */}
+      {(tags.length > 0 || housekeeping.length > 0) && (
+        <div className="flex flex-col gap-2">
+          <button type="button" onClick={() => setShowAlsoHeard((v) => !v)} className="self-start text-left text-sm text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-terracotta/40">
+            <span className="font-semibold text-ink">Also heard, not counted as questions:</span>{' '}
+            {[
+              tags.length > 0 ? `${tags.length} “right?” / “okay?” tag${tags.length === 1 ? '' : 's'}` : null,
+              housekeeping.length > 0 ? `${housekeeping.length} housekeeping question${housekeeping.length === 1 ? '' : 's'}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}{' '}
+            <span className="font-semibold text-terracotta-600">{showAlsoHeard ? 'Hide' : 'Show'}</span>
+          </button>
+          {showAlsoHeard && (
+            <div className="flex flex-wrap gap-2 text-xs text-ink-soft">
+              {tags.map((g, i) => (
+                <span key={`t${i}`} className="rounded-full bg-cream px-2.5 py-1">
+                  “{g.tag}?” <span className="font-mono">{formatTime(g.timestampSec)}</span>
+                </span>
+              ))}
+              {housekeeping.map((h, i) => (
+                <span key={`h${i}`} className="rounded-full bg-cream px-2.5 py-1">
+                  “{withoutAddressedNames(h.quote)}” <span className="font-mono">{formatTime(h.timestampSec)}</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Your follow-ups: a dot per answer heard, filled where you followed up. */}
       <div className="flex flex-col gap-4 border-t border-dashed border-hairline pt-5">

@@ -898,6 +898,9 @@ export type AudioTeachingMoves = {
   /// Questions the teacher asked and answered themselves. Counted nowhere
   /// else — the question detector excludes them by design.
   selfAnswered?: AudioMoveQuote[]
+  /// Questions about logistics, not the learning ("where is it?"). Counted
+  /// nowhere as questions; absent on lessons read before it existed.
+  housekeeping?: AudioMoveQuote[]
   questionKinds?: (AudioMoveQuote & { kind: AudioQuestionKind })[]
   /// `parts` is what the direction actually named. An empty list is the
   /// finding, not missing data: that direction named none of the four.
