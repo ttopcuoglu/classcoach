@@ -1,7 +1,8 @@
 // Regenerates the home page's teacher samples from the real report pages:
-//   public/samples/lesson-debrief.pdf / .png   a recorded lesson, with Rubric Lens
 //   public/samples/talk-it-through.pdf         a Talk It Through conversation
 //   public/samples/lesson-plan-feedback.pdf    feedback on a teacher's plan
+//
+// The sample Lesson Debrief is made by capture-sample-debrief.mjs instead.
 //
 //   npm run dev                                   (in another terminal)
 //   node scripts/capture-teacher-samples.mjs
@@ -27,14 +28,7 @@ const FIXTURES = {
   '/api/lesson-plans': [samples.plan],
 }
 
-await withChrome({ fixtures: FIXTURES }, async ({ open, pdf, shoot }) => {
-  await open(`/audio-coaching/${samples.lesson.id}/export`)
-  await pdf('lesson-debrief.pdf')
-  await shoot('lesson-debrief.png', `() => {
-    const sections = [...document.querySelectorAll('section')];
-    return [document.querySelector('header'), sections[0]];
-  }`)
-
+await withChrome({ fixtures: FIXTURES }, async ({ open, pdf }) => {
   await open(`/talk-to-me/${samples.talk.id}/export`)
   await pdf('talk-it-through.pdf')
 

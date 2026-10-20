@@ -268,13 +268,14 @@ function SampleCard({ feature, eyebrow, title, before, after, pdf }: (typeof SAM
 
 // The sample band's tiles: a miniature of the printed report's numbers. The
 // figures are the ones in the published sample report
-// (/samples/lesson-debrief.pdf) — an invented class, not a real one — and the frame says "Sample" so nobody reads them as
-// someone's results.
-const HERO_TILES = [
-  { label: 'You spoke', value: '36.5', unit: '%', card: 'bg-peach-tint', ink: 'text-terracotta-600' },
-  { label: 'Students spoke', value: '22.1', unit: '%', card: 'bg-gold-tint', ink: 'text-terracotta-600' },
-  { label: 'Questions', value: '14', unit: '', card: 'bg-mint-tint', ink: 'text-forest' },
-  { label: 'Avg. wait', value: '3.56', unit: 's', card: 'bg-mint-tint', ink: 'text-forest' },
+// (/samples/lesson-debrief.pdf, made by scripts/capture-sample-debrief.mjs) —
+// an invented class, not a real one — and the frame says "Sample" so nobody
+// reads them as someone's results.
+const SAMPLE_TILES = [
+  { label: 'You spoke', value: '34.3', unit: '%', card: 'bg-peach-tint', ink: 'text-terracotta-600' },
+  { label: 'Students spoke', value: '13.5', unit: '%', card: 'bg-gold-tint', ink: 'text-terracotta-600' },
+  { label: 'Questions', value: '7', unit: '', card: 'bg-mint-tint', ink: 'text-forest' },
+  { label: 'Avg. wait', value: '3.88', unit: 's', card: 'bg-mint-tint', ink: 'text-forest' },
 ]
 
 // Two screenshots of the real report (the Summary, and Talk & Participation's
@@ -764,12 +765,12 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           <div>
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Lesson Debrief · Sample report</span>
             <h3 className="mt-2 font-heading text-2xl font-bold leading-snug sm:text-3xl">
-              Eleven minutes of class, seen clearly<span className="text-gold">.</span>
+              Twenty-two minutes of class, seen clearly<span className="text-gold">.</span>
             </h3>
             <p className="mt-3 text-sm leading-relaxed text-cream/75">
-              Who was heard and for how long, what was asked and how long students had to think, how
-              checks for understanding went — with the exact moments, timestamps, and one next step. Then
-              the same lesson through the Danielson rubric: evidence for each component, never a score.
+              Who was heard and for how long, what was asked and how long students had to think, whether
+              your asks held — with the exact moments, timestamps, and what to try next time. Then the same
+              lesson read as a biology specialist would: what worked, and where it could go further.
               An invented class; no real teacher or student.
             </p>
             <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-gold">
@@ -778,7 +779,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             </span>
           </div>
           <div className="grid grid-cols-2 gap-3 rounded-2xl bg-cream p-4 text-left sm:grid-cols-4 lg:grid-cols-2">
-            {HERO_TILES.map((t) => (
+            {SAMPLE_TILES.map((t) => (
               <div key={t.label} className={`rounded-xl px-3 py-3 ${t.card}`}>
                 <p className={`text-[10px] font-bold uppercase tracking-[0.12em] ${t.ink}`}>{t.label}</p>
                 <p className="font-heading text-2xl font-extrabold leading-tight text-forest">
@@ -790,7 +791,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <div className="col-span-2 rounded-xl border-l-4 border-gold bg-gold-tint/60 px-3 py-2.5 sm:col-span-4 lg:col-span-2">
               <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-terracotta-600">Why wait time matters</p>
               <p className="mt-0.5 text-sm leading-snug text-ink">
-                Three to five seconds of silence after a question is the single cheapest change most teachers can make.
+                Three to five seconds of silence after a question is the single cheapest change most teachers can make. It feels much longer than it is.
               </p>
             </div>
           </div>
