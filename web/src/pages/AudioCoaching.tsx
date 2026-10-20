@@ -5702,7 +5702,8 @@ function QuestionsChecksPart({
                     setHot(it.i)
                   }}
                   className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 transition-transform"
-                  style={{ left: x(it.t), opacity: it.on ? 1 : 0.3, transform: `translate(-50%, -50%) scale(${hot === it.i ? 1.4 : 1})` }}
+                  // Every mark in full colour; the chosen kind a touch larger.
+                  style={{ left: x(it.t), transform: `translate(-50%, -50%) scale(${hot === it.i ? 1.5 : it.on ? 1.2 : 1})` }}
                 >
                   {it.node}
                 </button>

@@ -1031,7 +1031,8 @@ struct QuestionsSection: View {
             Circle().fill(q.mix.color).frame(width: 13, height: 13)
         }
         .buttonStyle(.plain)
-        .opacity(on ? 1 : 0.3)
+        // Full colour always; the chosen kind a touch larger.
+        .scaleEffect(on ? 1.25 : 1)
     }
 
     private func qcCheckRing(_ c: AudioCfuEntry, on: Bool) -> some View {
@@ -1042,7 +1043,7 @@ struct QuestionsSection: View {
                 .frame(width: 13, height: 13)
         }
         .buttonStyle(.plain)
-        .opacity(on ? 1 : 0.3)
+        .scaleEffect(on ? 1.25 : 1)
     }
 
     private func qcPills(count: @escaping (QuestionMix) -> Int, checks: Int, checksOn: Bool, current: QuestionMix) -> some View {
