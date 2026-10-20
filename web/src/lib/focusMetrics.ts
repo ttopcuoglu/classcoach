@@ -8,7 +8,7 @@ export const FOCUS_METRIC_LABELS: Record<FocusMetric, string> = {
   longestMonologue: 'Longest unbroken stretch',
   waitTime2: 'Pause after an answer',
   followUpQuestionCount: 'Follow-up questions',
-  higherOrderPct: 'Higher-order questions',
+  higherOrderPct: 'Questions beyond recall',
   cfuCount: 'Checks for understanding',
   // Retired from the picker, kept so an account that chose one still renders.
   avgWaitTime: 'Avg. wait time',

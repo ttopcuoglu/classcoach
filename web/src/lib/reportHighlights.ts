@@ -195,7 +195,9 @@ export type NextTimeItem = { id: string; from: string; text: string; lead?: stri
 /// forward. Each names where it came from, so a teacher can go and read the
 /// evidence behind it. "Worth double-checking" notes are left out — a caution
 /// about possible content errors is not something to build a lesson on.
-export function buildNextTimeItems(session: AudioSessionWithSegments): NextTimeItem[] {
+export function buildNextTimeItems(
+  session: Pick<AudioSessionWithSegments, 'momentToRevisit' | 'nextSteps' | 'contentNotes'>,
+): NextTimeItem[] {
   const items: NextTimeItem[] = []
   const add = (id: string, from: string, text: string | null | undefined, lead?: string) => {
     if (text?.trim()) items.push({ id, from, text: text.trim(), lead })

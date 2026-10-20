@@ -2885,6 +2885,85 @@ function FocusSelector({
   )
 }
 
+/// The one focus a teacher chose on their latest lesson's Summary, brought to
+/// My Growth with the trends for that part of the lesson one tap away.
+///
+/// The two used to know nothing of each other: a teacher could make follow-ups
+/// their focus for next lesson and still find My Growth charting their pace.
+/// This only offers; it never changes the saved My Growth focus by itself,
+/// since that one is account-wide and the Coach reads it too.
+function LessonFocusLink({
+  sessions,
+  focusMetric,
+  onPick,
+}: {
+  sessions: AudioSession[]
+  focusMetric: FocusMetric | null
+  onPick: (metric: FocusMetric) => void
+}) {
+  const newestFirst = sessions
+    .slice()
+    .sort((a, b) => new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime())
+  const chosen = newestFirst.find((s) => s.lessonFocus?.next?.itemId)
+  const itemId = chosen?.lessonFocus?.next?.itemId
+  if (!chosen || !itemId) return null
+  const item = buildNextTimeItems(chosen).find((i) => i.id === itemId)
+  if (!item) return null
+
+  const section = ITEM_SECTION[itemId]
+  const sectionLabel = section ? INSIGHTS_SECTIONS.find((s) => s.key === section)?.label : undefined
+  // Only Talk & Participation and Questioning & Checking have trends; the
+  // other two sections' lessons are where to follow those.
+  const metrics = sectionLabel ? (FOCUS_METRIC_GROUPS.find((g) => g.category === sectionLabel)?.metrics ?? []) : []
+
+  // How many lessons in a row, newest first, chose a focus in this same part.
+  let streak = 0
+  for (const s of newestFirst.slice(newestFirst.indexOf(chosen))) {
+    const id = s.lessonFocus?.next?.itemId
+    if (!id || ITEM_SECTION[id] !== section) break
+    streak++
+  }
+  const date = new Date(chosen.sessionDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+
+  return (
+    <div className="rounded-2xl bg-peach-tint/50 p-5">
+      <p className="text-xs font-bold uppercase tracking-wide text-[#8E3F22]">Your one focus, from your lesson on {date}</p>
+      <p className="mt-1.5 text-sm text-ink">{item.text}</p>
+      {streak >= 2 && sectionLabel && (
+        <p className="mt-1.5 text-xs text-ink-soft">
+          {sectionLabel} has been your focus for your last {streak} lessons.
+        </p>
+      )}
+      {metrics.length > 0 ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-ink-soft">Follow it here:</span>
+          {metrics.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => onPick(m)}
+              aria-pressed={focusMetric === m}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                focusMetric === m
+                  ? 'border-terracotta bg-terracotta text-cream'
+                  : 'border-hairline bg-cream-card text-ink-soft hover:border-terracotta/40 hover:text-terracotta-600'
+              }`}
+            >
+              {FOCUS_METRIC_LABELS[m]}
+            </button>
+          ))}
+        </div>
+      ) : (
+        sectionLabel && (
+          <p className="mt-2 text-xs text-ink-soft">
+            My Growth doesn&rsquo;t chart {sectionLabel} yet. Each lesson&rsquo;s own {sectionLabel} page is where to follow it.
+          </p>
+        )
+      )}
+    </div>
+  )
+}
+
 function MyGrowthTab({
   sessions,
   focusMetric,
@@ -2954,11 +3033,13 @@ function MyGrowthTab({
   )
   const waitTime2Max = Math.max(4, ...waitTime2.filter((v): v is number => v != null)) * 1.2
   // Count AND total on one chart rather than a share on its own: a share is
-  // 100% when one question was asked and one was higher-order, which reads as
-  // a triumph. The gap between the two lines is the recall questions, and it
-  // cannot lie that way.
-  const higherOrderCount = analyzed.map((s) => metricsNum(s, 'higherOrderQuestionCount'))
-  const allQuestions = analyzed.map((s) => s.questionCount ?? null)
+  // 100% when one question was asked and one went beyond recall, which reads
+  // as a triumph. The gap between the two lines is the recall questions, and
+  // it cannot lie that way. Sorted by classifyQuestions, so each point is the
+  // "X of Y questions went beyond recall" that lesson's own page shows.
+  const questionMixes = analyzed.map((s) => (s.questionLog == null ? null : classifyQuestions(s)))
+  const beyondRecall = questionMixes.map((qs) => (qs == null ? null : qs.filter((q) => q.mix !== 'recall').length))
+  const allQuestions = questionMixes.map((qs) => (qs == null ? null : qs.length))
   const questionMax = Math.max(6, ...allQuestions.filter((v): v is number => v != null)) * 1.15
 
   const insight = buildTrendInsight(analyzed)
@@ -3041,12 +3122,12 @@ function MyGrowthTab({
       key: 'higherOrderPct',
       node: (
         <TrendChart
-          title="Higher-order questions"
+          title="Questions beyond recall"
           unit=""
           maxValue={questionMax}
           labels={labels}
           series={[
-            { label: 'Higher-order', colorVar: '--color-terracotta', values: higherOrderCount },
+            { label: 'Beyond recall', colorVar: '--color-terracotta', values: beyondRecall },
             { label: 'All questions', colorVar: '--color-hairline', values: allQuestions },
           ]}
           emptyMessage="No questions detected yet to trend."
@@ -3072,6 +3153,7 @@ function MyGrowthTab({
 
   return (
     <div className="flex flex-col gap-6">
+      <LessonFocusLink sessions={sessions} focusMetric={focusMetric} onPick={onFocusMetricChange} />
       <FocusSelector focusMetric={focusMetric} onChange={onFocusMetricChange} />
 
       {insight && (
@@ -5433,9 +5515,9 @@ const KIND_TO_MIX: Record<string, MixKey> = { recall: 'recall', explain: 'explai
 
 /// Each counted question in one of three kinds: the finer read where it found
 /// the question, else the recall / higher-order split (higher-order without a
-/// finer kind reads as explain). Shared by Questioning & Checking and Summary
-/// so the two never show different numbers.
-function classifyQuestions(session: AudioSessionWithSegments) {
+/// finer kind reads as explain). Shared by Questioning & Checking, Summary and
+/// My Growth so the three never show different numbers.
+function classifyQuestions(session: Pick<AudioSession, 'questionLog' | 'teachingMoves'>) {
   const kinds = session.teachingMoves?.questionKinds ?? []
   const kindAt = (sec: number) => kinds.find((k) => Math.abs(k.timestampSec - sec) <= 4)?.kind
   return (session.questionLog ?? []).map((q) => {
@@ -5963,13 +6045,15 @@ function buildTrendInsight(sessions: AudioSession[]): string | null {
     }
   }
 
-  const withQuestions = sessions.filter(
-    (s) => (s.questionCount ?? 0) >= MIN_N_FOR_PERCENT && s.higherOrderPct != null,
-  )
-  if (withQuestions.length >= 3) {
-    const delta = withQuestions[withQuestions.length - 1].higherOrderPct! - withQuestions[0].higherOrderPct!
+  // The beyond-recall share, sorted the way each lesson's own page sorts it.
+  const beyondShares = sessions
+    .map((s) => (s.questionLog == null ? [] : classifyQuestions(s)))
+    .filter((qs) => qs.length >= MIN_N_FOR_PERCENT)
+    .map((qs) => (qs.filter((q) => q.mix !== 'recall').length / qs.length) * 100)
+  if (beyondShares.length >= 3) {
+    const delta = beyondShares[beyondShares.length - 1] - beyondShares[0]
     if (delta >= 10) {
-      return `Your higher-order questions are up ${Math.round(delta)} points since your first tracked session — nice trend.`
+      return `The share of your questions that went beyond recall is up ${Math.round(delta)} points since your first tracked session.`
     }
   }
 
