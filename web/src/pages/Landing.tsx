@@ -831,25 +831,26 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           <div className="relative">
             <div aria-hidden="true" className="absolute inset-0 translate-x-3 translate-y-3 rounded-3xl bg-gold" />
             <div className="relative rounded-3xl bg-forest p-8 text-cream">
-              {/* "3.1s average wait time" on a voice product reads as how long the
-                  app takes to answer. This says what is being measured, and that
-                  the numbers are an illustration rather than someone's results. */}
+              {/* One of the seven measures My Growth really charts — questions
+                  beyond recall, the ones asking students to explain or reason —
+                  with an illustration's numbers, said to be an example. The
+                  card claims only what the chart shows. */}
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">Example growth</p>
+                <p className="text-sm font-semibold">Example growth · My Growth</p>
                 <p className="text-xs text-cream/60">Across four lessons</p>
               </div>
-              <p className="mt-6 font-heading text-5xl font-extrabold">3.1 seconds</p>
-              <p className="mt-1 text-sm text-cream/70">average student thinking time</p>
-              <p className="mt-1 text-sm text-gold">Up 1.7 seconds across four lessons</p>
+              <p className="mt-6 font-heading text-5xl font-extrabold">7 questions</p>
+              <p className="mt-1 text-sm text-cream/70">beyond recall in the latest lesson</p>
+              <p className="mt-1 text-sm text-gold">Up from 2 across four lessons</p>
               <div className="mt-7 flex items-end gap-3" aria-hidden="true">
-                {[36, 52, 68, 84].map((h, i) => (
+                {[24, 36, 60, 84].map((h, i) => (
                   <div key={i} className="flex-1 rounded-t-lg bg-gold" style={{ height: `${h}px` }} />
                 ))}
               </div>
               <div className="mt-7 rounded-xl bg-forest-soft p-4">
-                <p className="text-sm font-semibold">You created more space for thinking.</p>
+                <p className="text-sm font-semibold">More of your questions asked students to think.</p>
                 <p className="mt-1 text-xs text-cream/70">
-                  Student responses got longer as the thinking time grew.
+                  Each bar is one recorded lesson: the questions that asked students to explain or reason.
                 </p>
               </div>
             </div>
