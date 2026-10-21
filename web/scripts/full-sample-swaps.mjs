@@ -43,7 +43,11 @@ export const SWAPS = {
 
     // Questioning & Checking
     'Of the 33 questions asked, several were invitations to read or volunteer rather than probes into content, and at least one placed the thinking back on you rather than leaving it with students — after asking “So what was it? So which two?” you supplied the answer yourself rather than waiting it out.':
-      'Of the 33 questions asked, several were invitations to read or volunteer rather than probes into content, and at least one placed the thinking back on you rather than leaving it with students — after asking “So which two go in? Which two?” you supplied the answer yourself rather than waiting it out.',
+      'Of the questions asked, several were invitations to read or volunteer rather than probes into content, and at least one placed the thinking back on you rather than leaving it with students — after asking “So which two go in? Which two?” you supplied the answer yourself rather than waiting it out.',
+    // The fixture's note counts 33 questions and a wait under three seconds;
+    // the report beside it shows 6 questions and TAWT 7.4 s.
+    'With wait time averaging under three seconds, there’s limited room for a student to gather a fuller response before the question moves on or gets answered by you. It’s not clear from the recording how many of the 33 pushed into reasoning versus simply directing attention or inviting a reader.':
+      'Where you did leave a pause, students had room to gather a fuller response before the question moved on. It’s not clear from the recording how many of your questions pushed into reasoning versus simply directing attention or inviting a reader.',
     '[name], what do you think is the meaning of the word abandoned?': '[name], what do you think the word aerobic means?',
     'Yeah. Natural climate change caused them to what?': 'Yeah. Without oxygen the cell switches to what?',
     'So of the six right here, which one would you think would fall under earthquakes?':

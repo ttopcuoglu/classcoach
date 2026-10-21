@@ -792,7 +792,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <div className="col-span-2 rounded-xl border-l-4 border-gold bg-gold-tint/60 px-3 py-2.5 sm:col-span-4 lg:col-span-2">
               <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-terracotta-600">What TAWT measures</p>
               <p className="mt-0.5 text-sm leading-snug text-ink">
-                Teacher-Anchored Wait Time: after a question that asked students to explain or reason, how long until you spoke again, any answer included. Three seconds or more gives most students time to think.
+                Teacher-Anchored Wait Time: after a question that asked students to explain or reason, how long until you spoke again, any answer included. When no one answered, three seconds or more of silence gives most students time to think.
               </p>
             </div>
           </div>
