@@ -54,6 +54,7 @@ import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { readStudentTalkFocus } from '../lib/studentTalkFocus.ts'
 import { readMomentToRevisit } from '../lib/momentToRevisit.ts'
 import { parseNextSteps, writeNextStepsFromNotes } from '../lib/nextSteps.ts'
+import { focusLineKey, MAX_STORED_LINES, writeFocusLine, type FocusLine } from '../lib/focusLine.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 import { splitMetricLogs } from '../lib/metricsForClient.ts'
 
@@ -413,6 +414,20 @@ audioSessionsRouter.patch('/:id', async (req, res) => {
     return
   }
 
+  // Choosing a focus replaces `next` only: the short lines already written
+  // for this lesson's items (lib/focusLine.ts) are kept, so going back to one
+  // does not write it again.
+  let lessonFocus: Prisma.InputJsonValue | typeof Prisma.DbNull | undefined
+  if (focusItemId !== undefined) {
+    const current = await prisma.audioSession.findFirst({
+      where: { id: req.params.id, userId: req.user!.userId },
+      select: { lessonFocus: true },
+    })
+    const lines = focusLinesOf(current?.lessonFocus)
+    const next = focusItemId ? { itemId: focusItemId, chosenAt: new Date().toISOString() } : null
+    lessonFocus = next || lines ? { ...(next ? { next } : {}), ...(lines ? { lines } : {}) } : Prisma.DbNull
+  }
+
   const { count } = await prisma.audioSession.updateMany({
     where: { id: req.params.id, userId: req.user!.userId },
     data: {
@@ -428,9 +443,7 @@ audioSessionsRouter.patch('/:id', async (req, res) => {
       ...(followUpDate !== undefined ? { followUpDate: followUpDate ? new Date(followUpDate) : null } : {}),
       ...(phases !== undefined ? { phases } : {}),
       ...(durationSec !== undefined ? { durationSec } : {}),
-      ...(focusItemId !== undefined
-        ? { lessonFocus: focusItemId ? { next: { itemId: focusItemId, chosenAt: new Date().toISOString() } } : Prisma.DbNull }
-        : {}),
+      ...(lessonFocus !== undefined ? { lessonFocus } : {}),
     },
   })
   if (count === 0) {
@@ -2066,6 +2079,51 @@ audioSessionsRouter.post('/:id/moment-to-revisit', async (req, res) => {
     include: { segments: { orderBy: { startSec: 'asc' } } },
   })
   res.json(updated)
+})
+
+/// The short focus lines stored on a lesson, or null when there are none.
+function focusLinesOf(lessonFocus: unknown): Record<string, FocusLine> | null {
+  const lines = (lessonFocus as { lines?: unknown } | null)?.lines
+  return lines && typeof lines === 'object' && Object.keys(lines).length > 0 ? (lines as Record<string, FocusLine>) : null
+}
+
+// The one focus for next lesson, said simply — see lib/focusLine.ts. Asked for
+// when a Summary opens on a focus that has no short line yet; the text is the
+// Try next time item as the page shows it, and the line is kept under its key.
+audioSessionsRouter.post('/:id/focus-line', async (req, res) => {
+  const { text, from } = req.body ?? {}
+  if (typeof text !== 'string' || !text.trim() || text.length > 2000) {
+    res.status(400).json({ error: 'text is required' })
+    return
+  }
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    select: { id: true, lessonFocus: true },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  const key = focusLineKey(text)
+  const lines = focusLinesOf(session.lessonFocus) ?? {}
+  if (lines[key]) {
+    res.json({ key, line: lines[key] })
+    return
+  }
+
+  const line = await writeFocusLine(text, typeof from === 'string' ? from.slice(0, 80) : null)
+  if (!line) {
+    res.status(502).json({ error: 'Could not shorten this focus. Please try again.' })
+    return
+  }
+  // Newest last; the oldest go first if a lesson ever runs past the cap.
+  const kept = Object.entries({ ...lines, [key]: line }).slice(-MAX_STORED_LINES)
+  const current = (session.lessonFocus ?? {}) as Record<string, unknown>
+  await prisma.audioSession.update({
+    where: { id: session.id },
+    data: { lessonFocus: { ...current, lines: Object.fromEntries(kept) } as Prisma.InputJsonValue },
+  })
+  res.json({ key, line })
 })
 
 // "Try next time" lines for a report summarized before they existed, written

@@ -25,6 +25,7 @@ import {
   generateHardLook,
   generateMomentToRevisit,
   generateNextSteps,
+  writeFocusLine,
   generateRubricLens,
   getAudioSession,
   getAudioSessions,
@@ -83,6 +84,7 @@ import {
   speechRateMetric,
 } from '../lib/reportConfidence'
 import { buildNextTimeItems, type NoticeCandidate } from '../lib/reportHighlights'
+import { focusLineKey } from '../lib/focusLine'
 
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60)
@@ -1129,6 +1131,11 @@ function TagSpeakersPanel({
 // useless — every card said it — while analysis already works out what the
 // lesson covered, in lessonContent.summary. One sentence only: this is a card
 // title, and the report shows the summary in full anyway.
+/// Longest title shown whole; a longer one is cut at a pause in the sentence,
+/// and only where that leaves a real phrase.
+const TITLE_MAX = 70
+const TITLE_MIN_BREAK = 25
+
 function sessionTitle(session: { lessonContent?: AudioLessonContent | null; classSubject?: string | null; period?: string | null }): string {
   const summary = session.lessonContent?.summary?.trim()
   if (summary) {
@@ -1136,9 +1143,19 @@ function sessionTitle(session: { lessonContent?: AudioLessonContent | null; clas
     // the first few words, or "Mr." and "e.g." end the title.
     const match = /^.{20,}?[.!?](?=\s|$)/.exec(summary)
     let out = match ? match[0] : summary
-    if (out.length > 90) {
-      const clipped = out.slice(0, 90)
-      out = clipped.slice(0, clipped.lastIndexOf(' ') > 0 ? clipped.lastIndexOf(' ') : 90) + '…'
+    if (out.length > TITLE_MAX) {
+      // Cut where the sentence itself pauses — a comma, dash, colon or
+      // bracket — so the title reads as a whole phrase ("The decline and fall
+      // of the ancient Indian empires") rather than stopping mid-thought
+      // ("…through reading passages and a…"). Only a word clip with an
+      // ellipsis when there is no such pause far enough in.
+      const head = out.slice(0, TITLE_MAX + 1)
+      const breaks = [...head.matchAll(/\s*(?:,|;|:|—|–|\s-\s|\()/g)].map((m) => m.index!).filter((i) => i >= TITLE_MIN_BREAK)
+      if (breaks.length > 0) out = out.slice(0, breaks[breaks.length - 1])
+      else {
+        const clipped = out.slice(0, TITLE_MAX)
+        out = clipped.slice(0, clipped.lastIndexOf(' ') > 0 ? clipped.lastIndexOf(' ') : TITLE_MAX) + '…'
+      }
     }
     out = out.replace(/[\s.]+$/, '')
     if (out) return out
@@ -2477,7 +2494,7 @@ function TryNextTimeList({
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-3xl bg-peach-tint/70 p-5 sm:p-6">
+    <div id="try-next-time" className="flex scroll-mt-6 flex-col gap-4 rounded-3xl bg-peach-tint/70 p-5 sm:p-6">
       <div>
         <p className="text-xs font-bold uppercase tracking-wide text-[#8E3F22]">Try next time</p>
         <p className="mt-0.5 text-sm text-ink-soft">
@@ -2599,10 +2616,31 @@ function SummaryTab({
   const focusSection = focus ? ITEM_SECTION[focus.id] : undefined
   const withGoal = focus?.id === 'questions' && heard != null && followed != null && heard >= 3 && followed < heard
   const goalTarget = withGoal ? Math.min(heard!, followed! + 2) : 0
+  // The focus said simply (server lib/focusLine.ts): written the first time a
+  // Summary opens on it, kept with the lesson. Until then, or if it cannot be
+  // written, the card shows the suggestion as it is.
+  const focusKey = focus ? focusLineKey(focus.text) : null
+  const focusLine = focusKey ? session.lessonFocus?.lines?.[focusKey] : undefined
+  const [whyOpen, setWhyOpen] = useState(false)
+  const triedFocusLines = useRef(new Set<string>())
+  useEffect(() => {
+    if (!focus || !focusKey || focusLine || triedFocusLines.current.has(focusKey)) return
+    triedFocusLines.current.add(focusKey)
+    writeFocusLine(session.id, focus.text, focus.from.split(' · ').pop() ?? focus.from)
+      .then(({ key, line }) =>
+        onUpdate({ ...session, lessonFocus: { ...session.lessonFocus, lines: { ...session.lessonFocus?.lines, [key]: line } } }),
+      )
+      .catch(() => {})
+  }, [focus, focusKey, focusLine, session, onUpdate])
   // Saved with the lesson; shown at once, and put back if the save fails.
   async function chooseFocus(itemId: string | null) {
     const before = session.lessonFocus ?? null
-    onUpdate({ ...session, lessonFocus: itemId ? { next: { itemId, chosenAt: new Date().toISOString() } } : null })
+    // The short lines already written stay with the lesson, as on the server.
+    const lines = before?.lines
+    onUpdate({
+      ...session,
+      lessonFocus: itemId || lines ? { ...(itemId ? { next: { itemId, chosenAt: new Date().toISOString() } } : {}), ...(lines ? { lines } : {}) } : null,
+    })
     window.scrollTo({ top: 0, behavior: 'smooth' })
     try {
       await updateAudioSession(session.id, { focusItemId: itemId })
@@ -2699,32 +2737,54 @@ function SummaryTab({
       {focus && (
         <div className="grid items-center gap-5 rounded-3xl bg-peach-tint p-6 shadow-[6px_6px_0_var(--color-gold)] sm:grid-cols-[1fr_auto]">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-[#8E3F22]">Your one focus for next lesson</p>
-            <p className="mt-1.5 text-lg leading-relaxed text-ink">{focus.text}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#6E4A3A]">
-              {focusSection ? (
+            <p className="text-xs font-bold uppercase tracking-wide text-[#8E3F22]">Next lesson, try this</p>
+            {focusLine ? (
+              <>
+                {focusLine.well && <p className="mt-2 text-base leading-relaxed text-[#6E4A3A]">{focusLine.well}</p>}
+                <p className="mt-1.5 font-heading text-xl font-bold leading-snug text-ink">{focusLine.try}</p>
+              </>
+            ) : (
+              <p className="mt-1.5 text-lg leading-relaxed text-ink">{focus.text}</p>
+            )}
+            {/* The full suggestion, and where it came from, one tap away. */}
+            {focusLine && whyOpen && (
+              <div className="mt-3 border-t border-[#E9C3AE] pt-3 text-sm leading-relaxed text-[#6E4A3A]">
+                <p>{focus.text}</p>
+                {focusSection ? (
+                  <button type="button" onClick={() => onNavigateInsights(focusSection)} className="mt-1.5 font-semibold hover:underline">
+                    See it in {focus.from.split(' · ').pop()} →
+                  </button>
+                ) : (
+                  <p className="mt-1.5">From {focus.from.split(' · ').pop()}</p>
+                )}
+              </div>
+            )}
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm font-semibold text-[#8E3F22] print:hidden">
+              {focusLine ? (
+                <button type="button" onClick={() => setWhyOpen((v) => !v)} aria-expanded={whyOpen} className="hover:underline">
+                  {whyOpen ? 'Hide why' : 'Why this ›'}
+                </button>
+              ) : focusSection ? (
                 <button type="button" onClick={() => onNavigateInsights(focusSection)} className="hover:underline">
                   From {focus.from.split(' · ').pop()} →
                 </button>
               ) : (
                 <span>From {focus.from.split(' · ').pop()}</span>
               )}
-              <span>
-                {chosenFocus
-                  ? 'Your choice'
-                  : headlineSection && suggested?.id === HEADLINE_SECTION_ITEM[headlineSection]
-                    ? 'Suggested: where today’s pattern points'
-                    : 'Suggested'}
-                {' · '}
-                {/* With no suggestion to go back to, the way out is to clear it. */}
-                {chosenFocus && suggested?.id !== chosenFocus.id ? (
-                  <button type="button" onClick={() => void chooseFocus(null)} className="font-semibold hover:underline">
-                    {suggested ? 'Back to the suggestion' : 'Clear my focus'}
-                  </button>
-                ) : (
-                  'pick another from Try next time below'
-                )}
-              </span>
+              {/* With no suggestion to go back to, the way out is to clear it. */}
+              {chosenFocus && suggested?.id !== chosenFocus.id ? (
+                <button type="button" onClick={() => void chooseFocus(null)} className="hover:underline">
+                  {suggested ? 'Back to the suggestion' : 'Clear my focus'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('try-next-time')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  className="hover:underline"
+                >
+                  Choose a different one
+                </button>
+              )}
             </div>
           </div>
           {withGoal && (

@@ -544,12 +544,54 @@ struct AudioTeachingMoves: Decodable {
     }
 }
 
-/// The one focus for next lesson the teacher picked from Try next time.
+/// The one focus for next lesson the teacher picked from Try next time, and
+/// the short lines written for the items made the focus (server
+/// lib/focusLine.ts), keyed by `FocusLine.key(for:)` of the item's text.
+/// Each part decodes on its own, so an unexpected value in one never loses
+/// the other.
 struct AudioLessonFocus: Decodable {
     struct Next: Decodable {
         let itemId: String
     }
-    let next: Next?
+    var next: Next?
+    var lines: [String: FocusLine]?
+
+    private enum CodingKeys: String, CodingKey { case next, lines }
+
+    init(next: Next?, lines: [String: FocusLine]?) {
+        self.next = next
+        self.lines = lines
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        next = try? c.decodeIfPresent(Next.self, forKey: .next)
+        lines = try? c.decodeIfPresent([String: FocusLine].self, forKey: .lines)
+    }
+}
+
+/// The focus said simply: what went well, when the suggestion says so, and
+/// one thing to do.
+struct FocusLine: Decodable {
+    let well: String?
+    let tryLine: String
+
+    private enum CodingKeys: String, CodingKey {
+        case well
+        case tryLine = "try"
+    }
+
+    /// FNV-1a over the trimmed text, as 8 hex digits — the key the server
+    /// stores a line under. Must match server and web exactly.
+    static func key(for text: String) -> String {
+        var h: UInt32 = 0x811c9dc5
+        for scalar in text.trimmingCharacters(in: .whitespacesAndNewlines).unicodeScalars {
+            h ^= scalar.value
+            h = h &* 0x01000193
+        }
+        let hex = String(h, radix: 16)
+        return String(repeating: "0", count: 8 - hex.count) + hex
+    }
 }
 
 /// A number, or nothing for any other JSON value — so one unexpected value
@@ -926,7 +968,7 @@ extension AudioSession {
 
     /// One sentence, not the two the summary may run to — this is a card
     /// title, and the report shows the summary in full anyway.
-    static func titleSentence(_ text: String?, limit: Int = 90) -> String? {
+    static func titleSentence(_ text: String?, limit: Int = 70) -> String? {
         guard let text else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -935,13 +977,29 @@ extension AudioSession {
         // in the first few words — otherwise "Mr." or "e.g." ends the title.
         let chars = Array(trimmed)
         var cut: Int?
-        for i in 20..<min(chars.count, limit) where ".!?".contains(chars[i]) {
+        // Searched to the end, as on the web: the sentence may run past the
+        // limit and still be cut at a pause below. (A summary under 20
+        // characters has no range to search, and is its own title.)
+        for i in stride(from: 20, to: chars.count, by: 1) where ".!?".contains(chars[i]) {
             if i + 1 >= chars.count || chars[i + 1] == " " { cut = i; break }
         }
         var out = cut.map { String(chars[0...$0]) } ?? trimmed
         if out.count > limit {
-            let clipped = String(out.prefix(limit))
-            out = (clipped.lastIndex(of: " ").map { String(clipped[..<$0]) } ?? clipped) + "…"
+            // Cut where the sentence itself pauses — a comma, dash, colon or
+            // bracket — so the title reads as a whole phrase rather than
+            // stopping mid-thought; a word clip with an ellipsis only when no
+            // pause comes far enough in. Mirrors sessionTitle on the web.
+            let head = String(out.prefix(limit + 1))
+            let pause = try! NSRegularExpression(pattern: "\\s*(?:,|;|:|—|–|\\s-\\s|\\()")
+            let breaks = pause.matches(in: head, range: NSRange(head.startIndex..., in: head))
+                .compactMap { Range($0.range, in: head).map { head.distance(from: head.startIndex, to: $0.lowerBound) } }
+                .filter { $0 >= 25 }
+            if let last = breaks.last {
+                out = String(out.prefix(last))
+            } else {
+                let clipped = String(out.prefix(limit))
+                out = (clipped.lastIndex(of: " ").map { String(clipped[..<$0]) } ?? clipped) + "…"
+            }
         }
         out = out.trimmingCharacters(in: CharacterSet(charactersIn: " ."))
         return out.isEmpty ? nil : out

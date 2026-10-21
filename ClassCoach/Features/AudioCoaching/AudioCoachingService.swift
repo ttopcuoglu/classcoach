@@ -246,6 +246,19 @@ enum AudioCoachingService {
     }
 
     /// "Try next time" lines for a report summarised before they existed.
+    private struct FocusLineBody: Encodable { let text: String; let from: String }
+    struct FocusLineResponse: Decodable { let key: String; let line: FocusLine }
+
+    /// The focus said simply, written once per item and kept with the lesson.
+    /// Mirrors `writeFocusLine` on the web.
+    static func writeFocusLine(sessionId: String, text: String, from: String) async throws -> FocusLineResponse {
+        try await APIClient.shared.request(
+            "/api/audio-sessions/\(sessionId)/focus-line",
+            method: "POST",
+            body: FocusLineBody(text: text, from: from)
+        )
+    }
+
     static func generateNextSteps(sessionId: String) async throws -> AudioSessionWithSegments {
         try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/next-steps", method: "POST")
     }

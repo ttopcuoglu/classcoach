@@ -265,7 +265,11 @@ struct OverviewTab: View {
     private func chooseFocus(_ itemId: String?) {
         let before = session
         var updated = session
-        updated.session.lessonFocus = itemId.map { AudioLessonFocus(itemId: $0) }
+        // The short lines already written stay with the lesson, as on the server.
+        let lines = session.lessonFocus?.lines
+        updated.session.lessonFocus = itemId != nil || lines != nil
+            ? AudioLessonFocus(next: itemId.map { AudioLessonFocus.Next(itemId: $0) }, lines: lines)
+            : nil
         onUpdate(updated)
         Task {
             do { try await AudioCoachingService.setLessonFocus(sessionId: session.id, itemId: itemId) } catch { onUpdate(before) }
@@ -335,14 +339,48 @@ struct OverviewTab: View {
 
     // MARK: Focus card
 
+    @State private var whyOpen = false
+    @State private var triedFocusLines: Set<String> = []
+
+    /// The focus said simply (server lib/focusLine.ts), once it is written.
+    private func focusLine(for focus: NextTimeItem) -> FocusLine? {
+        session.lessonFocus?.lines?[FocusLine.key(for: focus.text)]
+    }
+
+    /// Written the first time the Summary opens on a focus, and kept with the
+    /// lesson. Until then, or if it cannot be written, the card shows the
+    /// suggestion as it is.
+    private func writeFocusLineIfNeeded() async {
+        guard let focus, focusLine(for: focus) == nil else { return }
+        let key = FocusLine.key(for: focus.text)
+        guard !triedFocusLines.contains(key) else { return }
+        triedFocusLines.insert(key)
+        guard let result = try? await AudioCoachingService.writeFocusLine(sessionId: session.id, text: focus.text, from: focus.section) else { return }
+        var updated = session
+        var lines = session.lessonFocus?.lines ?? [:]
+        lines[result.key] = result.line
+        updated.session.lessonFocus = AudioLessonFocus(next: session.lessonFocus?.next, lines: lines)
+        onUpdate(updated)
+    }
+
     @ViewBuilder private var focusCard: some View {
         if let focus {
             let withGoal = focus.id == "questions" && (heard ?? 0) >= 3 && (followed ?? Int.max) < (heard ?? 0)
+            let line = focusLine(for: focus)
             VStack(alignment: .leading, spacing: 10) {
-                Text("YOUR ONE FOCUS FOR NEXT LESSON")
+                Text("NEXT LESSON, TRY THIS")
                     .font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(Color(hex: 0x8E3F22))
-                Text(focus.text).font(.body).foregroundStyle(AppTheme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let line {
+                    if let well = line.well {
+                        Text(well).font(.subheadline).foregroundStyle(Color(hex: 0x6E4A3A))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(line.tryLine).font(.heading(.title3)).foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(focus.text).font(.body).foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if withGoal, let heard, let followed {
                     let target = min(heard, followed + 2)
                     VStack(alignment: .leading, spacing: 6) {
@@ -365,31 +403,42 @@ struct OverviewTab: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Aim: \(target) of \(heard) answers followed up, \(followed) today")
                 }
-                if let section = focus.insightsSection {
-                    Button("From \(focus.section) →") { onNavigateInsights(section) }
-                        .font(.subheadline).foregroundStyle(Color(hex: 0x6E4A3A))
-                } else {
-                    Text("From \(focus.section)").font(.subheadline).foregroundStyle(Color(hex: 0x6E4A3A))
-                }
-                HStack(spacing: 4) {
-                    Text(chosen != nil ? "Your choice ·"
-                         : headlineSection.flatMap { Self.headlineItem[$0] } == suggested?.id ? "Suggested: where today\u{2019}s pattern points ·"
-                         : "Suggested ·")
-                    // With no suggestion to go back to, the way out is to clear it.
-                    if let chosen, suggested?.id != chosen.id {
-                        Button(suggested == nil ? "Clear my focus" : "Back to the suggestion") { chooseFocus(nil) }.fontWeight(.semibold)
-                    } else {
-                        Text("pick another from Try next time below")
+                // The full suggestion, and where it came from, one tap away.
+                if line != nil && whyOpen {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Divider().overlay(Color(hex: 0xE9C3AE))
+                        Text(focus.text).font(.subheadline).foregroundStyle(Color(hex: 0x6E4A3A))
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let section = focus.insightsSection {
+                            Button("See it in \(focus.section) →") { onNavigateInsights(section) }
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(Color(hex: 0x8E3F22))
+                        }
                     }
                 }
-                .font(.caption).foregroundStyle(Color(hex: 0x6E4A3A))
-                .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    if line != nil {
+                        Button(whyOpen ? "Hide why" : "Why this ›") { whyOpen.toggle() }
+                    } else if let section = focus.insightsSection {
+                        Button("From \(focus.section) →") { onNavigateInsights(section) }
+                    } else {
+                        Text("From \(focus.section)")
+                    }
+                    Spacer(minLength: 8)
+                    // With no suggestion to go back to, the way out is to clear it.
+                    if let chosen, suggested?.id != chosen.id {
+                        Button(suggested == nil ? "Clear my focus" : "Back to the suggestion") { chooseFocus(nil) }
+                    } else {
+                        Text("Choose a different one below")
+                    }
+                }
+                .font(.subheadline.weight(.semibold)).foregroundStyle(Color(hex: 0x8E3F22))
             }
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(AppTheme.peachTint, in: RoundedRectangle(cornerRadius: 22))
             .background(AppTheme.gold, in: RoundedRectangle(cornerRadius: 22).offset(x: 5, y: 5))
             .padding(.trailing, 5).padding(.bottom, 5)
+            .task(id: FocusLine.key(for: focus.text)) { await writeFocusLineIfNeeded() }
         }
     }
 
@@ -650,9 +699,6 @@ struct OverviewTab: View {
     }
 }
 
-extension AudioLessonFocus {
-    init(itemId: String) { self.next = Next(itemId: itemId) }
-}
 
 extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }

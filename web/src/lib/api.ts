@@ -1093,7 +1093,9 @@ export type AudioSession = {
     followUpLog?: { timestampSec: number; text: string }[]
   } | null
   /// The one focus for next lesson the teacher picked from Try next time.
-  lessonFocus?: { next?: { itemId: string; chosenAt: string } } | null
+  /// `lines`: the focus said simply, one per item made the focus, keyed by
+  /// focusLineKey of the item's text (server lib/focusLine.ts).
+  lessonFocus?: { next?: { itemId: string; chosenAt: string }; lines?: Record<string, FocusLine> } | null
   // Null or absent until the lesson has been read for it; the Summary tab
   // asks the first time it is opened.
   momentToRevisit?: AudioMomentToRevisit | null
@@ -2444,6 +2446,14 @@ export function generateHardLook(id: string): Promise<AudioSessionWithSegments> 
 
 export function generateMomentToRevisit(id: string): Promise<AudioSession> {
   return request(`/api/audio-sessions/${id}/moment-to-revisit`, { method: 'POST' })
+}
+
+/// The one focus for next lesson, said simply: what went well (when the
+/// suggestion says so) and one thing to do.
+export type FocusLine = { well: string | null; try: string }
+
+export function writeFocusLine(id: string, text: string, from: string): Promise<{ key: string; line: FocusLine }> {
+  return request(`/api/audio-sessions/${id}/focus-line`, { method: 'POST', body: JSON.stringify({ text, from }) })
 }
 
 export function generateNextSteps(id: string): Promise<AudioSession> {
