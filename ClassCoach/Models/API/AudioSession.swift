@@ -581,11 +581,12 @@ struct FocusLine: Decodable {
         case tryLine = "try"
     }
 
-    /// FNV-1a over the trimmed text, as 8 hex digits — the key the server
-    /// stores a line under. Must match server and web exactly.
+    /// FNV-1a over the version and the trimmed text, as 8 hex digits — the
+    /// key the server stores a line under. Must match server and web
+    /// exactly, version included.
     static func key(for text: String) -> String {
         var h: UInt32 = 0x811c9dc5
-        for scalar in text.trimmingCharacters(in: .whitespacesAndNewlines).unicodeScalars {
+        for scalar in ("v2:" + text.trimmingCharacters(in: .whitespacesAndNewlines)).unicodeScalars {
             h ^= scalar.value
             h = h &* 0x01000193
         }

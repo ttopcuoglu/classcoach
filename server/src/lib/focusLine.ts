@@ -20,11 +20,15 @@ import { extractTag } from './extractTag.ts'
 
 export type FocusLine = { well: string | null; try: string }
 
-/// FNV-1a over the text, as 8 hex digits. The web and iOS apps compute the
-/// same key to find a stored line, so this must not change.
+/// Bumped to write every stored line again: v2 after the quote fix above.
+export const FOCUS_LINE_VERSION = 'v2'
+
+/// FNV-1a over the version and the text, as 8 hex digits. The web and iOS
+/// apps compute the same key to find a stored line, so all three change
+/// together or not at all.
 export function focusLineKey(text: string): string {
   let h = 0x811c9dc5
-  for (const ch of text.trim()) {
+  for (const ch of `${FOCUS_LINE_VERSION}:${text.trim()}`) {
     h ^= ch.codePointAt(0)!
     h = Math.imul(h, 0x01000193) >>> 0
   }
@@ -49,7 +53,11 @@ Write nothing outside these tags:
 ${CORE_COACHING_RULES}`
 
 function clean(raw: string | null, maxLength: number): string | null {
-  const line = raw?.replace(/\s+/g, ' ').trim().replace(/^["“]|["”]$/g, '')
+  let line = raw?.replace(/\s+/g, ' ').trim()
+  // Quotes are taken off only when they wrap the whole line. Stripping a
+  // closing quote on its own cut the end off a line that finishes on a
+  // quoted word — ask one "why." came out as ask one "why.
+  if (line && /^["“].*["”]$/.test(line) && !/["“”]/.test(line.slice(1, -1))) line = line.slice(1, -1).trim()
   if (!line || /^NONE\.?$/i.test(line) || line.length > maxLength) return null
   return line
 }
