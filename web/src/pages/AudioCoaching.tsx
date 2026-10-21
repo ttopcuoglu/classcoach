@@ -58,7 +58,6 @@ import {
 } from '../lib/api'
 import { THIN_AUDIBLE_SHARE_PCT, useCaptureMonitor } from '../hooks/useCaptureMonitor'
 import {
-  buildEvidenceQualityLine,
   formatRatio,
   getCoverage,
   getCountMetric,
@@ -68,7 +67,6 @@ import {
   hasEnoughWaitTimeSamples,
   isConfidentState,
   isMissingState,
-  LOW_CAPTURE_PCT,
   judgeTalkBalance,
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
   MIN_N_FOR_PERCENT,
@@ -1127,32 +1125,39 @@ function TagSpeakersPanel({
   )
 }
 
+/// Longest title shown whole; a longer one is cut at its first pause, and
+/// only where that leaves a real phrase.
+const TITLE_WHOLE = 50
+const TITLE_MAX = 60
+const TITLE_MIN_BREAK = 25
+/// "The lesson covers…" opens nearly every summary and says nothing a title
+/// needs: "Adding and subtracting polynomials" is the headline.
+const TITLE_OPENER =
+  /^(?:in\s+)?(?:this|the|today['’]s)\s+(?:lesson|class|session|period)\s*,?\s+(?:covers|covered|focuses on|focused on|explores|explored|is about|was about|introduces|introduced|reviews|reviewed|teaches|taught|works on|worked on|looks at|looked at|centers on|centered on)\s+/i
+/// Where a sentence pauses: punctuation, or a word that starts a new phrase
+/// ("…polynomials by identifying like terms").
+const TITLE_PAUSE = /\s*(?:,|;|:|—|–|\s-\s|\()|\s+(?=(?:by|through|using|with|via|including|while|before|after|so that|in order to)\s)/gi
+
 // What to call a recording in a list. "Untitled lesson" was accurate and
 // useless — every card said it — while analysis already works out what the
 // lesson covered, in lessonContent.summary. One sentence only: this is a card
 // title, and the report shows the summary in full anyway.
-/// Longest title shown whole; a longer one is cut at a pause in the sentence,
-/// and only where that leaves a real phrase.
-const TITLE_MAX = 70
-const TITLE_MIN_BREAK = 25
-
 function sessionTitle(session: { lessonContent?: AudioLessonContent | null; classSubject?: string | null; period?: string | null }): string {
   const summary = session.lessonContent?.summary?.trim()
   if (summary) {
     // A sentence end counts only when a space or the end follows, and not in
     // the first few words, or "Mr." and "e.g." end the title.
     const match = /^.{20,}?[.!?](?=\s|$)/.exec(summary)
-    let out = match ? match[0] : summary
-    if (out.length > TITLE_MAX) {
-      // Cut where the sentence itself pauses — a comma, dash, colon or
-      // bracket — so the title reads as a whole phrase ("The decline and fall
-      // of the ancient Indian empires") rather than stopping mid-thought
-      // ("…through reading passages and a…"). Only a word clip with an
-      // ellipsis when there is no such pause far enough in.
+    let out = (match ? match[0] : summary).replace(TITLE_OPENER, '')
+    out = out.charAt(0).toUpperCase() + out.slice(1)
+    if (out.length > TITLE_WHOLE) {
+      // The first pause far enough in, so the headline is the lesson's topic
+      // and not the whole sentence; a word clip with an ellipsis only when the
+      // sentence has no pause before the limit.
       const head = out.slice(0, TITLE_MAX + 1)
-      const breaks = [...head.matchAll(/\s*(?:,|;|:|—|–|\s-\s|\()/g)].map((m) => m.index!).filter((i) => i >= TITLE_MIN_BREAK)
-      if (breaks.length > 0) out = out.slice(0, breaks[breaks.length - 1])
-      else {
+      const pause = [...head.matchAll(TITLE_PAUSE)].map((m) => m.index!).find((i) => i >= TITLE_MIN_BREAK)
+      if (pause != null) out = out.slice(0, pause)
+      else if (out.length > TITLE_MAX) {
         const clipped = out.slice(0, TITLE_MAX)
         out = clipped.slice(0, clipped.lastIndexOf(' ') > 0 ? clipped.lastIndexOf(' ') : TITLE_MAX) + '…'
       }
@@ -1979,19 +1984,15 @@ function ReportPanel({
   const num = (key: string) => (typeof metrics[key] === 'number' ? (metrics[key] as number) : null)
 
   // Talk & Participation
-  const teacherTalkMetric = getPresenceMetric(session.teacherTalkPct)
-  const studentTalkMetric = getPresenceMetric(session.studentTalkPct)
   // One decimal, like the two talk shares it is shown beside — rounded to a
   // whole number it made the three add up to 100.4.
   const silencePct =
     session.teacherTalkPct != null && session.studentTalkPct != null
       ? Math.max(0, Math.round((100 - session.teacherTalkPct - session.studentTalkPct) * 10) / 10)
       : null
-  const silenceMetric = getPresenceMetric(silencePct)
   const studentSegmentsMetric = getCountMetric({ count: num('studentVoiceSegments'), recordedSec })
 
   // Questioning & Thinking
-  const questionsMetric = getCountMetric({ count: session.questionCount, recordedSec })
   const higherOrderCount = num('higherOrderQuestionCount')
   const higherOrderRatio =
     session.questionCount != null ? formatRatio(higherOrderCount ?? 0, session.questionCount) : null
@@ -2041,18 +2042,6 @@ function ReportPanel({
   // Summary's "My Focus" card — maps the teacher's chosen focus to its
   // backing metric and the matching already-computed coach-voice sentence.
 
-  // Computed once here (not per-tab) so the shared header can show it on
-  // every tab, not just Summary.
-  const evidenceQuality = buildEvidenceQualityLine(coverage, [
-    teacherTalkMetric,
-    studentTalkMetric,
-    silenceMetric,
-    studentSegmentsMetric,
-    questionsMetric,
-    followUpMetric,
-      cfuMetric,
-    feedbackRatio,
-  ])
 
   function handleViewSource(sourceTab: ReportTab, sourceId: string, section?: InsightsSection) {
     setTab(sourceTab)
@@ -2167,9 +2156,6 @@ function ReportPanel({
               {formatSessionDateTime(session.sessionDate)}
               {session.gradeLevel ? ` · ${session.gradeLevel}` : ''}
               {session.durationSec ? ` · ${formatTime(session.durationSec)}` : ''}
-            </p>
-            <p className={`mt-3 text-xs ${evidenceQuality.tone === 'warn' ? 'font-semibold text-gold' : 'text-cream/60'}`}>
-              {evidenceQuality.text}
             </p>
             {coverage.isTinyRecording && (
               <span className="mt-4 inline-block rounded-full bg-gold px-3 py-1 text-xs font-bold uppercase tracking-wide text-forest">
@@ -2669,9 +2655,6 @@ function SummaryTab({
   const soundPct = split ? Math.round(((silencePct! * split.unresolvedPct) / (split.quietPct + split.unresolvedPct)) * 10) / 10 : null
   const quietPct = split && soundPct != null ? Math.max(0, Math.round((silencePct! - soundPct) * 10) / 10) : null
   const wpm = session.metricsDetail?.teacherWordsPerMinute ?? null
-  // The same reading as the header's "only X% came through" line.
-  const capturedPct = getCoverage(session.durationSec, session.phases, session.metricsDetail).capturedSharePct
-  const lowCapture = capturedPct != null && capturedPct < LOW_CAPTURE_PCT
   const tawt = tawtOf(session)
   // How many questions the average rests on: 0.0 s from one question and
   // from eight are different findings.
@@ -2735,7 +2718,9 @@ function SummaryTab({
       {/* Your one focus for next lesson, first: it is the takeaway, and a
           teacher should not have to read the summary to reach it. */}
       {focus && (
-        <div className="grid items-center gap-5 rounded-3xl bg-peach-tint p-6 shadow-[6px_6px_0_var(--color-gold)] sm:grid-cols-[1fr_auto]">
+        // No card around it: the focus is the page's opening line, not a box
+        // on it. A rule on the left marks where it starts.
+        <div className="grid items-center gap-5 border-l-4 border-terracotta py-1 pl-5 sm:grid-cols-[1fr_auto]">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-[#8E3F22]">Next lesson, try this</p>
             {focusLine ? (
@@ -2748,7 +2733,7 @@ function SummaryTab({
             )}
             {/* The full suggestion, and where it came from, one tap away. */}
             {focusLine && whyOpen && (
-              <div className="mt-3 border-t border-[#E9C3AE] pt-3 text-sm leading-relaxed text-[#6E4A3A]">
+              <div className="mt-3 border-t border-hairline pt-3 text-sm leading-relaxed text-[#6E4A3A]">
                 <p>{focus.text}</p>
                 {focusSection ? (
                   <button type="button" onClick={() => onNavigateInsights(focusSection)} className="mt-1.5 font-semibold hover:underline">
@@ -2848,15 +2833,7 @@ function SummaryTab({
         </div>
       )}
 
-      {/* The lesson's numbers. Insights, a tab away, has each one in full.
-          When most of the recording never became words, they say so first:
-          the tiles look as certain on a lost recording as on a clean one. */}
-      {lowCapture && (
-        <p className="-mb-1 rounded-2xl bg-gold-tint px-4 py-2.5 text-sm text-ink">
-          Only {capturedPct}% of this recording came through as clear speech, so read these numbers as a partial picture.
-          Students are the voices most likely to be missed.
-        </p>
-      )}
+      {/* The lesson's numbers. Insights, a tab away, has each one in full. */}
       <div className={`grid break-inside-avoid grid-cols-2 gap-3 ${tiles.length % 4 === 0 || tiles.length === 7 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
         {tiles.map((t) => {
           const confident = isConfidentState(t.metric.state)

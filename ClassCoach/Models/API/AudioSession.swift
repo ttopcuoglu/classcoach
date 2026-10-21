@@ -966,37 +966,46 @@ extension AudioSession {
         return "Untitled lesson"
     }
 
-    /// One sentence, not the two the summary may run to — this is a card
-    /// title, and the report shows the summary in full anyway.
-    static func titleSentence(_ text: String?, limit: Int = 70) -> String? {
+    /// "The lesson covers…" opens nearly every summary and says nothing a
+    /// title needs: "Adding and subtracting polynomials" is the headline.
+    private static let titleOpener = try! NSRegularExpression(
+        pattern: "^(?:in\\s+)?(?:this|the|today['’]s)\\s+(?:lesson|class|session|period)\\s*,?\\s+(?:covers|covered|focuses on|focused on|explores|explored|is about|was about|introduces|introduced|reviews|reviewed|teaches|taught|works on|worked on|looks at|looked at|centers on|centered on)\\s+",
+        options: .caseInsensitive)
+    /// Where a sentence pauses: punctuation, or a word that starts a new
+    /// phrase ("…polynomials by identifying like terms").
+    private static let titlePause = try! NSRegularExpression(
+        pattern: "\\s*(?:,|;|:|—|–|\\s-\\s|\\()|\\s+(?=(?:by|through|using|with|via|including|while|before|after|so that|in order to)\\s)",
+        options: .caseInsensitive)
+
+    /// A short headline from the summary's first sentence — mirrors
+    /// sessionTitle on the web: the "The lesson covers" opener dropped, whole
+    /// up to 50 characters, else cut at the first pause at least 25 in, and a
+    /// word clip with an ellipsis only when there is none before 60.
+    static func titleSentence(_ text: String?, whole: Int = 50, limit: Int = 60) -> String? {
         guard let text else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
         // A sentence end only counts if a space or the end follows it, and not
         // in the first few words — otherwise "Mr." or "e.g." ends the title.
+        // (A summary under 20 characters has no range to search, and is its
+        // own title.)
         let chars = Array(trimmed)
         var cut: Int?
-        // Searched to the end, as on the web: the sentence may run past the
-        // limit and still be cut at a pause below. (A summary under 20
-        // characters has no range to search, and is its own title.)
         for i in stride(from: 20, to: chars.count, by: 1) where ".!?".contains(chars[i]) {
             if i + 1 >= chars.count || chars[i + 1] == " " { cut = i; break }
         }
         var out = cut.map { String(chars[0...$0]) } ?? trimmed
-        if out.count > limit {
-            // Cut where the sentence itself pauses — a comma, dash, colon or
-            // bracket — so the title reads as a whole phrase rather than
-            // stopping mid-thought; a word clip with an ellipsis only when no
-            // pause comes far enough in. Mirrors sessionTitle on the web.
+        out = titleOpener.stringByReplacingMatches(in: out, range: NSRange(out.startIndex..., in: out), withTemplate: "")
+        out = out.prefix(1).uppercased() + out.dropFirst()
+        if out.count > whole {
             let head = String(out.prefix(limit + 1))
-            let pause = try! NSRegularExpression(pattern: "\\s*(?:,|;|:|—|–|\\s-\\s|\\()")
-            let breaks = pause.matches(in: head, range: NSRange(head.startIndex..., in: head))
+            let pause = titlePause.matches(in: head, range: NSRange(head.startIndex..., in: head))
                 .compactMap { Range($0.range, in: head).map { head.distance(from: head.startIndex, to: $0.lowerBound) } }
-                .filter { $0 >= 25 }
-            if let last = breaks.last {
-                out = String(out.prefix(last))
-            } else {
+                .first { $0 >= 25 }
+            if let pause {
+                out = String(out.prefix(pause))
+            } else if out.count > limit {
                 let clipped = String(out.prefix(limit))
                 out = (clipped.lastIndex(of: " ").map { String(clipped[..<$0]) } ?? clipped) + "…"
             }

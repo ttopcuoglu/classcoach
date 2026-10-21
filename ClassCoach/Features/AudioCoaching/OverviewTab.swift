@@ -406,7 +406,7 @@ struct OverviewTab: View {
                 // The full suggestion, and where it came from, one tap away.
                 if line != nil && whyOpen {
                     VStack(alignment: .leading, spacing: 6) {
-                        Divider().overlay(Color(hex: 0xE9C3AE))
+                        Divider()
                         Text(focus.text).font(.subheadline).foregroundStyle(Color(hex: 0x6E4A3A))
                             .fixedSize(horizontal: false, vertical: true)
                         if let section = focus.insightsSection {
@@ -433,11 +433,11 @@ struct OverviewTab: View {
                 }
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Color(hex: 0x8E3F22))
             }
-            .padding(18)
+            // No card around it: the focus is the page's opening line, not a
+            // box on it. A rule on the left marks where it starts.
+            .padding(.leading, 16).padding(.vertical, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.peachTint, in: RoundedRectangle(cornerRadius: 22))
-            .background(AppTheme.gold, in: RoundedRectangle(cornerRadius: 22).offset(x: 5, y: 5))
-            .padding(.trailing, 5).padding(.bottom, 5)
+            .overlay(alignment: .leading) { Rectangle().fill(AppTheme.terracotta).frame(width: 4) }
             .task(id: FocusLine.key(for: focus.text)) { await writeFocusLineIfNeeded() }
         }
     }
@@ -494,26 +494,8 @@ struct OverviewTab: View {
     private var hasSoundSplit: Bool { tiles.contains { $0.label == "Quiet" } }
     @State private var readingOpen = false
 
-    /// The share of the recording that became words — the same reading as the
-    /// web header's "only X% came through" line (getCoverage).
-    private var capturedPct: Int? {
-        guard session.metricsDetail != nil, let d = session.durationSec, d > 0 else { return nil }
-        return Int((((detail["teacherTalkSec"] ?? 0) + (detail["studentTalkSec"] ?? 0)) / d * 100).rounded())
-    }
-
     @ViewBuilder private var numbersCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // When most of the recording never became words, say so first:
-            // the tiles look as certain on a lost recording as on a clean one.
-            if let pct = capturedPct, pct < 50 {
-                Text("Only \(pct)% of this recording came through as clear speech, so read these numbers as a partial picture. Students are the voices most likely to be missed.")
-                    .font(.subheadline)
-                    .foregroundStyle(AppTheme.forest)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(hex: 0xF5E7C4), in: RoundedRectangle(cornerRadius: 14))
-            }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 ForEach(tiles) { t in
                     VStack(alignment: .leading, spacing: 6) {

@@ -333,13 +333,7 @@ struct ReportView: View {
     // MARK: Cover
 
     private var cover: some View {
-        let evidence = ReportConfidence.buildEvidenceQualityLine(
-            coverage: m.coverage,
-            metrics: [m.cfuMetric, m.redirectionMetric, m.directiveMetric, m.nameMentionMetric, m.followUpMetric,
-                      m.higherOrderRatio, m.feedbackRatio, ReportConfidence.getPresenceMetric(session.teacherTalkPct),
-                      ReportConfidence.getPresenceMetric(session.avgWaitTimeSec)].compactMap { $0 }
-        )
-        return VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text("WIVOZA · LESSON DEBRIEF")
                     .font(.caption2.weight(.bold)).tracking(1.4)
@@ -361,9 +355,6 @@ struct ReportView: View {
                   session.durationSec.map { ReportConfidence.formatDuration($0) }]
                 .compactMap { $0 }.joined(separator: " · "))
                 .font(.caption).foregroundStyle(.white.opacity(0.7))
-            Text(evidence.text)
-                .font(.caption2.weight(evidence.warn ? .semibold : .regular))
-                .foregroundStyle(evidence.warn ? AppTheme.gold : .white.opacity(0.55))
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
