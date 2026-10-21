@@ -14,6 +14,7 @@ import {
   TargetIcon,
   WaveformIcon,
 } from './icons'
+import { PLUS_MONTHLY_PRICE, PLUS_SUMMARY } from '../lib/pricing'
 
 type IconComponent = (props: { className?: string }) => React.ReactElement
 type NavItem = { to: string; label: string; icon: IconComponent; subtitle?: string }
@@ -165,13 +166,13 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           <div className="mx-3 mb-3 rounded-2xl bg-gold-tint p-4">
             <p className="text-sm font-semibold text-terracotta-600">Wivoza Plus</p>
             <p className="mt-1 text-xs text-forest/70">
-              Unlimited Lesson Debrief, Planning Coach, Communication Coach, and Coach's memory.
+              {PLUS_SUMMARY}
             </p>
             <Link
               to="/profile"
               className="mt-2.5 inline-block rounded-lg bg-terracotta-600 px-3 py-1.5 text-xs font-semibold text-cream hover:bg-terracotta"
             >
-              Upgrade — $9.99/month
+              Upgrade — {PLUS_MONTHLY_PRICE}/month
             </Link>
           </div>
         )}
@@ -226,7 +227,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             to="/profile"
             className="block bg-gold-tint px-4 py-2 text-center text-xs font-semibold text-terracotta-600 md:hidden print:!hidden"
           >
-            Unlock unlimited coaching — Upgrade to Wivoza Plus →
+            Get Lesson Debrief, Planning Coach and more — Upgrade to Wivoza Plus →
           </Link>
         )}
 

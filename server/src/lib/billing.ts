@@ -17,8 +17,10 @@ const FREE_MONTHLY_LIMITS: Record<FeatureArea, number> = {
 //
 // lesson_debrief is the one that has to stay honest about cost: a recording is
 // transcription plus several passes over the transcript, ~$0.22 for a 45-minute
-// class, so 60 a month was $13 against a $9.99 subscription. 20 is still a
-// recording every school day, which no teacher comes near.
+// class, so 60 a month was $13 against what was then a $9.99 subscription. 20
+// is still a recording every school day, which no teacher comes near — and it
+// is the number every price page states, so it is never called unlimited.
+// Change it here and in web/src/lib/pricing.ts together.
 const PAID_MONTHLY_LIMITS: Record<FeatureArea, number> = {
   lesson_debrief: 20,
   lesson_planning: 60,
@@ -26,7 +28,7 @@ const PAID_MONTHLY_LIMITS: Record<FeatureArea, number> = {
 }
 
 const UPGRADE_MESSAGES: Record<FeatureArea, string> = {
-  lesson_debrief: "You've used your 3 free Lesson Debrief recordings this month. Upgrade to Wivoza Plus in Profile & Settings for unlimited recordings.",
+  lesson_debrief: "You've used your 3 free Lesson Debrief recordings this month. Upgrade to Wivoza Plus in Profile & Settings for up to 20 a month.",
   lesson_planning: 'Lesson Planning is part of Wivoza Plus. Upgrade in Profile & Settings to unlock it.',
   communications: 'Communication Coach is part of Wivoza Plus. Upgrade in Profile & Settings to unlock it.',
 }

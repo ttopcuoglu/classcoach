@@ -140,7 +140,7 @@ const CATEGORIES: Category[] = [
     items: [
       {
         q: 'Is Wivoza free?',
-        a: 'Yes — Talk It Through and Practice are free for everyone, always, plus 3 Lesson Debrief recordings a month. Wivoza Plus is $9.99/month for unlimited Lesson Debrief, Planning Coach, Communication Coach, and Coach’s memory. Schools and districts can get Plus-level access for every teacher through a license — tell us about your school at wivoza.com/for-schools and we’ll be in touch.',
+        a: 'Yes — Talk It Through and Practice are free for everyone, always, plus 3 Lesson Debrief recordings a month. Wivoza Plus is $14.99/month, or $119/year (about $9.92 a month), for Lesson Debrief on up to 20 lessons a month, Planning Coach, Communication Coach, and Coach’s memory. Schools and districts can get Plus-level access for every teacher through a license — tell us about your school at wivoza.com/for-schools and we’ll be in touch.',
       },
       {
         q: 'How long does it take to get started?',

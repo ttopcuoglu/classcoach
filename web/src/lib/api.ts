@@ -1531,8 +1531,8 @@ export function deleteAccount(): Promise<{ status: string }> {
   return request('/api/profile', { method: 'DELETE' })
 }
 
-export function createCheckoutSession(): Promise<{ url: string }> {
-  return request('/api/billing/checkout', { method: 'POST' })
+export function createCheckoutSession(interval: 'month' | 'year' = 'month'): Promise<{ url: string }> {
+  return request('/api/billing/checkout', { method: 'POST', body: JSON.stringify({ interval }) })
 }
 
 export function createBillingPortalSession(): Promise<{ url: string }> {

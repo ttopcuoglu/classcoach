@@ -5,10 +5,17 @@ import { stripe } from '../lib/stripe.ts'
 export const billingRouter = Router()
 
 const PLUS_PRICE_ID = process.env.STRIPE_PLUS_PRICE_ID
+// $119 a year against $14.99 a month. Teachers cancel over the summer, and a
+// yearly plan is the one that survives it — it also costs one Stripe fee a
+// year instead of twelve. Same product, so the webhook needs nothing new:
+// every subscription event is handled the same whatever its interval.
+const PLUS_YEARLY_PRICE_ID = process.env.STRIPE_PLUS_YEARLY_PRICE_ID
 const FRONTEND_URL = (process.env.FRONTEND_ORIGINS ?? '').split(',')[0]?.trim() || 'http://localhost:5173'
 
 billingRouter.post('/checkout', async (req, res) => {
-  if (!PLUS_PRICE_ID) {
+  const yearly = req.body?.interval === 'year'
+  const priceId = yearly ? PLUS_YEARLY_PRICE_ID : PLUS_PRICE_ID
+  if (!priceId) {
     res.status(500).json({ error: 'Billing is not configured yet. Please try again later.' })
     return
   }
@@ -21,7 +28,7 @@ billingRouter.post('/checkout', async (req, res) => {
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
-      line_items: [{ price: PLUS_PRICE_ID, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       customer: user.stripeCustomerId ?? undefined,
       customer_email: user.stripeCustomerId ? undefined : user.email,
       client_reference_id: user.id,

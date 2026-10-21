@@ -216,7 +216,7 @@ export default function GuideTalkItThrough() {
           <div className="mt-8 flex flex-col items-start gap-3">
             <GuidePrimaryButton to="/talk-to-me">Talk It Through Now</GuidePrimaryButton>
             <p className="text-xs text-ink-soft">
-              Your voice is never saved — only the conversation text. Free, and unlimited.
+              Your voice is never saved — only the conversation text. Free for everyone.
             </p>
           </div>
         </GuideSection>

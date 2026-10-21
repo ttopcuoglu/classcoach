@@ -2,7 +2,7 @@ import { hasActivePlanFor, isDemoAccount, PLAN_USER_SELECT, startOfCurrentMonth,
 import { prisma } from './prisma.ts'
 
 const DAILY_ACTION_LIMIT = Number(process.env.DAILY_ACTION_LIMIT) || 50
-// A Plus/District teacher already pays for (or is granted) unlimited access
+// A Plus/District teacher already pays for (or is granted) the higher limits
 // to the per-feature areas billing.ts gates — this flat daily ceiling exists
 // purely as shared-API-key cost protection, not a monetization lever, so a
 // paid teacher gets a generous multiple of it rather than the same cap a

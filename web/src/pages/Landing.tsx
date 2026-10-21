@@ -25,6 +25,7 @@ import {
 } from '../components/icons'
 import { introVideo, MEET_PLAYLIST_ID, VideoFacade } from '../components/TrainingVideos'
 import FooterContact from '../components/FooterContact'
+import { PLUS_DEBRIEF_PER_MONTH, PLUS_MONTHLY_PRICE, PLUS_YEARLY_PER_MONTH, PLUS_YEARLY_PRICE } from '../lib/pricing'
 
 const PROCESS = [
   {
@@ -880,11 +881,11 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               <ul className="mt-6 space-y-3 text-sm text-ink-soft">
                 <li className="flex items-start gap-2.5">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
-                  Unlimited Talk It Through
+                  Talk It Through, free for everyone
                 </li>
                 <li className="flex items-start gap-2.5">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
-                  Unlimited Practice
+                  Practice, free for everyone
                 </li>
                 <li className="flex items-start gap-2.5">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
@@ -906,8 +907,11 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               <h3 className="font-heading text-xl font-bold text-forest">Wivoza Plus</h3>
               <p className="mt-1 text-sm text-ink-soft">For teachers who want it all</p>
               <p className="mt-6 flex items-baseline gap-1">
-                <span className="font-heading text-4xl font-extrabold text-forest">$9.99</span>
+                <span className="font-heading text-4xl font-extrabold text-forest">{PLUS_MONTHLY_PRICE}</span>
                 <span className="text-sm text-ink-soft">/month</span>
+              </p>
+              <p className="mt-1 text-sm text-ink-soft">
+                or {PLUS_YEARLY_PRICE} a year — about {PLUS_YEARLY_PER_MONTH} a month
               </p>
               <ul className="mt-6 space-y-3 text-sm text-ink-soft">
                 <li className="flex items-start gap-2.5">
@@ -916,7 +920,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 </li>
                 <li className="flex items-start gap-2.5">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
-                  Unlimited Lesson Debrief
+                  Lesson Debrief for up to {PLUS_DEBRIEF_PER_MONTH} lessons a month
                 </li>
                 <li className="flex items-start gap-2.5">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />

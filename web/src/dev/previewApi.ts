@@ -40,9 +40,11 @@ const PROFILE: Json = {
   focusMetric: null,
   coachMemory: null,
   coachMemoryEnabled: true,
-  plan: 'plus',
+  // `?free=1` is a teacher on the Free plan, so the upgrade buttons, prices
+  // and the sidebar's Plus card can be looked at before they ship.
+  plan: new URLSearchParams(window.location.search).has('free') ? 'free' : 'plus',
   planStatus: 'active',
-  plusAccess: 'subscription',
+  plusAccess: new URLSearchParams(window.location.search).has('free') ? null : 'subscription',
   organizationId: null,
   organization: null,
   createdAt: '2026-01-01T00:00:00.000Z',

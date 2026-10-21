@@ -19,6 +19,7 @@ import {
 } from '../lib/api'
 import TelegramConnect from '../components/TelegramConnect'
 import { EXPERIENCE_OPTIONS } from '../lib/experience'
+import { FREE_SUMMARY, PLUS_MONTHLY_PRICE, PLUS_SUMMARY, PLUS_YEARLY_PER_MONTH, PLUS_YEARLY_PRICE } from '../lib/pricing'
 
 const SECTION_BADGES = ['bg-gold text-forest', 'bg-terracotta text-cream', 'bg-forest text-gold']
 
@@ -251,11 +252,11 @@ export default function Profile() {
     }
   }
 
-  async function handleUpgrade() {
+  async function handleUpgrade(interval: 'month' | 'year') {
     setBillingLoading(true)
     setBillingError(null)
     try {
-      const { url } = await createCheckoutSession()
+      const { url } = await createCheckoutSession(interval)
       window.location.href = url
     } catch {
       setBillingError('Could not start checkout. Please try again.')
@@ -304,10 +305,10 @@ export default function Profile() {
             {plusAccess === 'admin'
               ? 'Platform admin — every feature is unlocked, with no limits.'
               : plusAccess === 'school'
-                ? `Included through ${organizationName ?? 'your school'} — unlimited Lesson Debrief, Planning Coach, Communication Coach, and Coach's memory.`
+                ? `Included through ${organizationName ?? 'your school'} — ${PLUS_SUMMARY[0].toLowerCase()}${PLUS_SUMMARY.slice(1)}`
                 : hasPlus
-                  ? 'Unlimited Lesson Debrief, Planning Coach, Communication Coach, and Coach\'s memory.'
-                  : 'Unlimited Talk It Through and Practice, 3 Lesson Debrief recordings a month.'}
+                  ? PLUS_SUMMARY
+                  : FREE_SUMMARY}
           </p>
           {plusAccess === 'admin' || plusAccess === 'school' || plusAccess === 'demo' ? null : plan === 'plus' ? (
             <button
@@ -319,14 +320,30 @@ export default function Profile() {
               {billingLoading ? 'Opening...' : 'Manage subscription'}
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={handleUpgrade}
-              disabled={billingLoading}
-              className="self-start rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90 disabled:opacity-60"
-            >
-              {billingLoading ? 'Please wait...' : 'Upgrade to Wivoza Plus — $9.99/month'}
-            </button>
+            // Yearly first: it is the better deal for a teacher and the plan
+            // that survives the summer. The limit is stated here because the
+            // Terms promise usage limits are disclosed before purchase.
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-cream/75">Wivoza Plus: {PLUS_SUMMARY}</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleUpgrade('year')}
+                  disabled={billingLoading}
+                  className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+                >
+                  {billingLoading ? 'Please wait...' : `Yearly — ${PLUS_YEARLY_PRICE} (about ${PLUS_YEARLY_PER_MONTH}/month)`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleUpgrade('month')}
+                  disabled={billingLoading}
+                  className="rounded-full border border-cream/30 px-4 py-2 text-sm font-semibold text-cream transition-colors hover:border-cream hover:bg-cream/10 disabled:opacity-60"
+                >
+                  {billingLoading ? 'Please wait...' : `Monthly — ${PLUS_MONTHLY_PRICE}/month`}
+                </button>
+              </div>
+            </div>
           )}
           {billingError && <p className="text-sm text-peach-tint">{billingError}</p>}
         </div>

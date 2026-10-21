@@ -155,7 +155,7 @@ export default function Terms() {
               9. Subscriptions, billing, and cancellation
             </h2>
             <p className="mt-1">
-              Wivoza Plus is a monthly subscription that renews automatically until canceled. We will disclose the
+              Wivoza Plus is a monthly or yearly subscription that renews automatically until canceled. We will disclose the
               price, billing frequency, applicable taxes, usage limits, and cancellation method before you purchase.
               Wivoza does not use a trial-to-paid conversion model — the Free plan does not expire, and you are only
               charged when you actively choose to upgrade, so there is no surprise transition from free to paid.
