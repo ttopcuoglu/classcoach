@@ -266,16 +266,16 @@ function SampleCard({ feature, eyebrow, title, before, after, pdf }: (typeof SAM
   )
 }
 
-// The sample band's tiles: a miniature of the printed report's numbers. The
-// figures are the ones in the published sample report
-// (/samples/lesson-debrief.pdf, made by scripts/capture-sample-debrief.mjs) —
-// an invented class, not a real one — and the frame says "Sample" so nobody
-// reads them as someone's results.
+// The sample band's tiles: a miniature of the Summary's numbers. The figures
+// are the ones in the published sample report (/samples/lesson-debrief.pdf,
+// the report's own "Save the full report as a PDF", made by
+// scripts/capture-full-sample.mjs) — an invented class, not a real one — and
+// the frame says "Sample" so nobody reads them as someone's results.
 const SAMPLE_TILES = [
   { label: 'You spoke', value: '34.3', unit: '%', card: 'bg-peach-tint', ink: 'text-terracotta-600' },
   { label: 'Students spoke', value: '13.5', unit: '%', card: 'bg-gold-tint', ink: 'text-terracotta-600' },
   { label: 'Questions', value: '7', unit: '', card: 'bg-mint-tint', ink: 'text-forest' },
-  { label: 'Avg. wait', value: '3.88', unit: 's', card: 'bg-mint-tint', ink: 'text-forest' },
+  { label: 'TAWT', value: '7.4', unit: 's', note: 'from 4 questions', card: 'bg-mint-tint', ink: 'text-forest' },
 ]
 
 // Two screenshots of the real report (the Summary, and Talk & Participation's
@@ -768,10 +768,10 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               Twenty-two minutes of class, seen clearly<span className="text-gold">.</span>
             </h3>
             <p className="mt-3 text-sm leading-relaxed text-cream/75">
-              Who was heard and for how long, what was asked and how long students had to think, whether
-              your asks held — with the exact moments, timestamps, and what to try next time. Then the same
-              lesson read as a biology specialist would: what worked, and where it could go further.
-              An invented class; no real teacher or student.
+              Who was heard and for how long, what you asked and how long you left the thinking with the
+              class, how your directions and redirections sounded — with the exact moments, timestamps, and
+              what to try next time. Then how you made the content clear: your examples, your connections,
+              and the key terms students used. An invented class; no real teacher or student.
             </p>
             <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-gold">
               View the full sample report
@@ -786,12 +786,13 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                   {t.value}
                   {t.unit && <span className="ml-0.5 text-sm font-bold">{t.unit}</span>}
                 </p>
+                {t.note && <p className="text-[11px] text-ink-soft">{t.note}</p>}
               </div>
             ))}
             <div className="col-span-2 rounded-xl border-l-4 border-gold bg-gold-tint/60 px-3 py-2.5 sm:col-span-4 lg:col-span-2">
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-terracotta-600">Why wait time matters</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-terracotta-600">What TAWT measures</p>
               <p className="mt-0.5 text-sm leading-snug text-ink">
-                Three to five seconds of silence after a question is the single cheapest change most teachers can make. It feels much longer than it is.
+                Teacher-Anchored Wait Time: after a question that asked students to explain or reason, how long until you spoke again, any answer included. Three seconds or more gives most students time to think.
               </p>
             </div>
           </div>
