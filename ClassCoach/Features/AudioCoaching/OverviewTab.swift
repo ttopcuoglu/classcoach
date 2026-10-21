@@ -381,7 +381,7 @@ struct OverviewTab: View {
 
     // MARK: The lesson's numbers
 
-    /// One tile — mirrors the web Summary's tiles: the same seven numbers,
+    /// One tile — mirrors the web Summary's tiles: the same eight numbers,
     /// labels and colours.
     private struct Tile: Identifiable {
         var id: String { label }
@@ -416,6 +416,12 @@ struct OverviewTab: View {
         let tawt = ThinkingPause.tawt(session)
         out.append(Tile(label: "TAWT", value: tawt.map { String(format: "%.1f", $0) }, unit: "s", tint: Color(hex: 0xE6EBD2),
                         hint: tawt == nil ? "No pause after a thinking question could be timed." : nil))
+        // The checks Questioning & Checking lists, left-out non-checks and all;
+        // older lessons with no log fall back to the stored count.
+        let checks = session.cfuLog.map { log in log.filter { $0.loop?.who != "not_a_check" }.count } ?? session.cfuCount
+        let tooShort = (session.durationSec ?? 0) < 3 * 60
+        out.append(Tile(label: "Checks", value: tooShort ? nil : checks.map { "\($0)" }, unit: "", tint: Color(hex: 0xD2E8E6),
+                        hint: tooShort ? "Recording too short (under 3 min) to reliably detect this." : nil))
         return out
     }
 
@@ -451,6 +457,7 @@ struct OverviewTab: View {
                     readingLine("Pace", "your words a minute, short pauses included. Everyday conversation usually runs about \(AudioInsights.conversationalWpmRange).")
                     readingLine("Questions", "the questions you asked, as the transcript caught them.")
                     readingLine("TAWT (Teacher-Anchored Wait Time)", "after a question that asked students to explain or reason, how long until you spoke again, averaged. Three seconds or more gives most students time to think.")
+                    readingLine("Checks", "the times you checked for understanding, as the transcript caught them. It counts the checks, not whether students understood.")
                 }
                 .padding(.top, 6)
             } label: {

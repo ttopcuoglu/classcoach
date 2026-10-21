@@ -2657,6 +2657,18 @@ function SummaryTab({
       unit: 's',
       accent: ACCENTS.olive,
     },
+    // The checks Questioning & Checking lists, so the two never disagree:
+    // moments the read found were not checks are left out. Lessons from
+    // before the log was kept fall back to the stored count.
+    {
+      label: 'Checks',
+      metric: getCountMetric({
+        count: session.cfuLog ? session.cfuLog.filter((c) => c.loop?.who !== 'not_a_check').length : session.cfuCount,
+        recordedSec: session.durationSec ?? 0,
+        minDurationSec: MIN_DURATION_FOR_CFU_DETECTION_SEC,
+      }),
+      accent: ACCENTS.teal,
+    },
   ]
 
   // Keep doing: a reasoning question, else one of the talk moves.
@@ -2803,6 +2815,7 @@ function SummaryTab({
           <div><dt className="inline font-semibold text-ink">Pace · </dt><dd className="inline">your words a minute, short pauses included. Everyday conversation usually runs about {CONVERSATIONAL_WPM_RANGE}.</dd></div>
           <div><dt className="inline font-semibold text-ink">Questions · </dt><dd className="inline">the questions you asked, as the transcript caught them.</dd></div>
           <div><dt className="inline font-semibold text-ink">TAWT (Teacher-Anchored Wait Time) · </dt><dd className="inline">after a question that asked students to explain or reason, how long until you spoke again, averaged. Three seconds or more gives most students time to think.</dd></div>
+          <div><dt className="inline font-semibold text-ink">Checks · </dt><dd className="inline">the times you checked for understanding, as the transcript caught them. It counts the checks, not whether students understood.</dd></div>
         </dl>
       </DetailsOpenOnPaper>
 
