@@ -25,9 +25,10 @@ THE TOOLS
   notes and photos are not kept; the conversation text is saved like a Talk
   It Through conversation. Messages pass through Telegram.
 - Lesson Debrief: record one class period. Wivoza transcribes it, asks which
-  voice is the teacher, then produces a report in five tabs (Summary,
-  Insights, Rubric lens, Reflect, My Growth) covering talk balance,
-  questioning, wait time, checks for understanding, clarity and climate.
+  voice is the teacher, then produces a report in six tabs (Summary,
+  Insights, Content Specialist, Rubric lens, Reflect, My Growth) covering
+  talk balance, questioning, wait time, checks for understanding, clarity and
+  climate.
   Rubric lens sorts the lesson's evidence under the Danielson rubric on
   request and never gives a level or score. Summary ends with a "Try next
   time" list the teacher can carry into Planning Coach. The Hard Look is an
@@ -35,8 +36,10 @@ THE TOOLS
   evidence supports; it is never in the printable report.
 - Practice: a rehearsal against a realistic scenario, with a model response
   to compare against. Pick a section and Wivoza writes the scenario; the
-  Conversation section role-plays a parent, student, colleague or
-  administrator instead. Asking about something real is Talk It Through's job
+  Conversation section writes a moment with a parent, student, colleague or
+  administrator instead; the teacher replies once and gets a coaching report
+  (live back-and-forth rehearsal is in Communication Coach's Prepare for a
+  Conversation). Asking about something real is Talk It Through's job
   now, and a conversation that is actually happening goes to Communication
   Coach.
 - Planning Coach: build a lesson from a topic (quick ideas or a full
@@ -88,12 +91,13 @@ PRICING
   through the short form at wivoza.com/for-schools (or email hello@wivoza.com).
 
 GETTING STARTED
-- Sign up with Apple, Google, or email and password. Before any sign-in
-  method works, the teacher must tick a box acknowledging what is sent to the
-  two AI providers.
+- On the website, sign up with Google or with email and password; the iPhone
+  app also offers Sign in with Apple. Before any sign-in method works, the
+  teacher must tick a box acknowledging what is sent to the two AI providers.
 - A six-step setup runs once: about you, classroom (including the district
   join code), mic check, a live demo, your goal, and an initial focus metric.
-  Every step can be skipped.
+  Every step except the short live demo has "Skip for now", and anything
+  already filled in is kept.
 - Works in any browser on a phone, tablet or laptop. Nothing to install. A
   microphone is needed for the voice features. There is also an iPhone app
   on the App Store, using the same account; some newer features reach the

@@ -47,7 +47,7 @@ const MOMENTS = [
 const STEPS = [
   {
     title: 'Press Record',
-    body: 'A big timer, a Pause button, and a Stop button — that’s the whole screen. Class, period, and grade are optional. It records in your browser or the iPhone app; nothing extra on your desk.',
+    body: 'A big timer, a Pause button, and a Stop button — that’s the whole screen, with nothing to fill in first. It records in your browser or the iPhone app; nothing extra on your desk.',
   },
   {
     title: 'Tell it which voice is yours',
@@ -59,7 +59,7 @@ const STEPS = [
   },
   {
     title: 'Talk it through',
-    body: 'The Reflect tab is a spoken conversation about what the report found — pick a starting point, or just say what’s on your mind. Finish with your own notes: strengths, growth areas, your next step, and a date to follow up.',
+    body: 'The Reflect tab is a spoken conversation about what the report found — pick a starting point, or just say what’s on your mind. When you finish, your notes are written from the conversation: what you noticed, what you want to explore, your next step with a date to follow up, and a focus for your next recording.',
   },
 ]
 
@@ -82,7 +82,7 @@ const TABS = [
   },
   {
     name: 'Reflect',
-    body: 'A spoken debrief with your coach, then your own notes — and a Lock button when you’re done with the report for good.',
+    body: 'A spoken debrief with your coach. When you finish, your notes are written from what you said — edit them, or come back and talk more any time.',
   },
   {
     name: 'My Growth',
@@ -376,7 +376,7 @@ export default function GuideLessonDebrief() {
               <LockIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
               <span>
                 It stays yours: set how long recordings are kept in Profile &amp; Settings, print or save a
-                report, lock one to make it permanently read-only, or delete it outright.
+                report, or delete it outright.
               </span>
             </p>
 

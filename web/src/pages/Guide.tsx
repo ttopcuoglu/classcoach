@@ -134,9 +134,9 @@ const GETTING_STARTED: Chapter = {
       tint: 'bg-gold-tint text-terracotta-600',
       nav: 'First sign-in',
       title: 'The onboarding walkthrough',
-      intro: 'A six-step wizard that runs once. Every step has a "Skip for now" link, and whatever you\'ve filled in before skipping is saved as you go.',
+      intro: 'A six-step wizard that runs once. Every step except the short live demo has a "Skip for now" link, and whatever you\'ve filled in before skipping is saved as you go.',
       specs: [
-        { label: '1. About you', body: 'your name, and your role — Teacher, Instructional Coach, Assistant Principal, Principal, District Leader, or Other.' },
+        { label: '1. About you', body: 'your name, your role — Teacher, Instructional Coach, Assistant Principal, Principal, District Leader, or Other — and your years in the classroom.' },
         { label: '2. Classroom', body: 'school name, an optional school/district join code, grade levels, and subjects.' },
         { label: '3. Mic check', body: 'a live level meter — the confirm button only unlocks once it actually detects sound.' },
         { label: '4. Live demo', body: 'read one line aloud to see real coaching detection work on your own voice.' },
@@ -205,7 +205,7 @@ const REPORT_TABS: SpecItem[] = [
   { label: 'Insights', body: 'the detail, in four sections — see below. Each one opens with a short note, shows its evidence as your own words with timestamps, and ends with one thing to keep and one to try. Each can also be given the Hard Look: on request, the least generous reading its evidence supports, with the moments behind it. Where the recording cannot carry a criticism it says so, and it never appears in the PDF.' },
   { label: 'Content Specialist', body: 'ideas for teaching this subject from a subject-area specialist\'s point of view — what worked, where it could go further, and where students tend to get stuck — each tied to a moment in the lesson. It is ideas for the topic, not a read of how you taught it.' },
   { label: 'Rubric lens', body: 'on request, this lesson sorted under the Danielson rubric\'s Domains 2 and 3 — the moments that speak to each component and one next step for it. Never a level or a score.' },
-  { label: 'Reflect', body: 'a spoken debrief with Coach about what the report found. Pick a starting point (talk through today\'s highlights, explore a specific moment, reflect on how the lesson felt, or ask your own question), then talk it through — pause, resume, or type instead at any point. Finish with your own Strengths / Growth areas / My next step / Follow-up date notes, optionally drafted for you from the conversation, and a Lock button that makes the whole report permanently read-only.' },
+  { label: 'Reflect', body: 'a spoken debrief with Coach about what the report found. Pick a starting point (talk through today\'s highlights, explore a specific moment, reflect on how the lesson felt, or ask your own question), then talk it through — pause, resume, or type instead at any point. When you finish, your notes are written from the conversation — What I noticed / What I want to explore / My next step with a follow-up date / Focus for my next recording — and they save themselves as you edit. Come back any time to carry on the conversation.' },
   { label: 'My Growth', body: 'seven measures trended across every lesson you\'ve recorded — your pace, your share of the talk, your longest unbroken stretch, the pause after an answer, follow-up questions, questions beyond recall, and checks for understanding. Pick one as your active focus and it\'s highlighted here and on Summary.' },
 ]
 
@@ -225,10 +225,10 @@ const LESSON_DEBRIEF: Feature = {
   guideTo: '/guide/lesson-debrief',
   intro: 'Record a real class period; Wivoza transcribes it, asks you which voice is the teacher, and turns it into a six-tab report — no audio is ever kept, only the text and what it shows.',
   specs: [
-    { label: 'Before recording', body: 'class/subject, period, grade level, and session date are all optional.' },
+    { label: 'Before recording', body: 'nothing to fill in — press Record. The report names the lesson from what was taught.' },
     { label: 'While recording', body: 'a running timer with record, pause, resume, and stop controls, capturing entirely in your browser.' },
     { label: 'After you stop', body: 'Wivoza transcribes the recording, then shows you a sample line from each detected voice and asks which one is the teacher — everyone else is grouped as Student. The audio is discarded at that point; only the text goes on to the report.' },
-    { label: 'Managing sessions', body: 'set a retention period in Profile (7 / 30 / 90 days, or indefinite), lock a report to make it permanently read-only, save the full report as a PDF, or delete it outright.' },
+    { label: 'Managing sessions', body: 'set a retention period in Profile (7 / 30 / 90 days, or indefinite), save the full report as a PDF, or delete it outright.' },
   ],
 }
 
