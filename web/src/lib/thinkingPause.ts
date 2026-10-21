@@ -13,6 +13,11 @@ const MAX_PAUSE_SEC = 30
 /// More than this many words after the question, in the same turn, and the
 /// teacher kept talking rather than leaving it with students: no pause.
 const MAX_WORDS_AFTER = 3
+/// A gap this long between two of the teacher's lines, straight after the
+/// question, is a pause even though the turn carries on: asking, waiting 1.8
+/// seconds and then going on is not talking past it. Under a second is a
+/// breath between sentences.
+const MIN_PAUSE_IN_TURN_SEC = 1
 
 type Seg = { speakerLabel: string; startSec: number; endSec: number; text: string }
 
@@ -23,7 +28,8 @@ const words = (t: string) => t.toLowerCase().replace(/[^a-z0-9' ]/g, ' ').split(
 
 /// The time after each question until the teacher spoke again, in the order
 /// given; null where it could not be measured. A question the teacher talked
-/// straight past — more words in the same turn — is a pause of zero.
+/// straight past — more words in the same turn with no real gap first — is a
+/// pause of zero.
 export function pausesAfter(segments: Seg[], questions: { timestampSec: number; quote: string }[]): (Pause | null)[] {
   const ordered = segments.filter((s) => s.text.trim()).sort((a, b) => a.startSec - b.startSec)
   return questions.map(({ timestampSec: t, quote }) => {
@@ -43,7 +49,16 @@ export function pausesAfter(segments: Seg[], questions: { timestampSec: number; 
     const tail = q.slice(-3).join(' ')
     let at = -1
     for (let i = 0; i + 3 <= turn.length; i++) if (turn.slice(i, i + 3).join(' ') === tail) at = i + 3
-    if (at !== -1 && turn.length - at > MAX_WORDS_AFTER) return { sec: 0, answered: false, keptTalking: true }
+    if (at !== -1 && turn.length - at > MAX_WORDS_AFTER) {
+      // The line the question ends in, and how many words it still had.
+      let k = idx
+      let upTo = words(ordered[idx].text).length
+      while (upTo < at && k < end) upTo += words(ordered[++k].text).length
+      if (upTo - at > MAX_WORDS_AFTER || k === end) return { sec: 0, answered: false, keptTalking: true }
+      const inTurn = ordered[k + 1].startSec - ordered[k].endSec
+      if (inTurn < MIN_PAUSE_IN_TURN_SEC) return { sec: 0, answered: false, keptTalking: true }
+      return { sec: Math.round(inTurn * 10) / 10, answered: false }
+    }
     const rest = ordered.slice(end + 1)
     const nextTeacher = rest.find((x) => x.speakerLabel === 'Teacher')
     if (!nextTeacher) return null

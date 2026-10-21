@@ -149,12 +149,15 @@ export function StatTile({
   value,
   unit,
   hint,
+  note,
   accent,
 }: {
   label: string
   value: string
   unit?: string
   hint?: string
+  /// A line under a measured number: what it rests on.
+  note?: string
   accent: Accent
 }) {
   return (
@@ -165,6 +168,7 @@ export function StatTile({
         {unit ? <span className="text-xl font-bold"> {unit}</span> : null}
       </p>
       {hint && <p className="mt-2 text-xs leading-snug text-forest/70">{hint}</p>}
+      {note && !hint && <p className="mt-2 text-xs leading-snug text-forest/70">{note}</p>}
     </div>
   )
 }

@@ -150,6 +150,9 @@ enum ThinkingPause {
     private static let maxJoinGapSec = 2.0
     private static let maxPauseSec = 30.0
     private static let maxWordsAfter = 3
+    /// A gap this long between two teacher lines, straight after the question,
+    /// is a pause even though the turn carries on; under it is a breath.
+    private static let minPauseInTurnSec = 1.0
 
     private static func words(_ t: String) -> [String] {
         let cleaned = t.lowercased().map { $0.isLetter || $0.isNumber || $0 == "'" || $0 == " " ? $0 : " " }
@@ -175,14 +178,23 @@ enum ThinkingPause {
         let tail = words(quote).suffix(3).joined(separator: " ")
         var at = -1
         if turn.count >= 3 { for i in 0...(turn.count - 3) where turn[i..<(i + 3)].joined(separator: " ") == tail { at = i + 3 } }
-        if at != -1 && turn.count - at > maxWordsAfter { return 0 }
+        if at != -1 && turn.count - at > maxWordsAfter {
+            // The line the question ends in, and how many words it still had.
+            var k = idx
+            var upTo = words(ordered[idx].text).count
+            while upTo < at && k < end { k += 1; upTo += words(ordered[k].text).count }
+            if upTo - at > maxWordsAfter || k == end { return 0 }
+            let inTurn = ordered[k + 1].startSec - ordered[k].endSec
+            return inTurn < minPauseInTurnSec ? 0 : (inTurn * 10).rounded() / 10
+        }
         guard let next = ordered[(end + 1)...].first(where: { $0.speakerLabel == "Teacher" }) else { return nil }
         let gap = next.startSec - ordered[end].endSec
         guard gap >= 0, gap <= maxPauseSec else { return nil }
         return (gap * 10).rounded() / 10
     }
 
-    static func tawt(_ session: AudioSessionWithSegments) -> Double? {
+    /// The average, and how many questions it rests on.
+    static func tawt(_ session: AudioSessionWithSegments) -> (average: Double, count: Int)? {
         let selfAnswered = session.teachingMoves?.selfAnswered ?? []
         let ordered = session.segments.filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }.sorted { $0.startSec < $1.startSec }
         let thinking = QuestionMix.classify(session).filter { q in
@@ -192,7 +204,7 @@ enum ThinkingPause {
         }
         let pauses = thinking.compactMap { pause(after: $0.entry.timestampSec, quote: Redaction.withoutAddressedNames($0.entry.text), in: ordered) }
         guard !pauses.isEmpty else { return nil }
-        return ((pauses.reduce(0, +) / Double(pauses.count)) * 10).rounded() / 10
+        return (((pauses.reduce(0, +) / Double(pauses.count)) * 10).rounded() / 10, pauses.count)
     }
 }
 
@@ -390,6 +402,8 @@ struct OverviewTab: View {
         let unit: String
         let tint: Color
         var hint: String? = nil
+        /// What a measured number rests on.
+        var note: String? = nil
     }
 
     private static func pct(_ v: Double?) -> String? { v.map { String(format: "%.1f", ($0 * 10).rounded() / 10) } }
@@ -414,8 +428,9 @@ struct OverviewTab: View {
         out.append(Tile(label: "Pace", value: detail["teacherWordsPerMinute"].map { "\(Int($0.rounded()))" }, unit: "wpm", tint: Color(hex: 0xF4DFE4)))
         out.append(Tile(label: "Questions", value: session.questionCount.map { "\($0)" }, unit: "", tint: Color(hex: 0xDCE7DF)))
         let tawt = ThinkingPause.tawt(session)
-        out.append(Tile(label: "TAWT", value: tawt.map { String(format: "%.1f", $0) }, unit: "s", tint: Color(hex: 0xE6EBD2),
-                        hint: tawt == nil ? "No pause after a thinking question could be timed." : nil))
+        out.append(Tile(label: "TAWT", value: tawt.map { String(format: "%.1f", $0.average) }, unit: "s", tint: Color(hex: 0xE6EBD2),
+                        hint: tawt == nil ? "No pause after a thinking question could be timed." : nil,
+                        note: tawt.map { "from \($0.count) question\($0.count == 1 ? "" : "s")" }))
         // The checks Questioning & Checking lists, left-out non-checks and all;
         // older lessons with no log fall back to the stored count.
         let checks = session.cfuLog.map { log in log.filter { $0.loop?.who != "not_a_check" }.count } ?? session.cfuCount
@@ -436,7 +451,7 @@ struct OverviewTab: View {
                         Text(t.label.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(AppTheme.forest.opacity(0.6))
                         (Text(t.value ?? "\u{2014}").font(.heading(.title)).foregroundColor(AppTheme.forest)
                             + Text(t.value != nil && !t.unit.isEmpty ? " \(t.unit)" : "").font(.subheadline.weight(.bold)).foregroundColor(AppTheme.forest))
-                        if let hint = t.hint {
+                        if let hint = t.hint ?? t.note {
                             Text(hint).font(.caption2).foregroundStyle(AppTheme.forest.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
                         }
                     }

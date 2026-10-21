@@ -2631,7 +2631,10 @@ function SummaryTab({
   const quietPct = split && soundPct != null ? Math.max(0, Math.round((silencePct! - soundPct) * 10) / 10) : null
   const wpm = session.metricsDetail?.teacherWordsPerMinute ?? null
   const tawt = tawtOf(session)
-  const tiles: { label: string; metric: ConfidentMetric; unit?: string; accent: Accent }[] = [
+  // How many questions the average rests on: 0.0 s from one question and
+  // from eight are different findings.
+  const tawtCount = tawt.pauses.filter((p) => p != null).length
+  const tiles: { label: string; metric: ConfidentMetric; unit?: string; note?: string; accent: Accent }[] = [
     { label: 'You spoke', metric: getPresenceMetric(teacherPct), unit: '%', accent: ACCENTS.terracotta },
     { label: 'Students spoke', metric: getPresenceMetric(studentPct), unit: '%', accent: ACCENTS.gold },
     ...(split
@@ -2655,6 +2658,7 @@ function SummaryTab({
               reason: tawt.thinking.length === 0 ? 'No question asked students to explain or reason.' : 'No pause after a thinking question could be timed.',
             },
       unit: 's',
+      note: tawt.average != null ? `from ${tawtCount} question${tawtCount === 1 ? '' : 's'}` : undefined,
       accent: ACCENTS.olive,
     },
     // The checks Questioning & Checking lists, so the two never disagree:
@@ -2790,6 +2794,7 @@ function SummaryTab({
               value={t.metric.display}
               unit={confident ? t.unit : undefined}
               hint={confident ? undefined : t.metric.reason}
+              note={confident ? t.note : undefined}
               accent={t.accent}
             />
           )
@@ -6124,7 +6129,9 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
             <span className="font-heading text-3xl font-extrabold leading-none text-forest">
               {thinkingPause.toFixed(1)}
               <small className="ml-1 font-sans text-base font-bold">s</small>
-              <small className="ml-1.5 font-sans text-sm font-medium text-ink-soft">average</small>
+              <small className="ml-1.5 font-sans text-sm font-medium text-ink-soft">
+                average of {thinkingPauses.filter((p) => p != null).length}
+              </small>
             </span>
           </div>
           <p className="text-sm leading-relaxed text-ink-soft">

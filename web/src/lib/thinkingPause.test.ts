@@ -37,6 +37,22 @@ test('a question you talked straight past had no pause', () => {
   assert.deepEqual(pausesAfter(segments, [q(10, 'Would that work the same way for addition?')]), [{ sec: 0, answered: false, keptTalking: true }])
 })
 
+test('a real gap before going on is a pause, even inside one turn', () => {
+  const segments = [
+    seg('Teacher', 10, 14, 'Would that work the same way for addition?'),
+    seg('Teacher', 15.8, 20, 'So the same thing happens when we add them up.'),
+  ]
+  assert.deepEqual(pausesAfter(segments, [q(10, 'Would that work the same way for addition?')]), [{ sec: 1.8, answered: false }])
+})
+
+test('a breath before going on is still talking past it', () => {
+  const segments = [
+    seg('Teacher', 10, 14, 'Would that work the same way for addition?'),
+    seg('Teacher', 14.4, 20, 'So the same thing happens when we add them up.'),
+  ]
+  assert.deepEqual(pausesAfter(segments, [q(10, 'Would that work the same way for addition?')]), [{ sec: 0, answered: false, keptTalking: true }])
+})
+
 test('a tag after the question is not talking past it', () => {
   const segments = [seg('Teacher', 10, 14, 'Would that work the same way for addition? K?'), seg('Teacher', 16.5, 18)]
   assert.deepEqual(pausesAfter(segments, [q(10, 'Would that work the same way for addition?')]), [{ sec: 2.5, answered: false }])
