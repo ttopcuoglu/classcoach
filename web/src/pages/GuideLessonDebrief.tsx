@@ -55,7 +55,7 @@ const STEPS = [
   },
   {
     title: 'Read the report',
-    body: 'Summary first: what the lesson covered, your one focus for next lesson, how the lesson moved, its numbers, and one thing to keep doing. Insights holds the detail. My Growth shows the same numbers trending across every session you’ve recorded.',
+    body: 'Summary first: one thing to try next lesson, what the lesson covered, how the lesson moved, its numbers — talk, sound and quiet, pace, questions, wait time and checks — and one thing to keep doing. Insights holds the detail. My Growth shows the same numbers trending across every session you’ve recorded.',
   },
   {
     title: 'Talk it through',
@@ -66,7 +66,7 @@ const STEPS = [
 const TABS = [
   {
     name: 'Summary',
-    body: 'What the lesson covered, your one focus for next lesson, how the lesson moved, the lesson’s numbers, one thing to keep doing, and a “Try next time” list you can carry straight into your next plan. Save the whole report as a PDF from here.',
+    body: 'Your one focus for next lesson, what the lesson covered, how the lesson moved, the lesson’s numbers, one thing to keep doing, and a “Try next time” list you can carry straight into your next plan. Save the whole report as a PDF from here.',
   },
   {
     name: 'Insights',
@@ -132,19 +132,18 @@ function SampleReport() {
         <p className="mt-1.5 text-xs text-ink-soft">Recorded 41:20 · 86% came through as audible speech</p>
       </div>
 
+      <div className="rounded-xl border-l-4 border-terracotta bg-peach-tint/50 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Next lesson, try this</p>
+        <p className="mt-1.5 text-sm text-ink">Your “what if the cell had no oxygen?” question got students reasoning.</p>
+        <p className="mt-1 text-sm font-semibold text-ink">After a student answers, ask one more “why?” before you move on.</p>
+        <p className="mt-1.5 text-xs text-ink-soft">Why this › · Choose a different one</p>
+      </div>
+
       <div className="rounded-xl border border-hairline bg-cream-card p-4">
         <p className="text-sm text-ink-soft">
           Students worked through cell respiration, moving from a modelled example to small-group analysis of
           what happens when oxygen runs short.
         </p>
-      </div>
-
-      <div className="rounded-xl border-l-4 border-terracotta bg-peach-tint/50 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Your one focus for next lesson</p>
-        <p className="mt-1.5 text-sm text-ink">
-          After a student answers, ask one more “why?” before you move on — you followed up on 4 of 15 answers today.
-        </p>
-        <p className="mt-1.5 text-xs text-ink-soft">Suggested: where today’s pattern points · or pick another from Try next time</p>
       </div>
 
       <div className="rounded-xl border border-hairline bg-cream-card p-4">
@@ -164,13 +163,16 @@ function SampleReport() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           { label: 'You spoke', value: '62', unit: '%', tint: 'bg-peach-tint' },
           { label: 'Students spoke', value: '27', unit: '%', tint: 'bg-gold-tint' },
-          { label: 'Silence / other', value: '11', unit: '%', tint: 'bg-mint-tint' },
+          { label: 'Sound, no words', value: '7', unit: '%', tint: 'bg-lavender-tint' },
+          { label: 'Quiet', value: '4', unit: '%', tint: 'bg-mint-tint' },
+          { label: 'Pace', value: '148', unit: 'wpm', tint: 'bg-peach-tint' },
           { label: 'Questions', value: '22', unit: '', tint: 'bg-mint-tint' },
           { label: 'TAWT', value: '2.4', unit: 's', tint: 'bg-mint-tint' },
+          { label: 'Checks', value: '3', unit: '', tint: 'bg-gold-tint' },
         ].map((t) => (
           <div key={t.label} className={`rounded-xl px-3 py-2.5 ${t.tint}`}>
             <p className="text-[10px] font-bold uppercase tracking-wide text-forest/60">{t.label}</p>

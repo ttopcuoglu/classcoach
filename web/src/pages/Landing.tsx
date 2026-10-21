@@ -297,14 +297,14 @@ function ReportMockup() {
           <p className="text-xs text-ink-soft">Your Lesson Debrief · Sample</p>
           <LockIcon className="h-4 w-4 text-ink-soft" />
         </div>
-        {/* The top of the Summary: the lesson, the one focus, how the lesson
-            moved and its numbers. The rest is cut off on purpose. */}
+        {/* The top of the Summary: the one focus, the lesson, how it moved and
+            its numbers. The rest is cut off on purpose. */}
         <div className="h-[30rem] overflow-hidden rounded-xl bg-cream sm:h-[34rem]">
           <img
             src="/samples/hero-debrief-summary.png"
-            alt="A sample Lesson Debrief Summary for an invented biology lesson: what the lesson covered, one focus for next lesson, how the lesson moved, and the lesson's numbers."
+            alt="A sample Lesson Debrief Summary for an invented biology lesson: one thing to try next lesson, what the lesson covered, how the lesson moved, and the lesson's numbers."
             width={1440}
-            height={2052}
+            height={2114}
             className="w-full"
           />
         </div>

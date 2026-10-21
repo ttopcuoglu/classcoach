@@ -107,6 +107,7 @@ await sleep(1800)
 
 const SHARED = {
   'The decline and fall of the ancient Indian empires, through reading passages and a…': 'Cellular respiration: where a cell’s energy comes from',
+  'The decline and fall of the ancient Indian empires': 'Cellular respiration: where a cell’s energy comes from',
   'Preview Teacher ·': 'Biology ·',
   '· 7th': '· 9th',
   'Recorded 22:38 · only 48% came through as audible speech — the quiet stretches are as likely to be distance or overlapping voices as a quiet room · 8 of 8 metrics measured from that portion':
@@ -119,6 +120,9 @@ await evaluate(`
       'The lesson covers cellular respiration — how cells turn glucose and oxygen into usable energy — moving from a modelled walk through the equation to small groups predicting what happens when oxygen runs short.',
     'The framing of internal bad choices versus external forces is a strong organizing lens for comparing why empires fall—next time you could have students sort the specific causes (climate shift, earthquakes, river course changes, leadership decisions) into those two buckets for each empire before the simulation starts, so the categories are active tools rather than background narration.':
       'After a student answers, ask one more “why?” before you move on — today you followed up on 3 of the 9 answers the recording could hear.',
+    // Next lesson, try this: what went well and the one thing to try.
+    'Your “bad choices vs. outside forces” framing gave students a strong lens.': 'Your “what if the cell had no oxygen?” question got students reasoning.',
+    'Have pairs sort the causes into those two groups before the simulation starts.': 'After a student answers, ask one more “why?” before you move on.',
     // How the lesson moved: the stages, renamed for the invented lesson.
     'Reviewing prior empire topics': 'Recapping photosynthesis',
     'Introducing the fall-of-empires simulation': 'Walking through the respiration equation',
@@ -150,7 +154,7 @@ const summaryClip = await evaluate(`(() => {
   const b = tile.closest('.grid').getBoundingClientRect().bottom + scrollY + 16;
   return { x: 0, y: t, width: ${W}, height: b - t };
 })()`)
-const summaryLeak = await evaluate(`(() => { const m = (() => { const t = document.querySelector('main').innerText; return t.slice(0, t.indexOf('TAWT') + 20) })().match(/empire|Gupta|Harappan|Mauryan|Indus|bromine|Moroccan/gi); return m })()`)
+const summaryLeak = await evaluate(`(() => { const m = (() => { const t = document.querySelector('main').innerText; return t.slice(0, t.indexOf('How to read these numbers')) })().match(/empire|Gupta|Harappan|Mauryan|Indus|bromine|Moroccan/gi); return m })()`)
 if (summaryLeak) throw new Error('real-lesson words left in the Summary: ' + summaryLeak.join(', '))
 await shoot('debrief-summary.png', summaryClip)
 
