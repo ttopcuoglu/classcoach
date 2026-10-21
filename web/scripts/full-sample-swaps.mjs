@@ -12,11 +12,11 @@ export const SWAPS = {
     'Preview Teacher ·': 'Biology ·',
     '· 7th': '· 9th',
 
-    // Summary
+    // Summary (the focus line is the hero's, scripts/capture-hero.mjs)
     'Your “bad choices vs. outside forces” framing gave students a strong lens.':
-      'Your “glucose in, oxygen in” build-up gave students a clear map.',
+      'Your “what if the cell had no oxygen?” question got students reasoning.',
     'Have pairs sort the causes into those two groups before the simulation starts.':
-      'Have pairs predict which stage stops first before you explain the group task.',
+      'After a student answers, ask one more “why?” before you move on.',
     'The lesson covers the decline and fall of ancient Indian empires—the Harappan (Indus River Valley), Mauryan, and Gupta civilizations—examining causes such as natural climate change, earthquakes, and rivers changing course, through reading passages and a simulation activity.':
       'The lesson covers cellular respiration — how cells turn glucose and oxygen into usable energy — moving from a modelled walk through the equation to small groups predicting what happens when oxygen runs short.',
     'Reviewing prior empire topics': 'Recapping photosynthesis',
