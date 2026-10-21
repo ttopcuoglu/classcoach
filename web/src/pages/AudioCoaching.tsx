@@ -67,6 +67,7 @@ import {
   hasEnoughWaitTimeSamples,
   isConfidentState,
   isMissingState,
+  LOW_CAPTURE_PCT,
   judgeTalkBalance,
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
   MIN_N_FOR_PERCENT,
@@ -2630,6 +2631,9 @@ function SummaryTab({
   const soundPct = split ? Math.round(((silencePct! * split.unresolvedPct) / (split.quietPct + split.unresolvedPct)) * 10) / 10 : null
   const quietPct = split && soundPct != null ? Math.max(0, Math.round((silencePct! - soundPct) * 10) / 10) : null
   const wpm = session.metricsDetail?.teacherWordsPerMinute ?? null
+  // The same reading as the header's "only X% came through" line.
+  const capturedPct = getCoverage(session.durationSec, session.phases, session.metricsDetail).capturedSharePct
+  const lowCapture = capturedPct != null && capturedPct < LOW_CAPTURE_PCT
   const tawt = tawtOf(session)
   // How many questions the average rests on: 0.0 s from one question and
   // from eight are different findings.
@@ -2690,21 +2694,8 @@ function SummaryTab({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* The lesson summary, whole: what the lesson was about, what went
-          well, and what might be worth a look — three paragraphs, at the
-          teacher's request, not folded to a line. The short pattern headline
-          is not shown; it still picks the suggested focus below. */}
-      {classSummary ? (
-        <SummaryNoteCard text={classSummary} />
-      ) : classSummarySending ? (
-        <div className="flex justify-center rounded-3xl bg-mint-tint/70 p-6 text-forest">
-          <ProgressRing progress={classSummaryProgress} label="Putting together a summary of this lesson" hint="Reading the whole transcript, not just the start." />
-        </div>
-      ) : (
-        spotlight && <CoachNoteCard text={`${spotlight.headline} ${spotlight.body}`} />
-      )}
-
-      {/* Your one focus for next lesson. */}
+      {/* Your one focus for next lesson, first: it is the takeaway, and a
+          teacher should not have to read the summary to reach it. */}
       {focus && (
         <div className="grid items-center gap-5 rounded-3xl bg-peach-tint p-6 shadow-[6px_6px_0_var(--color-gold)] sm:grid-cols-[1fr_auto]">
           <div>
@@ -2762,6 +2753,20 @@ function SummaryTab({
         </div>
       )}
 
+      {/* The lesson summary, whole: what the lesson was about, what went
+          well, and what might be worth a look — three paragraphs, at the
+          teacher's request, not folded to a line. The short pattern headline
+          is not shown; it still picks the suggested focus above. */}
+      {classSummary ? (
+        <SummaryNoteCard text={classSummary} />
+      ) : classSummarySending ? (
+        <div className="flex justify-center rounded-3xl bg-mint-tint/70 p-6 text-forest">
+          <ProgressRing progress={classSummaryProgress} label="Putting together a summary of this lesson" hint="Reading the whole transcript, not just the start." />
+        </div>
+      ) : (
+        spotlight && <CoachNoteCard text={`${spotlight.headline} ${spotlight.body}`} />
+      )}
+
       {/* How the lesson moved — only where the arc read found its stages. */}
       {arc.length > 0 && (
         <div className="flex break-inside-avoid flex-col gap-3 rounded-3xl bg-cream-card p-5">
@@ -2783,7 +2788,15 @@ function SummaryTab({
         </div>
       )}
 
-      {/* The lesson's numbers. Insights, a tab away, has each one in full. */}
+      {/* The lesson's numbers. Insights, a tab away, has each one in full.
+          When most of the recording never became words, they say so first:
+          the tiles look as certain on a lost recording as on a clean one. */}
+      {lowCapture && (
+        <p className="-mb-1 rounded-2xl bg-gold-tint px-4 py-2.5 text-sm text-ink">
+          Only {capturedPct}% of this recording came through as clear speech, so read these numbers as a partial picture.
+          Students are the voices most likely to be missed.
+        </p>
+      )}
       <div className={`grid break-inside-avoid grid-cols-2 gap-3 ${tiles.length % 4 === 0 || tiles.length === 7 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
         {tiles.map((t) => {
           const confident = isConfidentState(t.metric.state)
