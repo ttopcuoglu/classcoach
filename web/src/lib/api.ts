@@ -50,15 +50,15 @@ export type ScenarioAttempt = {
 // Curated subset of Deepgram Aura-2's voice catalog for Talk It Through —
 // see server/src/lib/talkVoices.ts. Same flat per-character billing
 // regardless of voice, so this list is a UX choice, not a cost one.
-export type TalkVoice = 'arcas' | 'andromeda' | 'apollo'
+export type TalkVoice = 'apollo' | 'arcas' | 'andromeda'
 
 export const TALK_VOICES: { value: TalkVoice; label: string; description: string }[] = [
-  { value: 'arcas', label: 'Arcas', description: 'Smooth and natural (default)' },
+  { value: 'apollo', label: 'Apollo', description: 'Calm and confident (default)' },
+  { value: 'arcas', label: 'Arcas', description: 'Smooth and natural' },
   { value: 'andromeda', label: 'Andromeda', description: 'Casual and expressive' },
-  { value: 'apollo', label: 'Apollo', description: 'Calm and confident' },
 ]
 
-export const DEFAULT_TALK_VOICE: TalkVoice = 'arcas'
+export const DEFAULT_TALK_VOICE: TalkVoice = 'apollo'
 
 /// A voice the teacher chose before the list was narrowed is still in their
 /// column; the server serves the default for it, so the picker has to show
