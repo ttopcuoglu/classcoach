@@ -1,6 +1,19 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { generateLessonDeck, type LessonAdaptation, type LessonPlan, type LessonStep, type PendingAdaptation } from '../lib/api'
+import {
+  generateLessonDeck,
+  getLessonTemplates,
+  layoutLessonPlan,
+  type ExportDoc,
+  type ExportDocBlock,
+  type LessonAdaptation,
+  type LessonPlan,
+  type LessonStep,
+  type LessonTemplates,
+  type PendingAdaptation,
+  type TemplateContent,
+  type TemplateSectionKind,
+} from '../lib/api'
 import {
   checkBlocks,
   currentMinutes,
@@ -32,6 +45,8 @@ import {
   StarIcon,
 } from './icons'
 import ExportModal from './ExportModal'
+import { LessonFormatsDialog } from './LessonFormats'
+import Overlay from './Overlay'
 import { WorkingRing } from './ProgressRing'
 import { Spinner } from './Spinner'
 
@@ -174,35 +189,6 @@ function FallbackDialog({ fallback, onClose }: { fallback: Fallback; onClose: ()
   )
 }
 
-function Overlay({ children, onClose, labelledBy }: { children: React.ReactNode; onClose: () => void; labelledBy: string }) {
-  const box = useRef<HTMLDivElement>(null)
-  // Read through a ref so a parent re-render can't re-run this and pull focus
-  // back off whatever the teacher has moved to inside the dialog.
-  const close = useRef(onClose)
-  useEffect(() => {
-    close.current = onClose
-  })
-  useEffect(() => {
-    if (!box.current?.contains(document.activeElement)) box.current?.focus()
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close.current()
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-  return (
-    <div
-      ref={box}
-      tabIndex={-1}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={labelledBy}
-      className="fixed inset-0 z-50 overflow-y-auto bg-forest/45 px-4 pt-6 focus:outline-none md:px-8"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      {children}
-    </div>
-  )
-}
-
 // ---------------------------------------------------------------------------
 // The document
 // ---------------------------------------------------------------------------
@@ -267,6 +253,8 @@ type DocSection = {
   defaultOpen: boolean
   copy: () => CopyBlock[]
   copyLabel?: string
+  /** Nothing to copy — a school-format section the lesson left empty. */
+  noCopy?: boolean
   body: React.ReactNode
 }
 
@@ -289,7 +277,7 @@ function SectionRow({ n, section, preview }: { n: number; section: DocSection; p
           <span className="min-w-0 flex-1 font-heading text-[17px] font-bold leading-snug text-forest">{section.title}</span>
           <Chevron open={open} />
         </button>
-        {!preview && <CopyButton blocks={section.copy} what={section.title} label={section.copyLabel} />}
+        {!preview && !section.noCopy && <CopyButton blocks={section.copy} what={section.title} label={section.copyLabel} />}
       </div>
       {open && (
         <div id={id} className="px-4 pb-5 sm:px-5 sm:pl-[60px]">
@@ -550,6 +538,252 @@ function LessonDocument({ plan, preview = false }: { plan: LessonPlan; preview?:
       {sections.map((section, i) => (
         <SectionRow key={section.key} n={i + 1} section={section} preview={preview} />
       ))}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// The lesson in a school's (or the teacher's own) lesson plan format
+// ---------------------------------------------------------------------------
+
+/// Which school-format kinds hold each part of Wivoza's own layout. A part no
+/// section of the format holds is not lost: it is listed under "Also from
+/// Wivoza", outside what is copied or downloaded as the plan.
+const HELD_BY: Record<string, TemplateSectionKind[]> = {
+  objective: ['objective'],
+  criteria: ['success_criteria'],
+  materials: ['materials'],
+  sequence: ['opening', 'instruction', 'guided_practice', 'independent_practice', 'activities', 'closing'],
+  checks: ['checks', 'assessment'],
+  misconceptions: ['misconceptions'],
+  exit: ['exit_ticket', 'assessment'],
+}
+
+function templateSections(content: TemplateContent): DocSection[] {
+  return content.sections.map((section) => {
+    const blocks = textBlocks(section.text)
+    const empty =
+      section.kind === 'teacher_fills'
+        ? 'For you to fill in.'
+        : 'Nothing in this lesson goes here. Fill it in yourself, or leave it.'
+    return {
+      key: section.id,
+      title: section.title,
+      defaultOpen: true,
+      noCopy: blocks.length === 0,
+      copy: () => blocks,
+      body: blocks.length ? <Blocks blocks={blocks} /> : <p className="text-sm italic text-warm-gray">{empty}</p>,
+    }
+  })
+}
+
+function wholeTemplateLesson(plan: LessonPlan, content: TemplateContent): CopyBlock[] {
+  const meta = metaLine(plan)
+  return [
+    { t: 'h1', text: lessonTitle(plan) },
+    ...(meta ? [{ t: 'p', text: meta } as CopyBlock] : []),
+    ...content.sections.flatMap((section): CopyBlock[] => [{ t: 'h2', text: section.title }, ...textBlocks(section.text)]),
+  ]
+}
+
+/// The school-format plan as the export file builder's document model.
+function templateExportDoc(plan: LessonPlan, content: TemplateContent): ExportDoc {
+  const blocks: ExportDocBlock[] = content.sections.flatMap((section): ExportDocBlock[] => [
+    { type: 'heading', text: section.title },
+    ...textBlocks(section.text).map((block): ExportDocBlock => {
+      if (block.t === 'ul') return { type: 'bullets', items: block.items }
+      if (block.t === 'ol') return { type: 'numbered', items: block.items }
+      return { type: 'paragraph', text: block.text }
+    }),
+  ])
+  return { title: lessonTitle(plan), subtitle: [content.templateName, metaLine(plan)].filter(Boolean).join(' · '), blocks }
+}
+
+function TemplateDocument({ plan, content }: { plan: LessonPlan; content: TemplateContent }) {
+  const kinds = new Set(content.sections.map((s) => s.kind))
+  const extras = documentSections(plan, false).filter((section) => !(HELD_BY[section.key] ?? []).some((kind) => kinds.has(kind)))
+  const [extrasOpen, setExtrasOpen] = useState(false)
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="overflow-hidden rounded-2xl border border-divider bg-white">
+        {templateSections(content).map((section, i) => (
+          <SectionRow key={section.key} n={i + 1} section={section} preview={false} />
+        ))}
+      </div>
+      {extras.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-dashed border-divider bg-cream/40">
+          <button
+            type="button"
+            onClick={() => setExtrasOpen((o) => !o)}
+            aria-expanded={extrasOpen}
+            className={`flex w-full items-center gap-3 px-4 py-3 text-left sm:px-5 ${FOCUS}`}
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block font-heading text-[15px] font-bold text-forest">Also from Wivoza</span>
+              <span className="block text-xs text-warm-gray">
+                {extras.map((e) => e.title).join(', ')} — your format has no place for these, so they're not in the copy or the download.
+              </span>
+            </span>
+            <Chevron open={extrasOpen} />
+          </button>
+          {extrasOpen && (
+            <div className="border-t border-divider bg-white">
+              {extras.map((section, i) => (
+                <SectionRow key={section.key} n={i + 1} section={section} preview={false} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/// What the layout depends on. When it changes (an adaptation applied or
+/// undone), the stored layout is out of date and is asked for again; the
+/// server answers from its store when nothing that matters changed.
+function lessonSignature(plan: LessonPlan): string {
+  return JSON.stringify([
+    plan.id,
+    plan.objective,
+    plan.successCriteria,
+    plan.materials,
+    plan.approach,
+    plan.durationMinutes,
+    plan.sequence,
+    plan.checks,
+    plan.misconceptions,
+    plan.exitTicket,
+    plan.subject,
+    plan.gradeLevel,
+    plan.unitName,
+    plan.essentialQuestion,
+    plan.standard,
+  ])
+}
+
+export type FormatPatch = Pick<LessonPlan, 'templateChoice' | 'templateContent'>
+
+function useLessonFormat(plan: LessonPlan, enabled: boolean, onFormatChange?: (patch: FormatPatch) => void) {
+  const [templates, setTemplates] = useState<LessonTemplates | null>(null)
+  const [applied, setApplied] = useState<{ signature: string; templateId: string | null } | null>(null)
+  const [pendingChoice, setPendingChoice] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const request = useRef(0)
+  const onChange = useRef(onFormatChange)
+  useEffect(() => {
+    onChange.current = onFormatChange
+  })
+  const signature = lessonSignature(plan)
+
+  const loadTemplates = useCallback(async () => {
+    try {
+      setTemplates(await getLessonTemplates())
+    } catch {
+      setTemplates(null)
+    }
+  }, [])
+  useEffect(() => {
+    if (enabled) void loadTemplates()
+  }, [enabled, loadTemplates])
+
+  const hasAny = !!templates && templates.personal.length + templates.school.length > 0
+
+  const run = useCallback(
+    async (choice?: string | null) => {
+      const n = ++request.current
+      setLoading(true)
+      setError(null)
+      setPendingChoice(choice === undefined ? null : (choice ?? 'default'))
+      try {
+        const result = await layoutLessonPlan(plan.id, choice)
+        if (n !== request.current) return
+        onChange.current?.({ templateChoice: result.plan.templateChoice ?? null, templateContent: result.plan.templateContent ?? null })
+        setApplied({ signature: lessonSignature(result.plan), templateId: result.appliedTemplateId })
+      } catch (e) {
+        if (n === request.current) setError((e as Error).message || "Could not put this lesson in your format.")
+      } finally {
+        if (n === request.current) {
+          setLoading(false)
+          setPendingChoice(null)
+        }
+      }
+    },
+    [plan.id],
+  )
+
+  useEffect(() => {
+    if (enabled && hasAny && applied?.signature !== signature) void run()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, hasAny, signature])
+
+  const content =
+    enabled && !loading && applied?.templateId && applied.signature === signature && plan.templateContent?.templateId === applied.templateId
+      ? plan.templateContent
+      : null
+
+  return {
+    enabled: enabled && !!templates,
+    templates,
+    hasAny,
+    appliedId: applied?.templateId ?? null,
+    pendingChoice,
+    loading,
+    error,
+    content,
+    choose: (choice: string) => void run(choice),
+    retry: () => void run(),
+    changed: async () => {
+      await loadTemplates()
+      void run()
+    },
+  }
+}
+
+type LessonFormat = ReturnType<typeof useLessonFormat>
+
+function FormatBar({ format, onManage }: { format: LessonFormat; onManage: () => void }) {
+  const templates = format.templates
+  if (!templates) return null
+  if (!format.hasAny)
+    return (
+      <p className="text-[13px] text-warm-gray">
+        Does your school use its own lesson plan form?{' '}
+        <button type="button" onClick={onManage} className={`rounded font-semibold text-forest underline decoration-forest/30 underline-offset-4 hover:decoration-forest ${FOCUS}`}>
+          Set up your format
+        </button>{' '}
+        and your lessons come out in it.
+      </p>
+    )
+  const value = format.loading && format.pendingChoice && format.pendingChoice !== 'default' ? format.pendingChoice : (format.appliedId ?? 'wivoza')
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <label htmlFor="lesson-format" className="text-xs font-bold uppercase tracking-[0.12em] text-warm-gray">
+        Format
+      </label>
+      <select
+        id="lesson-format"
+        value={value}
+        disabled={format.loading}
+        onChange={(e) => format.choose(e.target.value)}
+        className="min-w-0 max-w-full rounded-full border border-divider bg-white py-1.5 pl-3 pr-8 text-[13px] font-semibold text-forest focus:border-forest focus:outline-none disabled:opacity-70"
+      >
+        {templates.school.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+        {templates.personal.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+        <option value="wivoza">Wivoza layout</option>
+      </select>
+      <button type="button" onClick={onManage} className={`rounded text-[13px] font-semibold text-forest underline decoration-divider underline-offset-4 hover:decoration-forest ${FOCUS}`}>
+        Manage formats
+      </button>
     </div>
   )
 }
@@ -1065,6 +1299,7 @@ export default function LessonWorkspace({
   onToggleSaved,
   onShare,
   onNew,
+  onFormatChange,
 }: {
   plan: LessonPlan
   adaptation: WorkspaceAdaptation
@@ -1075,6 +1310,8 @@ export default function LessonWorkspace({
   onToggleSaved: () => void
   onShare: () => Promise<{ shareToken: string }>
   onNew: () => void
+  /** Build a Lesson only: lets the lesson be shown in a school's lesson plan format. */
+  onFormatChange?: (patch: FormatPatch) => void
 }) {
   const [fallback, setFallback] = useState<Fallback | null>(null)
   const copier = {
@@ -1094,6 +1331,11 @@ export default function LessonWorkspace({
   const canAdapt = isFullLesson || (isImprove && !!plan.planText?.trim())
   const canDeliver = !isIdeas
   const hasTools = canAdapt || canDeliver
+
+  const format = useLessonFormat(plan, isFullLesson && plan.mode === 'generated' && !!onFormatChange, onFormatChange)
+  const [formatsOpen, setFormatsOpen] = useState(false)
+  const [wordOpen, setWordOpen] = useState(false)
+  const content = format.content
 
   // The preview opens itself when a revision arrives; closing it leaves the
   // revision drafted, with a way back to it in the tools column.
@@ -1168,15 +1410,26 @@ export default function LessonWorkspace({
           <div className="mt-1 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
             <SaveForLater saved={plan.saved} onClick={onToggleSaved} />
             <ShareLesson onShare={onShare} />
-            <Link
-              to={`/lesson-planning/${plan.id}/export`}
-              className={`flex items-center justify-center gap-2 rounded-full bg-pale-gold px-4 py-2.5 text-sm font-bold text-forest hover:bg-[#efdb9f] ${FOCUS}`}
-            >
-              <DownloadIcon className="h-4 w-4 text-forest" />
-              <span className="text-forest">Download</span>
-            </Link>
+            {content ? (
+              <button
+                type="button"
+                onClick={() => setWordOpen(true)}
+                className={`flex items-center justify-center gap-2 rounded-full bg-pale-gold px-4 py-2.5 text-sm font-bold text-forest hover:bg-[#efdb9f] ${FOCUS}`}
+              >
+                <DownloadIcon className="h-4 w-4 text-forest" />
+                <span className="text-forest">Download as Word</span>
+              </button>
+            ) : (
+              <Link
+                to={`/lesson-planning/${plan.id}/export`}
+                className={`flex items-center justify-center gap-2 rounded-full bg-pale-gold px-4 py-2.5 text-sm font-bold text-forest hover:bg-[#efdb9f] ${FOCUS}`}
+              >
+                <DownloadIcon className="h-4 w-4 text-forest" />
+                <span className="text-forest">Download</span>
+              </Link>
+            )}
             <CopyButton
-              blocks={() => wholeLesson(plan)}
+              blocks={() => (content ? wholeTemplateLesson(plan, content) : wholeLesson(plan))}
               what="the entire lesson"
               label={isIdeas ? 'Copy All Ideas' : 'Copy Entire Lesson'}
               className="justify-center !px-4 !py-2.5 !text-sm !font-bold"
@@ -1194,11 +1447,43 @@ export default function LessonWorkspace({
 
         <div className={`grid gap-6 ${hasTools ? '@min-[760px]:grid-cols-[minmax(0,1fr)_270px]' : ''}`}>
           <div className="flex min-w-0 flex-col gap-3">
-            <div>
-              <h2 className="font-heading text-xl font-bold text-forest">{isIdeas ? 'Your Ideas' : 'Your Lesson'}</h2>
-              <p className="text-[13px] text-warm-gray">Copy any section into your own template.</p>
+            <div className="flex flex-col gap-2">
+              <div>
+                <h2 className="font-heading text-xl font-bold text-forest">{isIdeas ? 'Your Ideas' : 'Your Lesson'}</h2>
+                <p className="text-[13px] text-warm-gray">
+                  {content ? `In ${content.templateName}. Copy any section, or the whole plan.` : 'Copy any section into your own template.'}
+                </p>
+              </div>
+              {format.enabled && <FormatBar format={format} onManage={() => setFormatsOpen(true)} />}
             </div>
-            <LessonDocument key={`${plan.id}:${plan.versionHistory?.length ?? 0}`} plan={plan} />
+            {format.loading ? (
+              <div className="rounded-2xl border border-divider bg-white px-5 py-6">
+                <WorkingRing
+                  active
+                  estimatedMs={12000}
+                  label="Putting it in your format"
+                  hint="Your lesson, in your form's own sections."
+                  className="text-forest"
+                />
+              </div>
+            ) : (
+              <>
+                {format.error && (
+                  <p role="alert" className="rounded-lg bg-soft-terracotta px-3 py-2 text-[13px] text-forest">
+                    {format.error}{' '}
+                    <button type="button" onClick={format.retry} className={`rounded font-semibold underline underline-offset-2 ${FOCUS}`}>
+                      Try again
+                    </button>{' '}
+                    Showing the Wivoza layout meanwhile.
+                  </p>
+                )}
+                {content ? (
+                  <TemplateDocument key={content.sourceKey} plan={plan} content={content} />
+                ) : (
+                  <LessonDocument key={`${plan.id}:${plan.versionHistory?.length ?? 0}`} plan={plan} />
+                )}
+              </>
+            )}
             <p className="text-xs text-warm-gray">
               {isImprove
                 ? 'Coaching on the plan you brought. Your learning goal and the parts that work stay as they are.'
@@ -1256,6 +1541,18 @@ export default function LessonWorkspace({
           changesLabel="How your delivery plan is built in"
           loader={() => generateLessonDeck(plan.id).then((result) => result.model)}
           onClose={() => setSlidesOpen(false)}
+        />
+      )}
+      {formatsOpen && <LessonFormatsDialog onClose={() => setFormatsOpen(false)} onChanged={() => void format.changed()} />}
+      {wordOpen && content && (
+        <ExportModal
+          sessionId={plan.id}
+          text={content.sourceKey}
+          initialFormat="docx"
+          documentOnly
+          note={`Laid out in ${content.templateName}.`}
+          loader={async () => templateExportDoc(plan, content)}
+          onClose={() => setWordOpen(false)}
         />
       )}
       {fallback && <FallbackDialog fallback={fallback} onClose={() => setFallback(null)} />}

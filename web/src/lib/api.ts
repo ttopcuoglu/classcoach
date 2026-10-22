@@ -494,6 +494,12 @@ export type LessonPlan = {
   quickIdeas: QuickIdea[] | null
   pendingAdaptation: PendingAdaptation | null
   versionHistory: LessonVersion[] | null
+  // The lesson plan format picked for this lesson: null = the teacher's
+  // default, 'wivoza' = Wivoza's own layout, otherwise a LessonTemplate id.
+  templateChoice?: string | null
+  // The lesson laid out in that format. Derived on the server and replaced
+  // whenever the lesson or the format changes — see layoutLessonPlan.
+  templateContent?: TemplateContent | null
 }
 
 export type LessonStep = { minutes: number | null; title: string; teacher: string | null; students: string | null }
@@ -2249,6 +2255,131 @@ export function setLessonPlanSaved(id: string, saved: boolean): Promise<LessonPl
 
 export function shareLessonPlan(id: string): Promise<{ shareToken: string }> {
   return request(`/api/lesson-plans/${id}/share`, { method: 'POST' })
+}
+
+// ---------------------------------------------------------------------------
+// Lesson plan formats (a school's or a teacher's own template)
+// ---------------------------------------------------------------------------
+
+export type TemplateSectionKind =
+  | 'details'
+  | 'objective'
+  | 'standards'
+  | 'essential_question'
+  | 'success_criteria'
+  | 'vocabulary'
+  | 'materials'
+  | 'opening'
+  | 'instruction'
+  | 'guided_practice'
+  | 'independent_practice'
+  | 'activities'
+  | 'closing'
+  | 'checks'
+  | 'assessment'
+  | 'misconceptions'
+  | 'differentiation'
+  | 'exit_ticket'
+  | 'homework'
+  | 'other'
+  | 'teacher_fills'
+
+export type TemplateSection = { id: string; title: string; kind: TemplateSectionKind; prompt: string | null }
+export type TemplateCadence = 'daily' | 'weekly'
+
+export type LessonTemplate = {
+  id: string
+  organizationId: string | null
+  userId: string | null
+  name: string
+  cadence: TemplateCadence
+  sections: TemplateSection[]
+  sourceFileName: string | null
+  isDefault: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type LessonTemplates = {
+  personal: LessonTemplate[]
+  school: LessonTemplate[]
+  schoolName: string | null
+  canManageSchool: boolean
+  defaultId: string | null
+}
+
+export type TemplateContent = {
+  templateId: string
+  templateName: string
+  sourceKey: string
+  sections: { id: string; title: string; kind: TemplateSectionKind; text: string }[]
+}
+
+/// What Wivoza read from an uploaded form. Nothing is saved until it is
+/// checked and passed to createLessonTemplate.
+export type ReadTemplate = {
+  name: string | null
+  cadence: TemplateCadence
+  sections: TemplateSection[]
+  note: string | null
+  sourceFileName: string
+}
+
+export function getLessonTemplates(): Promise<LessonTemplates> {
+  return request('/api/lesson-templates')
+}
+
+export async function readLessonTemplate(file: File): Promise<ReadTemplate> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch(`${API_BASE_URL}/api/lesson-templates/read`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw apiError(body?.error ?? messageForStatus(res.status), res.status)
+  }
+  return res.json()
+}
+
+export function createLessonTemplate(data: {
+  scope: 'school' | 'personal'
+  name: string
+  cadence: TemplateCadence
+  sections: TemplateSection[]
+  sourceFileName?: string | null
+}): Promise<LessonTemplate> {
+  return request('/api/lesson-templates', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function updateLessonTemplate(
+  id: string,
+  data: Partial<{ name: string; cadence: TemplateCadence; sections: TemplateSection[]; isDefault: boolean }>,
+): Promise<LessonTemplate> {
+  return request(`/api/lesson-templates/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+
+export async function deleteLessonTemplate(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/lesson-templates/${id}`, { method: 'DELETE', credentials: 'include' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw apiError(body?.error ?? messageForStatus(res.status), res.status)
+  }
+}
+
+/// The lesson laid out in its format. Pass `choice` to change the format
+/// (a template id, 'wivoza', or null for the default); leave it out to just
+/// get the current layout, which is free when nothing has changed.
+export function layoutLessonPlan(
+  id: string,
+  choice?: string | null,
+): Promise<{ plan: LessonPlan; appliedTemplateId: string | null }> {
+  return request(`/api/lesson-plans/${id}/layout`, {
+    method: 'POST',
+    body: JSON.stringify(choice === undefined ? {} : { choice }),
+  })
 }
 
 export function getAudioSessions(): Promise<AudioSession[]> {

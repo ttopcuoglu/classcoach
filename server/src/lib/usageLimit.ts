@@ -84,6 +84,13 @@ export type UsageAction =
   // file for what it's about so the form can suggest a topic and subject.
   | 'lesson_plan_adapt'
   | 'lesson_plan_infer_context'
+  // Lesson plan templates (lessonTemplateModel.ts). `template_read` reads an
+  // uploaded school form for its sections; `plan_layout` lays a built lesson
+  // out in one. Deliberately not in LESSON_PLANNING_ACTIONS: a layout happens
+  // on its own when a lesson is opened, and counting it against a free
+  // teacher's monthly lessons would halve them for a format they didn't pick.
+  | 'lesson_template_read'
+  | 'lesson_plan_layout'
 
 // Every turn-based call in the two free-forever features. Kept as one list so
 // a future action in either area doesn't silently fall back into the flat cap.

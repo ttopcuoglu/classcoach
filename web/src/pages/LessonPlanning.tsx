@@ -796,6 +796,7 @@ function BuildPanel() {
           onToggleSaved={() => toggleSaved(plan)}
           onShare={() => shareLessonPlan(plan.id)}
           onNew={handleNew}
+          onFormatChange={(patch) => setPlan((prev) => (prev && prev.id === plan.id ? { ...prev, ...patch } : prev))}
         />
       ) : (
         <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">

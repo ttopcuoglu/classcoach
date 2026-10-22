@@ -24,9 +24,20 @@ import {
   parseInferredContext,
   parseQuickIdeas,
   type LessonSections,
+  type LessonStep,
 } from '../lib/lessonPlanModel.ts'
 import { extractPdfImages, extractPptxImages, orderedSlideParts, type OriginalImage } from '../lib/originalImages.ts'
 import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
+import { loadTemplateOwner, templateForChoice } from '../lib/lessonTemplates.ts'
+import {
+  buildLayoutPrompt,
+  isUsableLayout,
+  layoutSourceKey,
+  layoutUserMessage,
+  parseLayout,
+  sanitizeSections,
+  type TemplateContent,
+} from '../lib/lessonTemplateModel.ts'
 import { prisma } from '../lib/prisma.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
 import { THEME_GUIDE, type SlideDeck } from '../lib/slidesPptx.ts'
@@ -1363,6 +1374,102 @@ async function restoreVersion(req: Request, res: Response, which: 'original' | '
   })
   res.json(updated)
 }
+
+// ---------------------------------------------------------------------------
+// Lesson plan formats — the lesson laid out in a school's or teacher's template
+// ---------------------------------------------------------------------------
+
+/// Layouts already being written, by plan and source key, so a second request
+/// for the same layout (the page opening twice, a double click) waits for the
+/// first instead of paying for it again.
+const layoutsInFlight = new Map<string, Promise<TemplateContent | null>>()
+
+/// Sets which format this lesson uses (when `choice` is sent) and returns the
+/// lesson laid out in it. A layout that is still current costs nothing: the
+/// stored one is returned as it is. Only a Planning Coach full lesson has a
+/// layout — anything else comes back unchanged with no template applied.
+lessonPlansRouter.post('/:id/layout', async (req, res) => {
+  const userId = req.user!.userId
+  let plan = await prisma.lessonPlan.findFirst({ where: { id: String(req.params.id), userId } })
+  if (!plan) {
+    res.status(404).json({ error: 'Lesson plan not found' })
+    return
+  }
+
+  const body = req.body ?? {}
+  if ('choice' in body) {
+    const choice = body.choice
+    if (choice !== null && typeof choice !== 'string') {
+      res.status(400).json({ error: 'choice must be a format id, "wivoza", or null' })
+      return
+    }
+    plan = await prisma.lessonPlan.update({ where: { id: plan.id }, data: { templateChoice: choice } })
+  }
+
+  const owner = await loadTemplateOwner(userId)
+  const template = owner ? await templateForChoice(owner, plan.templateChoice) : null
+  const structured = ((plan.sequence as unknown[] | null) ?? []).length > 0
+  const sections = template ? sanitizeSections(template.sections) : null
+  if (!template || !sections || !structured) {
+    res.json({ plan, appliedTemplateId: null })
+    return
+  }
+
+  const sourceKey = layoutSourceKey(plan, { id: template.id, updatedAt: template.updatedAt, sections })
+  const stored = plan.templateContent as TemplateContent | null
+  if (stored?.sourceKey === sourceKey) {
+    res.json({ plan, appliedTemplateId: template.id })
+    return
+  }
+
+  const flightKey = `${plan.id}:${sourceKey}`
+  let flight = layoutsInFlight.get(flightKey)
+  if (!flight) {
+    const denied = await checkAndLogUsage(userId, 'lesson_plan_layout')
+    if (denied) {
+      res.status(429).json({ error: denied })
+      return
+    }
+    const lesson = plan
+    flight = (async () => {
+      const response = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 4000,
+        thinking: { type: 'disabled' },
+        system: buildLayoutPrompt(),
+        messages: [{ role: 'user', content: layoutUserMessage(lesson, sections) }],
+      })
+      const text = response.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('\n')
+      const laidOut = parseLayout(text, sections, (lesson.sequence as unknown as LessonStep[] | null) ?? [])
+      if (!isUsableLayout(laidOut)) {
+        console.error('[lesson-plans] layout came back empty — stop_reason:', response.stop_reason)
+        return null
+      }
+      return { templateId: template.id, templateName: template.name, sourceKey, sections: laidOut }
+    })().finally(() => layoutsInFlight.delete(flightKey))
+    layoutsInFlight.set(flightKey, flight)
+  }
+
+  try {
+    const content = await flight
+    if (!content) {
+      res.status(502).json({ error: "Could not put this lesson in your school's format. Please try again." })
+      return
+    }
+    const updated = await prisma.lessonPlan.update({
+      where: { id: plan.id },
+      data: { templateContent: content as unknown as Prisma.InputJsonValue },
+    })
+    res.json({ plan: updated, appliedTemplateId: template.id })
+  } catch (error) {
+    const failure = classifyModelError(error, "Could not put this lesson in your school's format")
+    logModelFailure('[lesson-plans] layout failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
+  }
+})
 
 lessonPlansRouter.patch('/:id', async (req, res) => {
   const { saved } = req.body ?? {}

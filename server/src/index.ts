@@ -16,6 +16,7 @@ import { conversationPrepRouter } from './routes/conversationPrep.ts'
 import { debriefRouter } from './routes/debrief.ts'
 import { followUpsRouter } from './routes/followUps.ts'
 import { lessonPlansRouter } from './routes/lessonPlans.ts'
+import { lessonTemplatesRouter } from './routes/lessonTemplates.ts'
 import { onboardingRouter } from './routes/onboarding.ts'
 import { parentMessageRouter } from './routes/parentMessage.ts'
 import { profileRouter } from './routes/profile.ts'
@@ -124,6 +125,7 @@ app.use('/api/admin', requireAuth, adminRouter)
 app.use('/api/billing', requireAuth, billingRouter)
 app.use('/api/audio-sessions', requireAuth, audioSessionsRouter)
 app.use('/api/lesson-plans', requireAuth, lessonPlansRouter)
+app.use('/api/lesson-templates', requireAuth, lessonTemplatesRouter)
 app.use('/api/conversation-prep', requireAuth, conversationPrepRouter)
 app.use('/api/conversation-plans', requireAuth, conversationPlanRouter)
 app.use('/api/assignment-coach', requireAuth, assignmentCoachRouter)

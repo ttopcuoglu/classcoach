@@ -56,7 +56,8 @@ import {
 } from '../lib/adminLabels'
 import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { CHALLENGE_TYPES, MESSAGE_PURPOSES, challengeLabel, purposeLabel } from '../lib/communicationOptions'
-import { ChartBarIcon, ChatBubbleIcon, HomeIcon, LockIcon, ShieldIcon, UserIcon } from '../components/icons'
+import { ChartBarIcon, ChatBubbleIcon, HomeIcon, LessonPlanIcon, LockIcon, ShieldIcon, UserIcon } from '../components/icons'
+import { LessonFormatManager } from '../components/LessonFormats'
 
 function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -91,7 +92,7 @@ const primaryButtonClass =
   'rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft'
 
 type AnalyticsTab = 'dashboard' | 'engagement' | 'insights'
-type Tab = AnalyticsTab | 'professionalLearning' | 'people' | 'organizations' | 'platformUsers' | 'schoolInquiries'
+type Tab = AnalyticsTab | 'professionalLearning' | 'people' | 'lessonFormat' | 'organizations' | 'platformUsers' | 'schoolInquiries'
 
 const ANALYTICS_META: Record<AnalyticsTab, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Are teachers using Wivoza, and what should you do next.' },
@@ -225,6 +226,11 @@ export default function AdminDashboard() {
           People
         </button>
 
+        <button type="button" onClick={() => setTab('lessonFormat')} className={navButtonClass(tab === 'lessonFormat')}>
+          <LessonPlanIcon className="h-4 w-4 shrink-0" />
+          Lesson plan format
+        </button>
+
         {isSuperadmin && (
           <div>
             <p className="flex items-center gap-1.5 px-3 text-xs font-semibold text-ink-soft">
@@ -325,6 +331,11 @@ export default function AdminDashboard() {
               currentUserId={me?.id ?? null}
               overview={overview}
             />
+          </CardBoundary>
+        )}
+        {tab === 'lessonFormat' && (
+          <CardBoundary key="lessonFormat" title="Lesson plan format">
+            <LessonFormatPanel />
           </CardBoundary>
         )}
         {tab === 'organizations' && (
@@ -2937,6 +2948,28 @@ function PeoplePanel({
       ) : (
         <p className="text-sm text-ink-soft">Select an organization above to view its staff roster.</p>
       )}
+    </div>
+  )
+}
+
+// The school's lesson plan format: Planning Coach lays every lesson its
+// teachers build out in it. Always the admin's own school — the templates
+// routes have no ?organizationId=, so a superadmin manages the school their
+// own account belongs to.
+function LessonFormatPanel() {
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">Lesson plan format<span className="text-gold">.</span></h1>
+        <p className="mt-1 max-w-2xl text-sm text-ink-soft">
+          Upload the lesson plan form your teachers hand in. Every lesson they build in Planning Coach comes out in its sections,
+          ready to post or submit. Teachers can still switch a lesson back to the Wivoza layout, and anything about specific
+          students is left for them to fill in.
+        </p>
+      </div>
+      <section className="max-w-3xl rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+        <LessonFormatManager schoolOnly />
+      </section>
     </div>
   )
 }

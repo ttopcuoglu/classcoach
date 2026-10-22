@@ -1173,6 +1173,160 @@ function debrief(id: string, source: string, text: string, days: number): Json {
   }
 }
 
+// Lesson plan formats. `?formats=school` starts with a school format already
+// set up (and `?admin` makes the viewer the admin who manages it); without it
+// there are none, which is how the "Set up your format" prompt is reached.
+// Kept for the page's lifetime so uploads, edits and deletes can be clicked
+// through.
+const PREVIEW_SCHOOL = 'Preview Middle School'
+const previewTemplates: Json[] = new URLSearchParams(window.location.search).get('formats') === 'school'
+  ? [
+      {
+        id: 'tpl-school',
+        organizationId: 'org-preview',
+        userId: null,
+        name: 'Preview Middle daily lesson plan',
+        cadence: 'daily',
+        sections: [
+          { id: 's1', title: 'Teacher / Date / Period', kind: 'details', prompt: null },
+          { id: 's2', title: 'MA Standard(s)', kind: 'standards', prompt: 'Write the full standard code' },
+          { id: 's3', title: 'Learning Target', kind: 'objective', prompt: '"I can" statement' },
+          { id: 's4', title: 'Do Now', kind: 'opening', prompt: null },
+          { id: 's5', title: 'Mini-Lesson', kind: 'instruction', prompt: null },
+          { id: 's6', title: 'Work Time', kind: 'independent_practice', prompt: null },
+          { id: 's7', title: 'CFU', kind: 'checks', prompt: null },
+          { id: 's8', title: 'Differentiation', kind: 'differentiation', prompt: null },
+          { id: 's9', title: 'Accommodations (IEP/504)', kind: 'teacher_fills', prompt: 'List students' },
+          { id: 's10', title: 'Exit Ticket', kind: 'exit_ticket', prompt: null },
+          { id: 's11', title: 'Homework', kind: 'homework', prompt: null },
+        ],
+        sourceFileName: 'daily-plan.docx',
+        isDefault: true,
+        createdAt: daysAgo(20),
+        updatedAt: daysAgo(20),
+      },
+    ]
+  : []
+let previewTemplateChoice: string | null = null
+
+function previewTemplateList(): Json {
+  const live = previewTemplates.filter((t) => !t.archived)
+  const personal = live.filter((t) => t.userId)
+  const school = live.filter((t) => t.organizationId)
+  return {
+    personal,
+    school,
+    schoolName: PREVIEW_SCHOOL,
+    canManageSchool: new URLSearchParams(window.location.search).has('admin'),
+    defaultId: (personal.find((t) => t.isDefault) ?? school.find((t) => t.isDefault))?.id ?? null,
+  }
+}
+
+/// A stand-in for what the model writes into each kind of section.
+const PREVIEW_SECTION_TEXT: Record<string, string> = {
+  details: 'Teacher:\nDate:\nPeriod: Science, 7th',
+  standards: 'MS-LS1-2',
+  objective: 'I can explain why a cell membrane lets some things through and not others.',
+  checks: '- After the prediction: pairs hold up a whiteboard with their prediction and one reason.\n- During the lab: listen for what crosses the barrier, not just "it leaks".',
+  differentiation:
+    'Support: a sentence starter for the prediction, and the lab directions as four numbered steps.\n\nStretch: predict what would happen with a larger molecule, and say why.',
+  exit_ticket: 'In two sentences, explain why a cell without a membrane could not survive.\n\nExpected: names control of what enters and leaves the cell.',
+  homework: '',
+}
+
+function previewLayout(path: string, body: Json): Json {
+  if ('choice' in body) previewTemplateChoice = (body.choice as string | null) ?? null
+  const list = previewTemplateList() as { personal: Json[]; school: Json[]; defaultId: string | null }
+  const all = [...list.personal, ...list.school]
+  const template =
+    previewTemplateChoice === 'wivoza' ? null : (all.find((t) => t.id === previewTemplateChoice) ?? all.find((t) => t.id === list.defaultId) ?? null)
+  const plan = lesson({ templateChoice: previewTemplateChoice })
+  if (!template || path.includes('preview-feedback')) return { plan, appliedTemplateId: null }
+  const steps = SEQUENCE as unknown as { title: string; minutes: number; teacher: string; students: string }[]
+  const stepKinds = new Set(['opening', 'instruction', 'guided_practice', 'independent_practice', 'activities', 'closing'])
+  const stepSections = (template.sections as Json[]).filter((s) => stepKinds.has(String(s.kind)))
+  const text = (section: Json): string => {
+    if (section.kind === 'teacher_fills') return ''
+    if (stepKinds.has(String(section.kind))) {
+      const at = stepSections.indexOf(section)
+      const share = steps.filter((_, i) => Math.min(Math.floor((i * stepSections.length) / steps.length), stepSections.length - 1) === at)
+      return share.map((st) => `${st.title} (${st.minutes} min)\nTeacher: ${st.teacher}\nStudents: ${st.students}`).join('\n\n')
+    }
+    return PREVIEW_SECTION_TEXT[String(section.kind)] ?? ''
+  }
+  return {
+    plan: {
+      ...plan,
+      templateContent: {
+        templateId: template.id,
+        templateName: template.name,
+        sourceKey: `${template.id}:${template.updatedAt}`,
+        sections: (template.sections as Json[]).map((section) => ({ ...section, text: text(section) })),
+      },
+    },
+    appliedTemplateId: template.id,
+  }
+}
+
+function previewTemplates_(path: string, method: string, body: Json): Json | null {
+  const id = path.replace('/api/lesson-templates', '').replace(/^\//, '')
+  if (method === 'GET') return previewTemplateList()
+  if (id === 'read') {
+    return {
+      name: 'Hampden Valley daily lesson plan',
+      cadence: 'daily',
+      note: 'The bottom of the second page was cut off, so check nothing is missing after Homework.',
+      sourceFileName: 'lesson-plan-template.docx',
+      sections: [
+        { id: 's1', title: 'Teacher / Date / Course / Room', kind: 'details', prompt: null },
+        { id: 's2', title: 'MA Curriculum Framework Standard(s)', kind: 'standards', prompt: 'Write the full standard code' },
+        { id: 's3', title: 'Learning Target', kind: 'objective', prompt: 'Student-friendly "I can" statement, posted in the room' },
+        { id: 's4', title: 'Academic Vocabulary', kind: 'vocabulary', prompt: null },
+        { id: 's5', title: 'Do Now (5 min)', kind: 'opening', prompt: 'Independent, silent, on the board when students enter' },
+        { id: 's6', title: 'I Do', kind: 'instruction', prompt: 'Teacher modeling' },
+        { id: 's7', title: 'We Do', kind: 'guided_practice', prompt: 'Guided practice' },
+        { id: 's8', title: 'You Do', kind: 'independent_practice', prompt: 'Independent practice' },
+        { id: 's9', title: 'CFU Strategies', kind: 'checks', prompt: 'How will you know they got it during the lesson?' },
+        { id: 's10', title: 'Differentiation / ELL Supports', kind: 'differentiation', prompt: null },
+        { id: 's11', title: 'Accommodations (IEP/504)', kind: 'teacher_fills', prompt: 'List students and accommodations' },
+        { id: 's12', title: 'Exit Ticket', kind: 'exit_ticket', prompt: null },
+        { id: 's13', title: 'Homework', kind: 'homework', prompt: null },
+        { id: 's14', title: 'Reflection (complete after teaching)', kind: 'teacher_fills', prompt: null },
+      ],
+    }
+  }
+  if (method === 'POST') {
+    const school = body.scope === 'school'
+    const owner = (t: Json) => (school ? !!t.organizationId : !!t.userId)
+    const created: Json = {
+      id: `tpl-${previewTemplates.length + 1}`,
+      organizationId: school ? 'org-preview' : null,
+      userId: school ? null : 'preview-user',
+      name: body.name,
+      cadence: body.cadence,
+      sections: body.sections,
+      sourceFileName: body.sourceFileName ?? null,
+      isDefault: !previewTemplates.some((t) => owner(t) && !t.archived && t.isDefault),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    previewTemplates.unshift(created)
+    return created
+  }
+  const template = previewTemplates.find((t) => t.id === id)
+  if (!template) return null
+  if (method === 'DELETE') {
+    template.archived = true
+    template.isDefault = false
+    return {}
+  }
+  if (body.isDefault === true) {
+    for (const t of previewTemplates) if (!!t.organizationId === !!template.organizationId) t.isDefault = false
+  }
+  Object.assign(template, body, { updatedAt: new Date().toISOString() })
+  return template
+}
+
 // Canned answers, matched longest-path-first so '/api/lesson-plans/x/adapt'
 // does not get answered by '/api/lesson-plans'.
 /// "Not right?" flags left in this preview, kept for the page's lifetime.
@@ -1180,6 +1334,8 @@ const previewQuoteFlags: Json[] = []
 
 function answer(path: string, method: string, body: Json): Json | Json[] | null {
   if (path.startsWith('/api/auth/me') || path.startsWith('/api/profile')) return PROFILE
+  if (path.startsWith('/api/lesson-templates')) return previewTemplates_(path, method, body)
+  if (path.startsWith('/api/lesson-plans/') && path.endsWith('/layout')) return previewLayout(path, body)
   if (path.endsWith('/adapt')) {
     const action = String(body.action ?? 'simplify')
     // A plan the teacher brought themselves is revised as prose, not as the

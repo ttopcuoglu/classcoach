@@ -47,7 +47,12 @@ THE TOOLS
   .pdf), or review an assignment. The assignment review, formerly called
   Assignment Coach, reports on grade fit, rigor, learning value, workload
   and AI-completion risk, or redesigns the task so students must show their
-  own thinking.
+  own thinking. A built lesson can come out in the school's own lesson plan
+  form: a school admin uploads the form once (Admin, Lesson plan format), or
+  a teacher uploads their own from "Manage formats" on the lesson. Wivoza
+  reads its sections; the lesson is laid out in them, ready to copy or
+  download as Word. Sections about specific students are left blank for the
+  teacher. Daily forms only for now; weekly plans are not built yet.
 - Communication Coach: write a message, prepare for a real meeting or
   conversation (including rehearsing it), or get a second read on a reply
   before sending it.

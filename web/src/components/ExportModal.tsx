@@ -570,6 +570,8 @@ export default function ExportModal({
   chipLabel = 'Improved presentation',
   changesLabel = 'What we improved',
   originalFile = null,
+  documentOnly = false,
+  note,
 }: {
   sessionId: string
   text: string
@@ -584,6 +586,10 @@ export default function ExportModal({
   changesLabel?: string
   /** The teacher's own file: its pictures are carried into the layout. */
   originalFile?: File | null
+  /** A document that is already laid out (a lesson in its school's format): no slides, nothing to regenerate. */
+  documentOnly?: boolean
+  /** Replaces the line under the preview that says what was kept. */
+  note?: string
 }) {
   const [format, setFormat] = useState<ExportFormat>(initialFormat)
   const kind = kindOf(format)
@@ -738,7 +744,10 @@ export default function ExportModal({
           <div className="flex flex-col gap-1">
             <p className="text-xs text-ink-soft">
               {kind === 'document' ? 'Opens in Word, Google Docs, and Pages.' : 'Opens in PowerPoint, Google Slides, and Keynote.'}{' '}
-              {slidesOnly ? 'Your own pictures are kept as they were; any others are openly licensed and credited on the slide. Add your own where a dashed VISUAL spot is marked.' : 'Your original structure is kept.'}
+              {note ??
+                (slidesOnly
+                  ? 'Your own pictures are kept as they were; any others are openly licensed and credited on the slide. Add your own where a dashed VISUAL spot is marked.'
+                  : 'Your original structure is kept.')}
             </p>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               {kind === 'document' ? (
@@ -746,9 +755,11 @@ export default function ExportModal({
                   <button type="button" onClick={() => handleDownload(otherDocFormat)} disabled={!doc || loading || busy !== null} className={linkClass}>
                     {busy === otherDocFormat ? 'Building…' : `Also download as ${otherDocFormat === 'pdf' ? 'PDF' : 'Word'}`}
                   </button>
-                  <button type="button" onClick={() => switchKind('slides')} className={linkClass}>
-                    Switch to a presentation
-                  </button>
+                  {!documentOnly && (
+                    <button type="button" onClick={() => switchKind('slides')} className={linkClass}>
+                      Switch to a presentation
+                    </button>
+                  )}
                 </>
               ) : slidesOnly ? null : (
                 <button type="button" onClick={() => switchKind('document')} className={linkClass}>
@@ -759,9 +770,11 @@ export default function ExportModal({
             {error && ready && <p className="text-xs text-terracotta-600">{error}</p>}
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <button type="button" onClick={regenerate} disabled={loading} className="text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50">
-              Regenerate ↻
-            </button>
+            {!documentOnly && (
+              <button type="button" onClick={regenerate} disabled={loading} className="text-xs font-semibold text-ink-soft hover:text-forest disabled:opacity-50">
+                Regenerate ↻
+              </button>
+            )}
             <button
               type="button"
               onClick={() => handleDownload(format)}

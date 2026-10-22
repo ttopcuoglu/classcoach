@@ -96,6 +96,7 @@ model User {
   assignmentCoachSessions AssignmentCoachSession[]
   pdFocusAreas      PdFocusArea[]
   coachFollowUps    CoachFollowUp[]
+  lessonTemplates   LessonTemplate[]
 
   @@index([passwordResetTokenHash])
 }
@@ -121,6 +122,7 @@ model Organization {
   createdAt        DateTime  @default(now())
   users            User[]
   pdFocusAreas     PdFocusArea[]
+  lessonTemplates  LessonTemplate[]
 }
 
 // A coaching-priority theme (see coachingPriority.ts's PRIORITY_LABELS) an
@@ -570,6 +572,47 @@ model LessonPlan {
   // Every version an applied adaptation replaced, oldest first — so index 0
   // is always the original and no adaptation can lose it.
   versionHistory    Json?
+
+  // Which lesson plan format the teacher picked for this lesson: null = their
+  // default (their own default template, else their school's), "wivoza" =
+  // Wivoza's own layout, otherwise a LessonTemplate id. Plain text, not a
+  // relation, so deleting a template never touches a plan laid out with it.
+  templateChoice    String?
+  // The lesson laid out in a template: { templateId, templateName, sourceKey,
+  // sections: [{ id, title, kind, text }] }. It carries its own copy of the
+  // section titles and kinds, so a later edit to the template never rewrites
+  // a plan already laid out. sourceKey fingerprints the lesson and template it
+  // was made from; when either changes the layout is redone on the next view
+  // (see server/src/lib/lessonTemplateModel.ts). Derived, never edited.
+  templateContent   Json?
+}
+
+// A school's (organizationId) or a teacher's own (userId) lesson plan
+// format — exactly one of the two is set. Planning Coach lays a built
+// lesson out in it so it can be posted or handed in without retyping.
+// sections is [{ id, title, kind, prompt }] in the form's own order; kind
+// says what Wivoza writes there (see SECTION_KINDS in lessonTemplateModel.ts)
+// and "teacher_fills" means it is left blank on purpose.
+model LessonTemplate {
+  id              String        @id @default(cuid())
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId          String?
+  user            User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdByUserId String
+  name            String
+  cadence         String        @default("daily") // "daily" | "weekly" — weekly layouts are not built yet
+  sections        Json
+  sourceFileName  String?
+  // The one an owner's lessons use unless the teacher picks another. At most
+  // one per owner, kept that way by the routes rather than a constraint.
+  isDefault       Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  archivedAt      DateTime?
+
+  @@index([organizationId])
+  @@index([userId])
 }
 
 // A recorded class period, transcribed once (never stored as audio) and

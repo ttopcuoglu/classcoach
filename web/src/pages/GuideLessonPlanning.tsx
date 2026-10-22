@@ -54,7 +54,7 @@ const LANES = [
     name: 'Build a Lesson',
     when: 'You’re starting from a topic, or from material you already have.',
     detail:
-      'Say what you’re teaching — “introducing cells” is enough — and how long you have. Get back a full lesson: objective and success criteria, a timed sequence with what you say and what students do, materials, checks for understanding, likely misconceptions, and an exit ticket. Or ask for Quick Ideas instead: three to five practical moves, briefly explained.',
+      'Say what you’re teaching — “introducing cells” is enough — and how long you have. Get back a full lesson: objective and success criteria, a timed sequence with what you say and what students do, materials, checks for understanding, likely misconceptions, and an exit ticket. If your school has its own lesson plan form, the lesson can come out in it, ready to hand in: upload the form once from Manage formats. Or ask for Quick Ideas instead: three to five practical moves, briefly explained.',
   },
   {
     icon: ChecklistIcon,
