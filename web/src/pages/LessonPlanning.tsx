@@ -6,6 +6,7 @@ import AnswerSection, { NumberedCard } from '../components/AnswerSection'
 import PastList, { type PastItem } from '../components/PastList'
 import { CameraIcon, ClipboardIcon, CloseIcon, ShareIcon, StarIcon, UploadIcon } from '../components/icons'
 import CoachingChat from '../components/CoachingChat'
+import LessonWorkspace from '../components/LessonWorkspace'
 import ExportModal from '../components/ExportModal'
 import { PanelHeader } from '../components/PanelHeader'
 import { ProgressRing, WorkingRing } from '../components/ProgressRing'
@@ -27,6 +28,7 @@ import {
   getProfile,
   inferLessonContext,
   revertLessonPlan,
+  undoLessonAdaptation,
   sendLessonPlanChat,
   setLessonPlanSaved,
   shareLessonPlan,
@@ -39,6 +41,7 @@ import {
   type LessonPlanPresentationReview,
 } from '../lib/api'
 import { takePlanningPrefill } from '../lib/communicationsPrefill'
+import { currentMinutes, DURATION_CHOICES, lessonMinutes } from '../lib/lessonCopy'
 
 // Assignment Coach is the fourth chip rather than a seventh menu item. Every
 // chip here is one planning job — start a lesson, strengthen one you have,
@@ -180,35 +183,6 @@ function PlanHeader({ plan }: { plan: LessonPlan }) {
   )
 }
 
-/// What the lesson actually runs to, said honestly: the steps' own minutes,
-/// and what the teacher asked for when the two drifted apart.
-function lessonMinutes(plan: LessonPlan): string | null {
-  const steps = plan.sequence ?? []
-  const total = steps.reduce((sum, step) => sum + (step.minutes ?? 0), 0)
-  if (!total) return plan.durationMinutes ? `${plan.durationMinutes} min` : null
-  if (plan.durationMinutes && plan.durationMinutes !== total) return `${total} min of ${plan.durationMinutes} planned`
-  return `${total} min`
-}
-
-/// The minutes an Adjust Time revision is working from — what the lesson runs
-/// to now, so "Shorten to 30 minutes" only appears when there is something to
-/// shorten.
-function currentMinutes(plan: LessonPlan): number | null {
-  const total = (plan.sequence ?? []).reduce((sum, step) => sum + (step.minutes ?? 0), 0)
-  return total || plan.durationMinutes || null
-}
-
-// The sample plan's parts, in teaching order, each with what it's for. Still
-// here because every sample plan generated before Planning Coach is still in
-// a teacher's history, still shareable, and still printed from these fields.
-const PLAN_PARTS: { key: 'doNow' | 'agenda' | 'closure' | 'hots' | 'homework'; title: string; subtitle: string }[] = [
-  { key: 'doNow', title: 'Do Now', subtitle: 'How students start — the first few minutes' },
-  { key: 'agenda', title: 'Agenda', subtitle: 'The main activities, in order' },
-  { key: 'closure', title: 'Closure', subtitle: 'How the lesson wraps up and checks what students learned' },
-  { key: 'hots', title: 'Higher-order thinking', subtitle: 'Where students analyze, evaluate or create' },
-  { key: 'homework', title: 'Homework', subtitle: 'Practice after class' },
-]
-
 const REVIEW_PARTS: { key: keyof LessonPlanPresentationReview; title: string; subtitle: string }[] = [
   { key: 'gradeLevelFit', title: 'Grade-level fit', subtitle: 'Whether the content and language suit your students' },
   { key: 'visuals', title: 'Visuals', subtitle: 'How the slides look and read from the back of the room' },
@@ -229,139 +203,6 @@ function PartSections({ parts, start = 1 }: { parts: Part[]; start?: number }) {
       {parts.map((part, i) => (
         <AnswerSection key={part.title} n={start + i} title={part.title} subtitle={part.subtitle}>
           {part.body}
-        </AnswerSection>
-      ))}
-    </>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// A built lesson, on screen
-// ---------------------------------------------------------------------------
-
-/// The full lesson, section by section. Returns how many numbered sections it
-/// used so whatever follows (delivery coaching, a revision card) keeps
-/// counting rather than restarting at 1.
-function LessonSections({ plan, start = 1 }: { plan: LessonPlan; start?: number }) {
-  const steps = plan.sequence ?? []
-  const checks = plan.checks ?? []
-  const misconceptions = plan.misconceptions ?? []
-  const ticket = plan.exitTicket
-  let n = start - 1
-
-  return (
-    <>
-      {(plan.objective || plan.successCriteria) && (
-        <NumberedCard n={++n} title="What students will be able to do" subtitle="The learning goal, and how you'll know they got there">
-          <div className="flex flex-col gap-3">
-            {plan.objective && <Labeled label="Objective">{plan.objective}</Labeled>}
-            {plan.successCriteria && <Labeled label="Students can show it when they">{plan.successCriteria}</Labeled>}
-          </div>
-        </NumberedCard>
-      )}
-
-      {plan.materials && (
-        <AnswerSection n={++n} title="Materials" subtitle="What to have ready before class">
-          {plan.materials}
-        </AnswerSection>
-      )}
-
-      {steps.length > 0 && (
-        <NumberedCard n={++n} title="The lesson" subtitle="What happens, in order, with what you say and what students do">
-          <ol className="flex flex-col gap-3">
-            {steps.map((step, i) => (
-              <li key={i} className="rounded-xl border border-hairline bg-cream/60 px-4 py-3">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <p className="font-heading text-sm font-bold text-forest">
-                    {i + 1}. {step.title}
-                  </p>
-                  {step.minutes != null && (
-                    <span className="rounded-full bg-gold-tint px-2.5 py-0.5 text-[11px] font-bold text-terracotta-600">
-                      {step.minutes} min
-                    </span>
-                  )}
-                </div>
-                <div className="mt-2 flex flex-col gap-2">
-                  {step.teacher && <Labeled label="You">{step.teacher}</Labeled>}
-                  {step.students && <Labeled label="Students">{step.students}</Labeled>}
-                </div>
-              </li>
-            ))}
-          </ol>
-        </NumberedCard>
-      )}
-
-      {checks.length > 0 && (
-        <NumberedCard n={++n} title="Checks for understanding" subtitle="Where to find out whether they're getting it — not whether they're busy">
-          <div className="flex flex-col gap-2">
-            {checks.map((check, i) => (
-              <Expandable key={i} summary={check.when ? `${check.when} — ${check.check}` : check.check}>
-                {check.when && <Labeled label="When">{check.when}</Labeled>}
-                <Labeled label="The check">{check.check}</Labeled>
-                {check.lookFor && <Labeled label="What to look for">{check.lookFor}</Labeled>}
-              </Expandable>
-            ))}
-          </div>
-        </NumberedCard>
-      )}
-
-      {misconceptions.length > 0 && (
-        <NumberedCard n={++n} title="Likely misconceptions" subtitle="What students commonly bring to this content — and how to surface it">
-          <div className="flex flex-col gap-2">
-            {misconceptions.map((item, i) => (
-              <Expandable key={i} summary={item.belief}>
-                {item.surface && <Labeled label="How to surface it">{item.surface}</Labeled>}
-                {item.response && <Labeled label="How to address it">{item.response}</Labeled>}
-              </Expandable>
-            ))}
-            <p className="text-xs text-ink-soft">
-              These are common for this content at this grade. They are not a claim about your students — you'll find out
-              which ones are in the room when you ask.
-            </p>
-          </div>
-        </NumberedCard>
-      )}
-
-      {ticket && (
-        <NumberedCard n={++n} title="Exit ticket" subtitle="Aligned to the objective, with what the answers would tell you">
-          <div className="flex flex-col gap-3">
-            <div className="rounded-xl border border-hairline bg-white px-4 py-3">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">For students</p>
-              <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{ticket.task}</p>
-            </div>
-            {(ticket.expected || ticket.signals || ticket.nextStep) && (
-              <Expandable summary="What to look for in the answers">
-                {ticket.expected && <Labeled label="Expected answer">{ticket.expected}</Labeled>}
-                {ticket.signals && <Labeled label="What different responses show">{ticket.signals}</Labeled>}
-                {ticket.nextStep && <Labeled label="Suggested next step">{ticket.nextStep}</Labeled>}
-              </Expandable>
-            )}
-          </div>
-        </NumberedCard>
-      )}
-    </>
-  )
-}
-
-/// How many numbered sections LessonSections will render for this plan, so
-/// callers can number what comes after it without rendering it twice.
-function lessonSectionCount(plan: LessonPlan): number {
-  return (
-    (plan.objective || plan.successCriteria ? 1 : 0) +
-    (plan.materials ? 1 : 0) +
-    ((plan.sequence ?? []).length > 0 ? 1 : 0) +
-    ((plan.checks ?? []).length > 0 ? 1 : 0) +
-    ((plan.misconceptions ?? []).length > 0 ? 1 : 0) +
-    (plan.exitTicket ? 1 : 0)
-  )
-}
-
-function QuickIdeasSections({ plan, start = 1 }: { plan: LessonPlan; start?: number }) {
-  return (
-    <>
-      {(plan.quickIdeas ?? []).map((idea, i) => (
-        <AnswerSection key={i} n={start + i} title={idea.title} subtitle="A way to teach this">
-          {idea.how}
         </AnswerSection>
       ))}
     </>
@@ -577,15 +418,21 @@ function useAdaptation(plan: LessonPlan | null, onUpdated: (plan: LessonPlan) =>
   const [busy, setBusy] = useState<LessonAdaptation | null>(null)
   const [applying, setApplying] = useState(false)
   const [reverting, setReverting] = useState(false)
+  const [undoing, setUndoing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The adaptation just applied, for the "applied — Undo" note. Cleared by
+  // the note itself, or by anything else that changes the lesson.
+  const [justApplied, setJustApplied] = useState<string | null>(null)
 
-  async function run(work: () => Promise<LessonPlan>, done: (busy: boolean) => void) {
+  async function run(work: () => Promise<LessonPlan>, done: (busy: boolean) => void): Promise<boolean> {
     setError(null)
     done(true)
     try {
       onUpdated(await work())
+      return true
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not revise the lesson. Please try again.')
+      return false
     } finally {
       done(false)
     }
@@ -595,14 +442,24 @@ function useAdaptation(plan: LessonPlan | null, onUpdated: (plan: LessonPlan) =>
     busy,
     applying,
     reverting,
+    undoing,
     error,
+    justApplied,
+    clearApplied: () => setJustApplied(null),
     adapt: (action: LessonAdaptation, targetMinutes?: number) => {
       if (!plan || busy) return
+      setJustApplied(null)
       void run(() => adaptLessonPlan(plan.id, action, targetMinutes), (active) => setBusy(active ? action : null))
     },
     apply: () => {
       if (!plan || applying) return
-      void run(() => applyLessonAdaptation(plan.id), setApplying)
+      const label = plan.pendingAdaptation?.label ?? 'The revision'
+      void run(() => applyLessonAdaptation(plan.id), setApplying).then((ok) => ok && setJustApplied(label))
+    },
+    // One step back — the version the last applied adaptation replaced.
+    undo: () => {
+      if (!plan || undoing) return
+      void run(() => undoLessonAdaptation(plan.id), setUndoing).then((ok) => ok && setJustApplied(null))
     },
     discard: () => {
       if (!plan) return
@@ -610,6 +467,7 @@ function useAdaptation(plan: LessonPlan | null, onUpdated: (plan: LessonPlan) =>
     },
     revert: () => {
       if (!plan || reverting) return
+      setJustApplied(null)
       void run(() => revertLessonPlan(plan.id), setReverting)
     },
   }
@@ -833,7 +691,6 @@ type BuildForm = {
 }
 
 const DEFAULT_DURATION = 45
-const DURATION_CHOICES = [30, 45, 50, 60, 90]
 
 const EMPTY_BUILD: BuildForm = {
   topic: '',
@@ -1167,19 +1024,37 @@ function BuildPanel() {
   }
 
   const ideas = form.kind === 'ideas'
-  // Three shapes can come back here: a Planning Coach lesson, a list of
-  // teaching ideas, and — reopened from history — one of the old five-slot
-  // sample plans.
-  const legacyParts = plan ? presentParts(PLAN_PARTS.map((part) => ({ ...part, body: plan[part.key] }))) : []
-  const isFullLesson = !!plan && (plan.sequence?.length ?? 0) > 0
-  const isIdeas = !!plan && (plan.quickIdeas?.length ?? 0) > 0
-  let sections = 0
-  if (plan) sections = isFullLesson ? lessonSectionCount(plan) : isIdeas ? (plan.quickIdeas ?? []).length : legacyParts.length
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
-        {!plan ? (
+      {plan ? (
+        // Three shapes can come back here: a Planning Coach lesson, a list of
+        // teaching ideas, and — reopened from history — one of the old
+        // five-slot sample plans. The workspace draws all three.
+        <LessonWorkspace
+          plan={plan}
+          adaptation={adaptation}
+          delivery={{ loading: deliveryLoading, error: deliveryError, onRequest: handlePresentationFeedback }}
+          deliveryCard={
+            plan.deliveryCoaching || deliveryLoading ? (
+              <div className="flex flex-col gap-3">
+                {plan.deliveryCoaching && <DeliveryCoachingCard n={1} coaching={plan.deliveryCoaching} planId={plan.id} />}
+                <WorkingRing
+                  active={deliveryLoading}
+                  estimatedMs={14000}
+                  label="Coaching how to teach it"
+                  hint="Opening, pacing, engagement, and closing."
+                  className="text-forest"
+                />
+              </div>
+            ) : null
+          }
+          onToggleSaved={() => toggleSaved(plan)}
+          onShare={() => shareLessonPlan(plan.id)}
+          onNew={handleNew}
+        />
+      ) : (
+        <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
           <div className="flex flex-col gap-4">
             <PanelHeader eyebrow="Planning Coach" title="Build a lesson">
               Start with a topic, or the material you already have. Everything else is optional.
@@ -1493,80 +1368,13 @@ function BuildPanel() {
               )}
             </button>
           </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            <PlanHeader plan={plan} />
-            {isFullLesson ? (
-              <LessonSections plan={plan} />
-            ) : isIdeas ? (
-              <QuickIdeasSections plan={plan} />
-            ) : (
-              <PartSections parts={legacyParts} />
-            )}
-
-            <p className="text-xs text-ink-soft">
-              {isIdeas
-                ? 'Ideas to pull into the plan you are writing — take the ones that fit your class.'
-                : 'A draft to edit, not a script. You know your class; change whatever needs changing.'}
-            </p>
-
-            {isFullLesson && (
-              <>
-                <AdaptationTools plan={plan} busy={adaptation.busy} onAdapt={adaptation.adapt} />
-                <RevertNote plan={plan} onRevert={adaptation.revert} reverting={adaptation.reverting} />
-                {adaptation.error && <p className="text-sm text-terracotta-600">{adaptation.error}</p>}
-                {plan.pendingAdaptation && (
-                  <PendingAdaptationCard
-                    n={sections + 1}
-                    plan={plan}
-                    applying={adaptation.applying}
-                    onApply={adaptation.apply}
-                    onDiscard={adaptation.discard}
-                  />
-                )}
-              </>
-            )}
-
-            {plan.deliveryCoaching && (
-              <DeliveryCoachingCard
-                n={sections + (plan.pendingAdaptation ? 2 : 1)}
-                coaching={plan.deliveryCoaching}
-                planId={plan.id}
-              />
-            )}
-            <WorkingRing
-              active={deliveryLoading}
-              estimatedMs={14000}
-              label="Coaching how to teach it"
-              hint="Opening, pacing, engagement, and closing."
-              className="text-forest"
-            />
-            {deliveryError && <p className="text-sm text-terracotta-600">{deliveryError}</p>}
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-4">
-                <SaveButton plan={plan} onToggle={toggleSaved} />
-                <ShareButton onShare={() => shareLessonPlan(plan.id)} />
-                <Link
-                  to={`/lesson-planning/${plan.id}/export`}
-                  className="text-sm font-medium text-ink-soft hover:text-terracotta-600"
-                >
-                  Download
-                </Link>
-                {!isIdeas && <DeliveryFeedbackButton plan={plan} loading={deliveryLoading} onClick={handlePresentationFeedback} />}
-              </div>
-              <button type="button" onClick={handleNew} className={PRIMARY_BUTTON}>
-                {isIdeas ? 'New Ideas' : 'New Lesson'}
-              </button>
-            </div>
-          </div>
-        )}
         {error && (
           <p className="mt-4 text-center text-sm text-terracotta-600">
             <UpgradeMessage text={error} />
           </p>
         )}
-      </div>
+        </div>
+      )}
 
       <PastList
         title="Your lessons"

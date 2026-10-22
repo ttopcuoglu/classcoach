@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type Request, type Response } from 'express'
 import JSZip from 'jszip'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
@@ -1415,14 +1415,21 @@ lessonPlansRouter.post('/:id/discard-adaptation', async (req, res) => {
 /// kept on top of it: a teacher reverting wants the original back, and
 /// keeping the discarded branch would only make "which one am I looking at"
 /// harder to answer.
-lessonPlansRouter.post('/:id/revert', async (req, res) => {
-  const plan = await prisma.lessonPlan.findFirst({ where: { id: req.params.id, userId: req.user!.userId } })
+lessonPlansRouter.post('/:id/revert', (req, res) => restoreVersion(req, res, 'original'))
+
+/// One step back: the version the last applied adaptation replaced, with the
+/// versions before it kept, so Undo after a second adaptation lands on the
+/// first rather than all the way back at the original.
+lessonPlansRouter.post('/:id/undo-adaptation', (req, res) => restoreVersion(req, res, 'previous'))
+
+async function restoreVersion(req: Request, res: Response, which: 'original' | 'previous') {
+  const plan = await prisma.lessonPlan.findFirst({ where: { id: String(req.params.id), userId: req.user!.userId } })
   if (!plan) {
     res.status(404).json({ error: 'Lesson plan not found' })
     return
   }
   const history = (plan.versionHistory as { sections: LessonSections; durationMinutes?: number | null }[] | null) ?? []
-  const original = history[0]
+  const original = which === 'original' ? history[0] : history[history.length - 1]
   if (!original?.sections) {
     res.status(400).json({ error: 'This is the original version.' })
     return
@@ -1432,7 +1439,7 @@ lessonPlansRouter.post('/:id/revert', async (req, res) => {
   const updated = await prisma.lessonPlan.update({
     where: { id: plan.id },
     data: {
-      versionHistory: [],
+      versionHistory: which === 'original' ? [] : (history.slice(0, -1) as unknown as Prisma.InputJsonValue[]),
       pendingAdaptation: Prisma.DbNull,
       ...(s.planText != null
         ? { planText: s.planText }
@@ -1450,7 +1457,7 @@ lessonPlansRouter.post('/:id/revert', async (req, res) => {
     },
   })
   res.json(updated)
-})
+}
 
 lessonPlansRouter.patch('/:id', async (req, res) => {
   const { saved } = req.body ?? {}

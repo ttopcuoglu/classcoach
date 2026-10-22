@@ -235,7 +235,14 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           {/* Reading width everywhere except the admin reports, which carry their
               own section menu beside the content — at the reading width that
               left the dashboards about 670px, too narrow for a row of stats. */}
-          <div className={`mx-auto w-full ${location.pathname.startsWith('/admin') ? 'max-w-6xl' : 'max-w-4xl'}`}>
+          {/* Planning Coach's Lesson Workspace widens the same way while a lesson
+              and its tools column are on screen (it sets data-workspace); the
+              form before it keeps the reading width. */}
+          <div
+            className={`mx-auto w-full ${
+              location.pathname.startsWith('/admin') ? 'max-w-6xl' : 'max-w-4xl has-[[data-workspace]]:max-w-6xl'
+            }`}
+          >
             <Outlet />
           </div>
         </main>

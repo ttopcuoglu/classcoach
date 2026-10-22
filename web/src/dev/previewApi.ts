@@ -1233,7 +1233,18 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
       versionHistory: [{ label: 'Original', savedAt: new Date().toISOString(), sections: { sequence: SEQUENCE }, durationMinutes: 45 }],
     })
   }
-  if (path.endsWith('/discard-adaptation') || path.endsWith('/revert')) return lesson()
+  if (path.endsWith('/presentation-feedback')) {
+    return lesson({
+      deliveryCoaching: {
+        openingHook: 'Hold the bag up before you say a word and ask what will happen.',
+        pacing: 'Protect the 12 minutes of sense-making; cut the launch short before you cut that.',
+        engagementCheckpoints: 'Whiteboards after the prediction; two pairs report what their data rules out.',
+        explainingTheHardPart: 'Name "selectively permeable" only after students have argued for it.',
+        closing: 'Exit ticket on their own, collected at the door.',
+      },
+    })
+  }
+  if (path.endsWith('/discard-adaptation') || path.endsWith('/revert') || path.endsWith('/undo-adaptation')) return lesson()
   if (path.endsWith('/infer-context')) {
     return { topic: 'Cell membranes and diffusion', subject: 'Science', gradeLevel: '7th grade', followUp: 'What do you want students to be able to do with this reading by the end?' }
   }

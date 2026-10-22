@@ -45,6 +45,14 @@
   --color-olive-tint: #e6ebd2;
   --color-teal-tint: #d2e8e6;
   --color-hairline: #e7e0d3;
+
+  /* Planning Coach's Lesson Workspace. */
+  --color-sage: #e7eee7;
+  --color-pale-gold: #f4e4b3;
+  --color-soft-terracotta: #f7e6da;
+  --color-terracotta-strong: #ad4d30;
+  --color-warm-gray: #625d53;
+  --color-divider: #e7e1d5;
 }
 
 html,

@@ -2238,6 +2238,11 @@ export function revertLessonPlan(id: string): Promise<LessonPlan> {
   return request(`/api/lesson-plans/${id}/revert`, { method: 'POST' })
 }
 
+/// Puts back the version the most recent applied adaptation replaced.
+export function undoLessonAdaptation(id: string): Promise<LessonPlan> {
+  return request(`/api/lesson-plans/${id}/undo-adaptation`, { method: 'POST' })
+}
+
 export function setLessonPlanSaved(id: string, saved: boolean): Promise<LessonPlan> {
   return request(`/api/lesson-plans/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
 }
