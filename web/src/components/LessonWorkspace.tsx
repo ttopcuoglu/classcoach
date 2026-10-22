@@ -462,7 +462,7 @@ function documentSections(plan: LessonPlan, preview: boolean): DocSection[] {
   const checks = plan.checks ?? []
   if (checks.length) {
     const blocks = checks.flatMap((check, i) => checkBlocks(check, i))
-    sections.push({ key: 'checks', title: 'Checks for Understanding', defaultOpen: false, copy: () => blocks, body: <Blocks blocks={blocks} /> })
+    sections.push({ key: 'checks', title: 'Checks for Understanding', defaultOpen: true, copy: () => blocks, body: <Blocks blocks={blocks} /> })
   }
 
   const misconceptions = plan.misconceptions ?? []
@@ -471,7 +471,7 @@ function documentSections(plan: LessonPlan, preview: boolean): DocSection[] {
     sections.push({
       key: 'misconceptions',
       title: 'Potential Misconceptions',
-      defaultOpen: false,
+      defaultOpen: true,
       copy: () => blocks,
       body: (
         <div className="flex flex-col gap-3">
