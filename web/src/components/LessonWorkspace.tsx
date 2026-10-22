@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { LessonAdaptation, LessonPlan, LessonStep, PendingAdaptation } from '../lib/api'
+import { generateLessonDeck, type LessonAdaptation, type LessonPlan, type LessonStep, type PendingAdaptation } from '../lib/api'
 import {
   checkBlocks,
   currentMinutes,
@@ -31,6 +31,7 @@ import {
   SparkleIcon,
   StarIcon,
 } from './icons'
+import ExportModal from './ExportModal'
 import { WorkingRing } from './ProgressRing'
 import { Spinner } from './Spinner'
 
@@ -756,12 +757,16 @@ function BringItToLife({
   error,
   onRequest,
   onView,
+  slidesWaiting,
+  onSlides,
 }: {
   hasFeedback: boolean
   loading: boolean
   error: string | null
   onRequest: () => void
   onView: () => void
+  slidesWaiting: boolean
+  onSlides: () => void
 }) {
   return (
     <section aria-labelledby="bring-it-title" className="rounded-2xl border border-divider bg-soft-terracotta p-4">
@@ -790,6 +795,18 @@ function BringItToLife({
           </>
         )}
       </button>
+      <button
+        type="button"
+        onClick={onSlides}
+        disabled={loading}
+        className={`mt-2 flex w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold disabled:opacity-70 ${OUTLINE_BUTTON}`}
+      >
+        <span className="flex h-5 min-w-5 items-center justify-center rounded bg-[#D24726] px-1 text-[10px] font-extrabold text-white">P</span>
+        <span className="text-forest">{slidesWaiting ? 'Preparing your slides…' : 'Create Slides'}</span>
+      </button>
+      <p className="mt-1.5 text-xs leading-snug text-forest/75">
+        A deck to project, with your delivery notes in the speaker notes{hasFeedback ? '.' : ' — delivery feedback comes first, then the slides.'}
+      </p>
       {hasFeedback && !loading && (
         <button
           type="button"
@@ -1059,14 +1076,33 @@ export default function LessonWorkspace({
   const [closedKey, setClosedKey] = useState<string | null>(null)
   const previewOpen = !!pending && isFullLesson && pendingKey !== closedKey
 
+  // The deck is built from the delivery coaching (hook first, checkpoints,
+  // the hard part), so Create Slides on a lesson without coaching gets the
+  // coaching first and opens the deck the moment it lands.
+  const [slidesOpen, setSlidesOpen] = useState(false)
+  const [slidesWaiting, setSlidesWaiting] = useState(false)
+  function handleSlides() {
+    if (plan.deliveryCoaching) {
+      setSlidesOpen(true)
+      return
+    }
+    setSlidesWaiting(true)
+    if (!delivery.loading) delivery.onRequest()
+  }
+
   const deliveryRef = useRef<HTMLDivElement>(null)
   const wasLoading = useRef(false)
   useEffect(() => {
-    if (wasLoading.current && !delivery.loading && plan.deliveryCoaching) {
-      deliveryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (wasLoading.current && !delivery.loading) {
+      if (slidesWaiting) {
+        setSlidesWaiting(false)
+        if (plan.deliveryCoaching) setSlidesOpen(true)
+      } else if (plan.deliveryCoaching) {
+        deliveryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
     }
     wasLoading.current = delivery.loading
-  }, [delivery.loading, plan.deliveryCoaching])
+  }, [delivery.loading, plan.deliveryCoaching, slidesWaiting])
 
   const kind = isIdeas ? 'Teaching ideas' : isFullLesson ? 'Lesson draft' : 'Sample plan'
   const meta = [plan.subject, plan.gradeLevel].filter(Boolean).join(' · ')
@@ -1159,6 +1195,8 @@ export default function LessonWorkspace({
                   error={delivery.error}
                   onRequest={delivery.onRequest}
                   onView={() => deliveryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  slidesWaiting={slidesWaiting}
+                  onSlides={handleSlides}
                 />
               )}
             </aside>
@@ -1178,6 +1216,18 @@ export default function LessonWorkspace({
       )}
       {adaptation.justApplied && (
         <UndoToast label={adaptation.justApplied} undoing={adaptation.undoing} onUndo={adaptation.undo} onClose={adaptation.clearApplied} />
+      )}
+      {slidesOpen && (
+        <ExportModal
+          sessionId={plan.id}
+          text="lesson-deck"
+          initialFormat="pptx"
+          slidesOnly
+          chipLabel="Lesson presentation"
+          changesLabel="How your delivery plan is built in"
+          loader={() => generateLessonDeck(plan.id).then((result) => result.model)}
+          onClose={() => setSlidesOpen(false)}
+        />
       )}
       {fallback && <FallbackDialog fallback={fallback} onClose={() => setFallback(null)} />}
     </CopyContext.Provider>
