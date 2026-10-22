@@ -42,12 +42,21 @@ export function extractTag(text: string, tag: string, siblings: readonly string[
     siblings.length > 0
       ? new RegExp(`${STRUCTURAL_TAG_ONCE.source}|<\\/?(?:${siblings.filter((s) => s !== tag).join('|')})>`)
       : STRUCTURAL_TAG_ONCE
-  const match = text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))
-  if (match) {
-    return match[1]
-      .replace(STRUCTURAL_TAG, '')
-      .replace(new RegExp(`</?${tag}>`, 'g'), '')
+  // EVERY block with this name, not just the first. A list prompt asks for
+  // "one per line" inside one tag, and the model often answers by repeating
+  // the whole tag per item instead:
+  //   <question_kinds>a</question_kinds><question_kinds>b</question_kinds>
+  // A non-global match took `a` and silently dropped the rest, so a lesson
+  // the model read fully came back with exactly one moment in every
+  // category. Joining the blocks reads both shapes the same way.
+  const blocks = [...text.matchAll(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'g'))]
+  if (blocks.length > 0) {
+    const body = blocks
+      .map((m) => m[1].replace(STRUCTURAL_TAG, '').replace(new RegExp(`</?${tag}>`, 'g'), '').trim())
+      .filter(Boolean)
+      .join('\n')
       .trim()
+    return body
   }
 
   // No closing tag. Two ways that happens, both seen in production: the
