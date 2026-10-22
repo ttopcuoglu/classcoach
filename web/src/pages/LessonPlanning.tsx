@@ -41,7 +41,7 @@ import {
   type LessonPlanPresentationReview,
 } from '../lib/api'
 import { takePlanningPrefill } from '../lib/communicationsPrefill'
-import { currentMinutes, DURATION_CHOICES, lessonMinutes } from '../lib/lessonCopy'
+import { DURATION_CHOICES } from '../lib/lessonCopy'
 
 // Assignment Coach is the fourth chip rather than a seventh menu item. Every
 // chip here is one planning job — start a lesson, strengthen one you have,
@@ -137,48 +137,11 @@ export default function LessonPlanning() {
 // Shared pieces
 // ---------------------------------------------------------------------------
 
-/// A section a teacher opens only when they want it. Checks, misconceptions
-/// and the exit ticket's answer key are all genuinely useful and all genuinely
-/// long — printed open, they bury the lesson they belong to.
-function Expandable({ summary, children }: { summary: string; children: React.ReactNode }) {
-  return (
-    <details className="group rounded-xl border border-hairline bg-cream/60 px-4 py-3">
-      <summary className="cursor-pointer list-none text-sm font-semibold text-forest marker:hidden">
-        <span className="mr-1.5 inline-block text-ink-soft transition-transform group-open:rotate-90">›</span>
-        {summary}
-      </summary>
-      <div className="mt-2.5 flex flex-col gap-2.5 text-sm leading-relaxed text-ink">{children}</div>
-    </details>
-  )
-}
-
 function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
       <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-soft">{label}</p>
       <div className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{children}</div>
-    </div>
-  )
-}
-
-function PlanHeader({ plan }: { plan: LessonPlan }) {
-  const minutes = lessonMinutes(plan)
-  const kindLabel =
-    plan.mode !== 'generated'
-      ? 'Feedback'
-      : plan.planKind === 'ideas'
-        ? 'Teaching ideas'
-        : plan.planKind === 'full'
-          ? 'Lesson'
-          : 'Sample plan'
-  const chips = [plan.subject, plan.gradeLevel, plan.approach, minutes].filter(Boolean)
-  return (
-    <div className="-mx-6 -mt-6 bg-forest px-6 py-6 text-cream sm:px-8">
-      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
-        {[kindLabel, ...chips].join(' · ')}
-      </p>
-      {plan.objective && <p className="mt-2 font-heading text-xl font-bold leading-snug text-cream">{plan.objective}</p>}
-      {plan.standard && <p className="mt-1 text-xs text-cream/70">Standard: {plan.standard}</p>}
     </div>
   )
 }
@@ -212,204 +175,6 @@ function PartSections({ parts, start = 1 }: { parts: Part[]; start?: number }) {
 // ---------------------------------------------------------------------------
 // Adaptations
 // ---------------------------------------------------------------------------
-
-const ADAPTATIONS: { action: Exclude<LessonAdaptation, 'time'>; label: string; hint: string }[] = [
-  { action: 'simplify', label: 'Simplify', hint: 'Clearer directions, smaller steps, more scaffolds — same learning goal' },
-  { action: 'challenge', label: 'Add Challenge', hint: 'Deeper reasoning, transfer, application' },
-  { action: 'participation', label: 'Increase Participation', hint: 'More students contributing and showing their thinking' },
-]
-
-// A plain card rather than a numbered one: these are tools for working on the
-// lesson, not another part of it.
-function AdaptationTools({
-  plan,
-  busy,
-  onAdapt,
-}: {
-  plan: LessonPlan
-  busy: LessonAdaptation | null
-  onAdapt: (action: LessonAdaptation, targetMinutes?: number) => void
-}) {
-  const [timeOpen, setTimeOpen] = useState(false)
-  const [custom, setCustom] = useState('')
-  const minutes = currentMinutes(plan)
-  const chip =
-    'rounded-full border border-hairline bg-white px-3.5 py-2 text-sm font-semibold text-forest transition-colors hover:border-forest/50 hover:bg-cream disabled:opacity-60'
-
-  function pickTime(target: number) {
-    setTimeOpen(false)
-    setCustom('')
-    onAdapt('time', target)
-  }
-
-  const customMinutes = Number.parseInt(custom, 10)
-  const customValid = Number.isFinite(customMinutes) && customMinutes >= 5 && customMinutes <= 240
-
-  return (
-    <div className="rounded-2xl border border-hairline bg-cream-card p-5">
-      <p className="font-heading text-base font-bold text-forest">Adapt it</p>
-      <p className="text-xs text-ink-soft">
-        Each one rewrites the lesson and shows you the result first — your current version stays until you apply it.
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {ADAPTATIONS.map(({ action, label, hint }) => (
-          <button key={action} type="button" title={hint} onClick={() => onAdapt(action)} disabled={busy != null} className={chip}>
-            {busy === action ? (
-              <span className="flex items-center gap-2">
-                <Spinner /> {label}…
-              </span>
-            ) : (
-              label
-            )}
-          </button>
-        ))}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setTimeOpen((open) => !open)}
-            disabled={busy != null}
-            aria-expanded={timeOpen}
-            className={chip}
-          >
-            {busy === 'time' ? (
-              <span className="flex items-center gap-2">
-                <Spinner /> Adjust Time…
-              </span>
-            ) : (
-              'Adjust Time ▾'
-            )}
-          </button>
-          {timeOpen && busy == null && (
-            <div className="absolute left-0 top-full z-10 mt-2 w-60 rounded-xl border border-hairline bg-cream-card p-2 shadow-lg">
-              {minutes != null && minutes > 30 && (
-                <button
-                  type="button"
-                  onClick={() => pickTime(30)}
-                  className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-ink hover:bg-cream"
-                >
-                  Shorten to 30 minutes
-                </button>
-              )}
-              <div className="flex items-center gap-2 px-3 py-2">
-                <input
-                  type="number"
-                  min={5}
-                  max={240}
-                  value={custom}
-                  onChange={(e) => setCustom(e.target.value)}
-                  placeholder="Minutes"
-                  aria-label="Custom lesson length in minutes"
-                  className="w-24 rounded-lg border border-hairline bg-cream px-2.5 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
-                />
-                <button
-                  type="button"
-                  disabled={!customValid}
-                  onClick={() => pickTime(customMinutes)}
-                  className="rounded-full bg-terracotta px-3 py-1.5 text-xs font-semibold text-cream disabled:bg-hairline disabled:text-ink-soft"
-                >
-                  Rebuild
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-      <WorkingRing active={busy != null} estimatedMs={18000} label="Revising the lesson" className="mt-3 text-forest" />
-    </div>
-  )
-}
-
-/// The drafted revision, read before it replaces anything. A structured
-/// lesson's revision is shown as the lesson it would become; a plan the
-/// teacher wrote themselves is shown as the rewritten plan.
-function PendingAdaptationCard({
-  n,
-  plan,
-  applying,
-  onApply,
-  onDiscard,
-}: {
-  n: number
-  plan: LessonPlan
-  applying: boolean
-  onApply: () => void
-  onDiscard: () => void
-}) {
-  const pending = plan.pendingAdaptation
-  if (!pending) return null
-  const s = pending.sections
-  const steps = s.sequence ?? []
-
-  return (
-    <NumberedCard
-      n={n}
-      title={`${pending.label} — suggested revision`}
-      subtitle="Read it, then use it or discard it. Nothing changes until you do."
-    >
-      {pending.summary && (
-        <div className="rounded-xl border border-hairline bg-white px-4 py-3">
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What changed</p>
-          <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{pending.summary}</p>
-        </div>
-      )}
-
-      <div className="mt-3">
-        <Expandable summary="See the revised lesson">
-          {s.planText ? (
-            <p className="whitespace-pre-wrap text-sm text-ink">{s.planText}</p>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {s.objective && <Labeled label="Objective">{s.objective}</Labeled>}
-              {s.successCriteria && <Labeled label="Success criteria">{s.successCriteria}</Labeled>}
-              {steps.map((step, i) => (
-                <Labeled key={i} label={`${i + 1}. ${step.title}${step.minutes != null ? ` · ${step.minutes} min` : ''}`}>
-                  {[step.teacher && `You: ${step.teacher}`, step.students && `Students: ${step.students}`]
-                    .filter(Boolean)
-                    .join('\n')}
-                </Labeled>
-              ))}
-              {s.exitTicket && <Labeled label="Exit ticket">{s.exitTicket.task}</Labeled>}
-            </div>
-          )}
-        </Expandable>
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={onApply}
-          disabled={applying}
-          className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-        >
-          {applying ? (
-            <span className="flex items-center gap-2">
-              <Spinner /> Applying…
-            </span>
-          ) : (
-            'Use this version'
-          )}
-        </button>
-        <button type="button" onClick={onDiscard} disabled={applying} className="text-sm font-medium text-ink-soft hover:text-ink">
-          Discard
-        </button>
-      </div>
-    </NumberedCard>
-  )
-}
-
-function RevertNote({ plan, onRevert, reverting }: { plan: LessonPlan; onRevert: () => void; reverting: boolean }) {
-  const count = plan.versionHistory?.length ?? 0
-  if (count === 0) return null
-  return (
-    <p className="text-xs text-ink-soft">
-      {count === 1 ? 'One adaptation applied.' : `${count} adaptations applied.`} Your original is kept —{' '}
-      <button type="button" onClick={onRevert} disabled={reverting} className="font-semibold text-terracotta-600 underline underline-offset-2 disabled:opacity-60">
-        {reverting ? 'going back…' : 'go back to it'}
-      </button>
-      .
-    </p>
-  )
-}
 
 /// The adapt / apply / discard / revert cycle, shared by the two panels that
 /// own a lesson — generated and the teacher's own. Panels differ in what they
@@ -618,27 +383,6 @@ function ShareButton({ onShare }: { onShare: () => Promise<{ shareToken: string 
     >
       <ShareIcon className="h-4 w-4" />
       {copied ? 'Link copied' : url ? 'Copy link' : busy ? 'Sharing...' : 'Share'}
-    </button>
-  )
-}
-
-function DeliveryFeedbackButton({ plan, loading, onClick }: { plan: LessonPlan; loading: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={loading}
-      className="text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
-    >
-      {loading ? (
-        <span className="flex items-center gap-2">
-          <Spinner /> Getting feedback...
-        </span>
-      ) : plan.deliveryCoaching ? (
-        'Regenerate ↻'
-      ) : (
-        'Get presentation & delivery feedback'
-      )}
     </button>
   )
 }
@@ -1547,19 +1291,60 @@ function ImprovePanel() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const feedbackParts = plan
-    ? presentParts([
-        { title: 'Your plan', subtitle: 'What you shared', body: plan.planText },
-        { title: 'Coaching', subtitle: "What's working, and what to try", body: plan.feedback },
-      ])
-    : []
   const showRevision = !!plan?.suggestedRevision && !revisionDismissed
-  let n = feedbackParts.length
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
-        {!plan ? (
+      {plan ? (
+        // The same workspace a built lesson opens in: Coach's feedback and the
+        // plan as copyable sections, the tools beside them, and the follow-up
+        // chat under the plan it is about.
+        <LessonWorkspace
+          plan={plan}
+          adaptation={adaptation}
+          delivery={{ loading: deliveryLoading, error: deliveryError, onRequest: handlePresentationFeedback }}
+          extras={
+            <div className="flex flex-col gap-3">
+              <CoachingChat
+                messages={plan.conversation.slice(2)}
+                sending={chatSending}
+                error={chatError}
+                draft={chatDraft}
+                onDraftChange={setChatDraft}
+                onSend={handleSendChat}
+                placeholder="Ask a follow-up, or ask the coach to revise your plan..."
+              />
+              {showRevision && plan.suggestedRevision && (
+                <SuggestedRevisionCard
+                  n={1}
+                  text={plan.suggestedRevision}
+                  applying={applyingRevision}
+                  onApply={handleApplyRevision}
+                  onDismiss={() => setRevisionDismissed(true)}
+                />
+              )}
+            </div>
+          }
+          deliveryCard={
+            plan.deliveryCoaching || deliveryLoading ? (
+              <div className="flex flex-col gap-3">
+                {plan.deliveryCoaching && <DeliveryCoachingCard n={showRevision ? 2 : 1} coaching={plan.deliveryCoaching} planId={plan.id} />}
+                <WorkingRing
+                  active={deliveryLoading}
+                  estimatedMs={14000}
+                  label="Coaching how to teach it"
+                  hint="Opening, pacing, engagement, and closing."
+                  className="text-forest"
+                />
+              </div>
+            ) : null
+          }
+          onToggleSaved={() => toggleSaved(plan)}
+          onShare={() => shareLessonPlan(plan.id)}
+          onNew={handleNew}
+        />
+      ) : (
+        <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
           <div className="flex flex-col gap-4">
             <PanelHeader eyebrow="Planning Coach" title="Improve a lesson">
               Paste or upload a plan you already have — a finished one, a partial one, or rough notes. Your learning
@@ -1665,75 +1450,13 @@ function ImprovePanel() {
               )}
             </button>
           </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            <PlanHeader plan={plan} />
-            <PartSections parts={feedbackParts} />
-
-            <AdaptationTools plan={plan} busy={adaptation.busy} onAdapt={adaptation.adapt} />
-            <RevertNote plan={plan} onRevert={adaptation.revert} reverting={adaptation.reverting} />
-            {adaptation.error && <p className="text-sm text-terracotta-600">{adaptation.error}</p>}
-            {plan.pendingAdaptation && (
-              <PendingAdaptationCard
-                n={++n}
-                plan={plan}
-                applying={adaptation.applying}
-                onApply={adaptation.apply}
-                onDiscard={adaptation.discard}
-              />
-            )}
-
-            <CoachingChat
-              messages={plan.conversation.slice(2)}
-              sending={chatSending}
-              error={chatError}
-              draft={chatDraft}
-              onDraftChange={setChatDraft}
-              onSend={handleSendChat}
-              placeholder="Ask a follow-up, or ask the coach to revise your plan..."
-            />
-            {showRevision && plan.suggestedRevision && (
-              <SuggestedRevisionCard
-                n={++n}
-                text={plan.suggestedRevision}
-                applying={applyingRevision}
-                onApply={handleApplyRevision}
-                onDismiss={() => setRevisionDismissed(true)}
-              />
-            )}
-            {plan.deliveryCoaching && <DeliveryCoachingCard n={++n} coaching={plan.deliveryCoaching} planId={plan.id} />}
-            <WorkingRing
-              active={deliveryLoading}
-              estimatedMs={14000}
-              label="Coaching how to teach it"
-              hint="Opening, pacing, engagement, and closing."
-              className="text-forest"
-            />
-            {deliveryError && <p className="text-sm text-terracotta-600">{deliveryError}</p>}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-4">
-                <SaveButton plan={plan} onToggle={toggleSaved} />
-                <ShareButton onShare={() => shareLessonPlan(plan.id)} />
-                <Link
-                  to={`/lesson-planning/${plan.id}/export`}
-                  className="text-sm font-medium text-ink-soft hover:text-terracotta-600"
-                >
-                  Download
-                </Link>
-                <DeliveryFeedbackButton plan={plan} loading={deliveryLoading} onClick={handlePresentationFeedback} />
-              </div>
-              <button type="button" onClick={handleNew} className={PRIMARY_BUTTON}>
-                New Plan
-              </button>
-            </div>
-          </div>
-        )}
         {error && (
           <p className="mt-4 text-center text-sm text-terracotta-600">
             <UpgradeMessage text={error} />
           </p>
         )}
-      </div>
+        </div>
+      )}
 
       <PastList
         title="Plans you've improved"

@@ -1226,6 +1226,31 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
       },
     })
   }
+  // The rest of a brought plan's cycle stays a brought plan, so Improve a
+  // Lesson can be clicked through without turning into a built lesson.
+  if (path.includes('preview-feedback') && method !== 'GET') {
+    if (path.endsWith('/apply-adaptation')) {
+      return {
+        ...FEEDBACK,
+        planText:
+          'Do Now: three questions on the board.\n\nGroup work: the dialysis bag lab — predict first, in writing.\n\nMini-lesson: name what they saw. Diffusion, then the membrane.\n\nExit: in two sentences, why can a cell not survive without a membrane?',
+        versionHistory: [{ label: 'Original', savedAt: new Date().toISOString(), sections: { planText: FEEDBACK.planText }, durationMinutes: null }],
+      }
+    }
+    if (path.endsWith('/presentation-feedback')) {
+      return {
+        ...FEEDBACK,
+        deliveryCoaching: {
+          openingHook: 'Start with the bag in the beaker before the mini-lesson.',
+          pacing: 'Give the lab the most time; the Do Now can be five minutes.',
+          engagementCheckpoints: 'Predictions on whiteboards before the lab.',
+          explainingTheHardPart: 'Name selectivity after they have seen it.',
+          closing: 'An exit ticket that asks why, not what.',
+        },
+      }
+    }
+    return FEEDBACK
+  }
   if (path.endsWith('/apply-adaptation')) {
     return lesson({
       durationMinutes: 30,

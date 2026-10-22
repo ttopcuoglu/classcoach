@@ -169,7 +169,15 @@ export function currentMinutes(plan: LessonPlan): number | null {
 /// off — and kept short, because the full objective is the first section.
 export function lessonTitle(plan: LessonPlan): string {
   const raw = (plan.objective ?? '').trim()
-  if (!raw) return plan.unitName?.trim() || plan.fileName?.trim() || 'Your lesson'
+  if (!raw) {
+    // A plan the teacher brought has no objective of its own: its first line
+    // usually names it ("Day 3: fractions on a number line").
+    const firstLine = (plan.planText ?? '').split('\n').map((line) => line.trim()).find(Boolean)
+    const named = plan.unitName?.trim() || plan.fileName?.trim()
+    if (named) return named
+    if (firstLine && firstLine.length <= 80) return firstLine.replace(/[:.]$/, '')
+    return plan.planText ? 'Your lesson plan' : 'Your lesson'
+  }
   let title = raw
     .replace(/^(students|learners|scholars)\s+will\s+(be\s+able\s+to\s+)?/i, '')
     .replace(/^swbat:?\s*/i, '')

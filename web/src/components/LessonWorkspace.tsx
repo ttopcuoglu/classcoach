@@ -410,6 +410,25 @@ const LEGACY_PARTS: { key: 'doNow' | 'agenda' | 'closure' | 'hots' | 'homework';
 /// five-slot sample plans reopened from history. A section with nothing in it
 /// is left out rather than shown empty.
 function documentSections(plan: LessonPlan, preview: boolean): DocSection[] {
+  // Improve a Lesson: Coach's read of the plan, then the plan itself — which
+  // is what an adaptation rewrites, so a preview shows only that.
+  if (plan.mode === 'feedback') {
+    const sections: DocSection[] = []
+    const feedback = textBlocks(plan.feedback)
+    if (feedback.length && !preview)
+      sections.push({ key: 'feedback', title: 'Coaching Feedback', defaultOpen: true, copy: () => feedback, body: <Blocks blocks={feedback} /> })
+    const planBlocks = textBlocks(plan.planText)
+    if (planBlocks.length)
+      sections.push({
+        key: 'plan',
+        title: preview ? 'Your Plan, Revised' : 'Your Plan',
+        defaultOpen: true,
+        copy: () => planBlocks,
+        body: <Blocks blocks={planBlocks} />,
+      })
+    return sections
+  }
+
   if ((plan.quickIdeas ?? []).length > 0) {
     return (plan.quickIdeas ?? []).map((idea, i) => ({
       key: `idea-${i}`,
@@ -1042,6 +1061,7 @@ export default function LessonWorkspace({
   adaptation,
   delivery,
   deliveryCard,
+  extras,
   onToggleSaved,
   onShare,
   onNew,
@@ -1050,6 +1070,8 @@ export default function LessonWorkspace({
   adaptation: WorkspaceAdaptation
   delivery: { loading: boolean; error: string | null; onRequest: () => void }
   deliveryCard: React.ReactNode
+  /** Anything that follows the lesson before its delivery coaching — Improve a Lesson's follow-up chat. */
+  extras?: React.ReactNode
   onToggleSaved: () => void
   onShare: () => Promise<{ shareToken: string }>
   onNew: () => void
@@ -1064,17 +1086,21 @@ export default function LessonWorkspace({
     showFallback: setFallback,
   }
 
-  const isIdeas = (plan.quickIdeas ?? []).length > 0
-  const isFullLesson = (plan.sequence ?? []).length > 0
+  const isImprove = plan.mode === 'feedback'
+  const isIdeas = !isImprove && (plan.quickIdeas ?? []).length > 0
+  const isFullLesson = !isImprove && (plan.sequence ?? []).length > 0
+  // A Planning Coach lesson and a plan the teacher brought can both be
+  // adapted; the old five-slot samples have nowhere to write a revision back.
+  const canAdapt = isFullLesson || (isImprove && !!plan.planText?.trim())
   const canDeliver = !isIdeas
-  const hasTools = isFullLesson || canDeliver
+  const hasTools = canAdapt || canDeliver
 
   // The preview opens itself when a revision arrives; closing it leaves the
   // revision drafted, with a way back to it in the tools column.
   const pending = plan.pendingAdaptation
   const pendingKey = pending ? `${plan.id}:${pending.action}:${pending.label}:${pending.summary ?? ''}:${pending.minutes ?? ''}` : null
   const [closedKey, setClosedKey] = useState<string | null>(null)
-  const previewOpen = !!pending && isFullLesson && pendingKey !== closedKey
+  const previewOpen = !!pending && canAdapt && pendingKey !== closedKey
 
   // The deck is built from the delivery coaching (hook first, checkpoints,
   // the hard part), so Create Slides on a lesson without coaching gets the
@@ -1104,7 +1130,7 @@ export default function LessonWorkspace({
     wasLoading.current = delivery.loading
   }, [delivery.loading, plan.deliveryCoaching, slidesWaiting])
 
-  const kind = isIdeas ? 'Teaching ideas' : isFullLesson ? 'Lesson draft' : 'Sample plan'
+  const kind = isImprove ? 'Your plan, with coaching' : isIdeas ? 'Teaching ideas' : isFullLesson ? 'Lesson draft' : 'Sample plan'
   const meta = [plan.subject, plan.gradeLevel].filter(Boolean).join(' · ')
   const minutes = lessonMinutes(plan)
   const description = plan.approach?.trim() || null
@@ -1119,14 +1145,14 @@ export default function LessonWorkspace({
               <span aria-hidden="true" className="mx-1.5 text-warm-gray">
                 ›
               </span>
-              <span className="font-semibold text-forest">{isIdeas ? 'Quick Ideas' : 'Build a Lesson'}</span>
+              <span className="font-semibold text-forest">{isImprove ? 'Improve a Lesson' : isIdeas ? 'Quick Ideas' : 'Build a Lesson'}</span>
             </nav>
             <button
               type="button"
               onClick={onNew}
               className={`rounded-full px-3 py-1 text-[13px] font-semibold text-forest underline decoration-divider underline-offset-4 hover:decoration-forest ${FOCUS}`}
             >
-              + {isIdeas ? 'New ideas' : 'New lesson'}
+              + {isImprove ? 'New plan' : isIdeas ? 'New ideas' : 'New lesson'}
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1156,7 +1182,7 @@ export default function LessonWorkspace({
               className="justify-center !px-4 !py-2.5 !text-sm !font-bold"
             />
           </div>
-          {isFullLesson && (
+          {canAdapt && (
             <a
               href="#make-it-yours"
               className={`self-start rounded text-[13px] font-semibold text-forest underline decoration-forest/30 underline-offset-4 @min-[760px]:hidden ${FOCUS}`}
@@ -1174,10 +1200,13 @@ export default function LessonWorkspace({
             </div>
             <LessonDocument key={`${plan.id}:${plan.versionHistory?.length ?? 0}`} plan={plan} />
             <p className="text-xs text-warm-gray">
-              {isIdeas
-                ? 'Ideas to pull into the plan you are writing — take the ones that fit your class.'
-                : 'A draft to edit, not a script. You know your class; change whatever needs changing.'}
+              {isImprove
+                ? 'Coaching on the plan you brought. Your learning goal and the parts that work stay as they are.'
+                : isIdeas
+                  ? 'Ideas to pull into the plan you are writing — take the ones that fit your class.'
+                  : 'A draft to edit, not a script. You know your class; change whatever needs changing.'}
             </p>
+            {extras}
             {deliveryCard && (
               <div ref={deliveryRef} className="scroll-mt-6">
                 {deliveryCard}
@@ -1187,7 +1216,7 @@ export default function LessonWorkspace({
 
           {hasTools && (
             <aside className="flex min-w-0 flex-col gap-4 @min-[760px]:sticky @min-[760px]:top-6 @min-[760px]:self-start">
-              {isFullLesson && <MakeItYours plan={plan} adaptation={adaptation} onReview={() => setClosedKey(null)} />}
+              {canAdapt && <MakeItYours plan={plan} adaptation={adaptation} onReview={() => setClosedKey(null)} />}
               {canDeliver && (
                 <BringItToLife
                   hasFeedback={!!plan.deliveryCoaching}
