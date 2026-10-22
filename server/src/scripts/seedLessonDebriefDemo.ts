@@ -280,6 +280,35 @@ export function rawTags(lines: Line[]): string[] {
   })
 }
 
+// The loudness envelope a phone records alongside a lesson (one RMS sample a
+// second, see lib/settleTime.ts), so the report can tell quiet from sound the
+// microphone heard but could not turn into words. Built from the lesson's own
+// timeline: voices are loud, pair and group talk is a murmur with no words,
+// silent work and the wait after a question are quiet. A room that runs on
+// calling out (the 7th grade baseline) keeps a murmur between turns too.
+const CHATTY_ROOMS = new Set(['g7_baseline'])
+const PAIR_TALK = /turn and talk|partner|pair|neighbor|group|talk to|discuss/i
+
+export function buildLevelTrace(lesson: Lesson, lines: Line[], segments: Segment[]): number[] {
+  const rand = seeded(`${lesson.key}-trace`)
+  const jitter = (base: number, spread: number) => Math.min(1, Math.max(0, base + (rand() - 0.5) * 2 * spread))
+  const total = Math.ceil(segments[segments.length - 1].endSec) + 1
+  const trace: number[] = Array.from({ length: total }, () => jitter(0.04, 0.02))
+  const chatty = CHATTY_ROOMS.has(lesson.key)
+  segments.forEach((seg, i) => {
+    const level = seg.speakerLabel === 'Teacher' ? 0.3 : 0.2
+    // Whole seconds only, the way the report reads them: a second counts as
+    // speech when it starts inside the turn.
+    for (let sec = Math.ceil(seg.startSec); sec < seg.endSec && sec < total; sec++) trace[sec] = jitter(level, 0.06)
+    const next = segments[i + 1]
+    if (!next) return
+    const line = lines[i]
+    const murmur = (line.work != null && PAIR_TALK.test(line.t)) || (chatty && rand() < 0.6)
+    for (let sec = Math.ceil(seg.endSec); sec < next.startSec && sec < total; sec++) trace[sec] = murmur ? jitter(0.17, 0.05) : jitter(0.04, 0.02)
+  })
+  return trace.map((v) => Math.round(v * 100) / 100)
+}
+
 type GeneratedLesson = { key: string; lines: Line[] }
 type DemoFile = { generatedAt: string; lessons: GeneratedLesson[] }
 
@@ -332,6 +361,7 @@ async function insert(inPath: string, email: string) {
     const lessonContent = detectLessonContent(segments, analysis.phases)
     const recordedAt = new Date(lesson.recordedAt)
     const durationSec = Math.round(segments[segments.length - 1].endSec)
+    const levelTrace = buildLevelTrace(lesson, generated.lines, segments)
     // Analysis finishes a few minutes after the recording ends.
     const analyzedAt = new Date(recordedAt.getTime() + (durationSec + 240) * 1000)
 
@@ -345,6 +375,7 @@ async function insert(inPath: string, email: string) {
         consentConfirmed: true,
         status: 'analyzed',
         durationSec,
+        levelTrace,
         teacherTalkPct: analysis.teacherTalkPct,
         studentTalkPct: analysis.studentTalkPct,
         questionCount: analysis.questionCount,
@@ -387,6 +418,32 @@ async function insert(inPath: string, email: string) {
   await prisma.$disconnect()
 }
 
+// Gives sessions inserted before the trace existed their envelope, and the
+// quiet / sound-with-no-words split runAnalysis derives from it — without
+// re-running the model reads or touching the prose.
+async function addTraces(inPath: string, email: string) {
+  const { prisma } = await import('../lib/prisma.ts')
+  const { splitNonSpeech, teacherIntervals } = await import('../lib/settleTime.ts')
+  const file = JSON.parse(readFileSync(inPath, 'utf8')) as DemoFile
+  const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } })
+  if (!user) throw new Error(`No account for ${email}.`)
+  const sessions = await prisma.audioSession.findMany({ where: { userId: user.id }, orderBy: { sessionDate: 'asc' } })
+  if (sessions.length !== LESSONS.length) throw new Error(`${email} has ${sessions.length} sessions, expected ${LESSONS.length}.`)
+  // Dates move with refreshDemoDates, but the order never changes.
+  for (const [i, lesson] of LESSONS.entries()) {
+    const session = sessions[i]
+    if (session.classSubject !== lesson.classSubject) throw new Error(`Session ${i} is ${session.classSubject}, expected ${lesson.classSubject}.`)
+    const generated = file.lessons.find((l) => l.key === lesson.key)!
+    const segments = buildSegments(lesson, generated.lines)
+    const levelTrace = buildLevelTrace(lesson, generated.lines, segments)
+    const split = splitNonSpeech(levelTrace, teacherIntervals(segments), session.durationSec ?? levelTrace.length, segments)
+    const metricsDetail = { ...(session.metricsDetail as Record<string, unknown>), ...(split ?? {}) }
+    await prisma.audioSession.update({ where: { id: session.id }, data: { levelTrace, metricsDetail } })
+    console.log(`${lesson.key.padEnd(13)} quiet ${split?.quietSec ?? '—'}s, sound with no words ${split?.unresolvedSec ?? '—'}s`)
+  }
+  await prisma.$disconnect()
+}
+
 // Only when run directly — buildTeacherSamples imports the lesson timing above.
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [command, ...args] = process.argv.slice(2)
@@ -394,8 +451,10 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     await generate(args[0])
   } else if (command === 'insert' && args.length >= 2) {
     await insert(args[0], args[1])
+  } else if (command === 'add-traces' && args.length >= 2) {
+    await addTraces(args[0], args[1])
   } else {
-    console.error('Usage: generate <out.json> | insert <in.json> <email>')
+    console.error('Usage: generate <out.json> | insert <in.json> <email> | add-traces <in.json> <email>')
     process.exit(1)
   }
 }
