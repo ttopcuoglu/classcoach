@@ -812,8 +812,9 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
 /// The analysis itself: two reads of the transcript, the row, then the prose.
 /// Runs inside the request for clients that wait on it, and detached for the
 /// ones that poll — a 60-minute class is minutes of model time, which is
-/// longer than any phone will hold a request open.
-async function runAnalysis(sessionId: string, userId: string, segments: Segment[]) {
+/// longer than any phone will hold a request open. Exported for the demo
+/// seeds, which pass `awaitSummary` so the prose is in place before they exit.
+export async function runAnalysis(sessionId: string, userId: string, segments: Segment[], { awaitSummary = false } = {}) {
   // The phrase scan first, then Claude reads the transcript and overrides it —
   // both reads at once, since a teacher is waiting on this. Best-effort by
   // design: if either call fails the phrase answer stands, so a transcript is
@@ -947,9 +948,10 @@ async function runAnalysis(sessionId: string, userId: string, segments: Segment[
 
   // The report is complete without the prose: it is one 5000-token call, and
   // the Summary tab asks for it when it isn't there yet.
-  void writeClassSummary(userId, updated, segments).catch((error) => {
+  const summary = writeClassSummary(userId, updated, segments).catch((error) => {
     console.error('[audio-sessions] class summary after analysis failed:', error)
   })
+  if (awaitSummary) await summary
 
   return updated
 }

@@ -7,6 +7,8 @@
 //   npx tsx --env-file=.env src/scripts/seedLessonDebriefDemo.ts generate <out.json>
 //   npx tsx --env-file=.env src/scripts/seedLessonDebriefDemo.ts insert <in.json> <email>
 //
+// Afterwards, refreshDemoDates.ts moves the whole demo story up to today.
+//
 // Claude writes each transcript from a brief; every number the teacher sees
 // comes from the real analyzer (analyzeTranscript / detectLessonContent),
 // run at insert time exactly as a real upload would be. Timing is built
@@ -311,6 +313,10 @@ async function generate(outPath: string) {
 
 async function insert(inPath: string, email: string) {
   const { prisma } = await import('../lib/prisma.ts')
+  // The full pipeline a real upload gets — the Claude reads, the headline and
+  // the Summary prose — so the demo report has every section a teacher's
+  // own would. Loaded here so generate never needs the database.
+  const { runAnalysis } = await import('../routes/audioSessions.ts')
   const file = JSON.parse(readFileSync(inPath, 'utf8')) as DemoFile
   const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } })
   if (!user) throw new Error(`No account for ${email} — create it first.`)
@@ -329,7 +335,7 @@ async function insert(inPath: string, email: string) {
     // Analysis finishes a few minutes after the recording ends.
     const analyzedAt = new Date(recordedAt.getTime() + (durationSec + 240) * 1000)
 
-    await prisma.audioSession.create({
+    const session = await prisma.audioSession.create({
       data: {
         userId: user.id,
         classSubject: lesson.classSubject,
@@ -372,6 +378,7 @@ async function insert(inPath: string, email: string) {
         },
       },
     })
+    await runAnalysis(session.id, user.id, segments, { awaitSummary: true })
     console.log(summarize(lesson, generated.lines))
   }
 
