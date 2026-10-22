@@ -47,21 +47,21 @@ export const SCHOOLS_VIDEO = {
 }
 
 export const GET_STARTED_VIDEO = {
-  id: 'bao2qZHXzZA',
+  id: '12kQRHmmbHs',
   thumb: '/videos/get-started.webp',
   title: 'Get Started with Wivoza',
   blurb: 'Setup and your first session.',
 }
 
 // `slug` is also the anchor — /guide#video-<slug> — that the home page's
-// "Watch how it works" links land on.
+// "Watch how it works" links land on. One video per sidebar tool: assignment
+// review is a Planning Coach tab, so its video is Planning Coach's.
 export const FEATURE_VIDEOS = [
-  { slug: 'lesson-debrief', id: 'lLnZhrtiAIw', title: 'Lesson Debrief', blurb: 'Record a class, see what it sounded like.' },
-  { slug: 'talk-it-through', id: '-Xhmj0F7n_o', title: 'Talk It Through', blurb: 'Process a rough lesson in five minutes.' },
-  { slug: 'ask-practice', id: 'yyYz795vFRg', title: 'Practice', blurb: 'Rehearse the hard part before it happens.' },
-  { slug: 'lesson-planning', id: '-LNj8wyhk2I', title: 'Planning Coach', blurb: 'Beat the blank page.' },
-  { slug: 'assignment-coach', id: 'HrlsBYrjmV4', title: 'Assignment Coach', blurb: 'What does your assignment really ask?' },
-  { slug: 'communication-coach', id: '4fg0c7Q5CiY', title: 'Communication Coach', blurb: 'Say the hard thing without the edge.' },
+  { slug: 'lesson-debrief', id: 'XomSOSuTVug', title: 'Lesson Debrief', blurb: 'Record a class, see what it sounded like.' },
+  { slug: 'talk-it-through', id: '2YzIY7WzUO0', title: 'Talk It Through', blurb: 'Process a rough lesson in five minutes.' },
+  { slug: 'ask-practice', id: 'yV6g3IYROeo', title: 'Practice', blurb: 'Rehearse the hard part before it happens.' },
+  { slug: 'lesson-planning', id: 'uO4XQENiLZk', title: 'Planning Coach', blurb: 'Beat the blank page.' },
+  { slug: 'communication-coach', id: 'V8EY3crcvXs', title: 'Communication Coach', blurb: 'Say the hard thing without the edge.' },
 ]
 
 // Shows the thumbnail until someone presses play, and only then loads YouTube —

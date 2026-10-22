@@ -70,7 +70,7 @@ const MOMENTS = [
         // A tab inside Planning Coach now, not a tool of its own. It keeps a
         // card because it is a different job from writing a lesson.
         title: 'Assignment review',
-        slug: 'assignment-coach',
+        slug: 'lesson-planning',
         description: 'Inside Planning Coach: paste, upload, or photograph an assignment to see what it really asks, redesign it for meaningful AI use, then save it as Word, PDF, or PowerPoint.',
       },
     ],
