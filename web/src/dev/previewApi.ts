@@ -1374,6 +1374,32 @@ function fillPreviewWeek(body: Json): Json {
   return previewWeek
 }
 
+// Canvas. `?canvas=connected` starts with one install; the connect page is
+// reached at /lti/connect?token=anything.
+const previewCanvas: Json[] =
+  new URLSearchParams(window.location.search).get('canvas') === 'connected'
+    ? [{ id: 'lti-1', name: 'Canvas', environment: 'production', clientId: '10000000000123', createdAt: daysAgo(3), connectedTeachers: 7 }]
+    : []
+
+function previewLti(path: string, method: string, body: Json): Json | null {
+  if (path.startsWith('/api/lti/pending')) return { canvasName: 'Canvas', schoolName: PREVIEW_SCHOOL, nameInCanvas: 'Jordan Rivera' }
+  if (path === '/api/lti/connect') return { ok: true, canvasName: 'Canvas' }
+  if (path === '/api/lti/platforms' && method === 'GET') {
+    return { configUrl: 'https://www.wivoza.com/api/lti/config.json', platforms: previewCanvas.filter((p) => !p.archived) }
+  }
+  if (path === '/api/lti/platforms' && method === 'POST') {
+    const created = { id: `lti-${previewCanvas.length + 1}`, name: body.name ?? 'Canvas', environment: body.environment ?? 'production', clientId: body.clientId, createdAt: new Date().toISOString(), connectedTeachers: 0 }
+    previewCanvas.unshift(created)
+    return created
+  }
+  if (path.startsWith('/api/lti/platforms/') && method === 'DELETE') {
+    const found = previewCanvas.find((p) => p.id === path.split('/').pop())
+    if (found) found.archived = true
+    return {}
+  }
+  return null
+}
+
 function previewTemplates_(path: string, method: string, body: Json): Json | null {
   const id = path.replace('/api/lesson-templates', '').replace(/^\//, '')
   if (method === 'GET') return previewTemplateList()
@@ -1440,6 +1466,7 @@ const previewQuoteFlags: Json[] = []
 
 function answer(path: string, method: string, body: Json): Json | Json[] | null {
   if (path.startsWith('/api/auth/me') || path.startsWith('/api/profile')) return PROFILE
+  if (path.startsWith('/api/lti/')) return previewLti(path, method, body)
   if (path.startsWith('/api/lesson-templates')) return previewTemplates_(path, method, body)
   if (path === '/api/lesson-plans/week') return startPreviewWeek(body)
   if (path.endsWith('/week/fill')) return fillPreviewWeek(body)

@@ -17,6 +17,7 @@ import { debriefRouter } from './routes/debrief.ts'
 import { followUpsRouter } from './routes/followUps.ts'
 import { lessonPlansRouter } from './routes/lessonPlans.ts'
 import { lessonTemplatesRouter } from './routes/lessonTemplates.ts'
+import { ltiRouter } from './routes/lti.ts'
 import { onboardingRouter } from './routes/onboarding.ts'
 import { parentMessageRouter } from './routes/parentMessage.ts'
 import { profileRouter } from './routes/profile.ts'
@@ -112,6 +113,10 @@ app.use('/api/support', supportRouter)
 app.use('/api/school-inquiries', schoolInquiriesRouter)
 // Public, but only Telegram knows the secret header it checks; see routes/telegram.ts.
 app.use('/api/telegram/webhook', telegramWebhookRouter)
+// Public: Canvas's browser redirects carry no Wivoza session. The routes in
+// it that need one (connecting an account, a school's Canvas installs) check
+// for it themselves; see routes/lti.ts.
+app.use('/api/lti', ltiRouter)
 
 // Everything else requires a signed-in user.
 app.use('/api/scenarios', requireAuth, scenariosRouter)

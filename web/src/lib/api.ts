@@ -2349,6 +2349,38 @@ export function fillWeekPlan(id: string, data: { objectives?: string[]; choice?:
   return request(`/api/lesson-plans/${id}/week/fill`, { method: 'POST', body: JSON.stringify(data) })
 }
 
+// ---------------------------------------------------------------------------
+// Canvas (LTI 1.3)
+// ---------------------------------------------------------------------------
+
+/// A Canvas launch waiting for the signed-in teacher to confirm it is them.
+export function getLtiPending(token: string): Promise<{ canvasName: string; schoolName: string; nameInCanvas: string | null }> {
+  return request(`/api/lti/pending?token=${encodeURIComponent(token)}`)
+}
+
+export function connectLti(token: string): Promise<{ ok: true; canvasName: string }> {
+  return request('/api/lti/connect', { method: 'POST', body: JSON.stringify({ token }) })
+}
+
+export type CanvasEnvironment = 'production' | 'beta' | 'test'
+export type CanvasInstall = { id: string; name: string; environment: CanvasEnvironment; clientId: string; createdAt: string; connectedTeachers: number }
+
+export function getCanvasInstalls(): Promise<{ configUrl: string; platforms: CanvasInstall[] }> {
+  return request('/api/lti/platforms')
+}
+
+export function addCanvasInstall(data: { clientId: string; name?: string; environment?: CanvasEnvironment }): Promise<CanvasInstall> {
+  return request('/api/lti/platforms', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export async function removeCanvasInstall(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/lti/platforms/${id}`, { method: 'DELETE', credentials: 'include' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw apiError(body?.error ?? messageForStatus(res.status), res.status)
+  }
+}
+
 /// What Wivoza read from an uploaded form. Nothing is saved until it is
 /// checked and passed to createLessonTemplate.
 export type ReadTemplate = {

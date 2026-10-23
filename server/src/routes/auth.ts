@@ -57,7 +57,7 @@ const ADMIN_EMAILS = new Set(
 
 const isProd = process.env.NODE_ENV === 'production'
 
-const COOKIE_OPTIONS = {
+export const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: isProd,
   // Frontend and backend live on different Render subdomains in production,

@@ -97,6 +97,7 @@ model User {
   pdFocusAreas      PdFocusArea[]
   coachFollowUps    CoachFollowUp[]
   lessonTemplates   LessonTemplate[]
+  ltiLinks          LtiUserLink[]
 
   @@index([passwordResetTokenHash])
 }
@@ -123,6 +124,7 @@ model Organization {
   users            User[]
   pdFocusAreas     PdFocusArea[]
   lessonTemplates  LessonTemplate[]
+  ltiPlatforms     LtiPlatform[]
 }
 
 // A coaching-priority theme (see coachingPriority.ts's PRIORITY_LABELS) an
@@ -866,4 +868,58 @@ model SchoolInquiry {
   updatedAt        DateTime  @updatedAt
 
   @@index([createdAt])
+}
+
+// A school's Canvas, connected to Wivoza over LTI 1.3 (see routes/lti.ts).
+// A Canvas admin creates a developer key from Wivoza's config URL; the
+// school's Wivoza admin then enters that key's client id here. One row per
+// (issuer, clientId): the issuer names the Canvas environment, the client id
+// the key, and together they identify whose launches these are.
+model LtiPlatform {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  environment     String // "production" | "beta" | "test" — Instructure-hosted Canvas only
+  issuer          String
+  clientId        String
+  authUrl         String
+  jwksUrl         String
+  createdByUserId String
+  createdAt       DateTime     @default(now())
+  archivedAt      DateTime?
+  links           LtiUserLink[]
+  pending         LtiPendingLink[]
+
+  @@unique([issuer, clientId])
+}
+
+// A Canvas user (the token's `sub`) connected to a Wivoza account. Made only
+// when the teacher, signed in to Wivoza, confirms it once — never from the
+// email Canvas sends, which a Canvas admin controls.
+model LtiUserLink {
+  id           String      @id @default(cuid())
+  platformId   String
+  platform     LtiPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  sub          String
+  userId       String
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime    @default(now())
+  lastLaunchAt DateTime?
+
+  @@unique([platformId, sub])
+  @@index([userId])
+}
+
+// A launch from a Canvas user who is not connected yet, waiting for them to
+// confirm which Wivoza account it is. Only a hash of the one-time token is
+// kept; it lives for 30 minutes.
+model LtiPendingLink {
+  tokenHash  String      @id
+  platformId String
+  platform   LtiPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  sub        String
+  name       String?
+  expiresAt  DateTime
+  createdAt  DateTime    @default(now())
 }

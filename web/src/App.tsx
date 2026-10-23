@@ -30,6 +30,7 @@ const CommunicationExport = lazy(() => import('./pages/CommunicationExport'))
 const AdminPilotReport = lazy(() => import('./pages/AdminPilotReport'))
 const TalkToMe = lazy(() => import('./pages/TalkToMe'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
+const LtiConnect = lazy(() => import('./pages/LtiConnect'))
 const Terms = lazy(() => import('./pages/Terms'))
 const Guide = lazy(() => import('./pages/Guide'))
 const ForSchools = lazy(() => import('./pages/ForSchools'))
@@ -151,6 +152,12 @@ export default function App() {
           <Routes>
             <Route path="shared/:type/:token" element={<Shared />} />
             <Route path="terms" element={<Terms />} />
+            {/* Outside RequireAuth: it signs people in itself, and a new account
+                connects Canvas before onboarding rather than losing the link. */}
+            <Route
+              path="lti/connect"
+              element={loading ? <RouteFallback /> : <LtiConnect user={user} onSignedIn={refreshUser} onSignedOut={handleLogout} />}
+            />
             <Route path="forgot-password" element={<ForgotPassword />} />
             <Route path="reset-password" element={<ResetPassword />} />
             <Route path="guide" element={<Guide />} />
