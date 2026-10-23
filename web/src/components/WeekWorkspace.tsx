@@ -12,6 +12,7 @@ import { textBlocks, type CopyBlock } from '../lib/lessonCopy'
 import ExportModal from './ExportModal'
 import { ArrowRightIcon, StarIcon } from './icons'
 import { LessonFormatsDialog } from './LessonFormats'
+import SendToCanvasDialog, { SendToCanvasButton, useCanvasStatus } from './SendToCanvas'
 import { Blocks, CopyButton, CopyScope, SectionRow, type DocSection } from './LessonWorkspace'
 import { WorkingRing } from './ProgressRing'
 import { Spinner } from './Spinner'
@@ -143,6 +144,8 @@ export default function WeekWorkspace({
   const [weekly, setWeekly] = useState<LessonTemplate[] | null>(null)
   const [formatsOpen, setFormatsOpen] = useState(false)
   const [wordOpen, setWordOpen] = useState(false)
+  const canvas = useCanvasStatus()
+  const [canvasOpen, setCanvasOpen] = useState(false)
   // The format picked here, before the week is (re)filled in with it.
   const [formatChoice, setFormatChoice] = useState<string | null>(() => content?.templateId ?? (content ? 'wivoza' : plan.templateChoice ?? null))
 
@@ -270,6 +273,7 @@ export default function WeekWorkspace({
                 <span className="text-forest">Download as Word</span>
               </button>
               <CopyButton blocks={() => wholeWeek(plan)} what="the whole week" label="Copy Whole Week" className="justify-center !px-4 !py-2.5 !text-sm !font-bold" />
+              {canvas?.available && <SendToCanvasButton onClick={() => setCanvasOpen(true)} />}
               <button type="button" onClick={() => setEditing(true)} className={`px-4 py-2.5 text-sm font-bold ${OUTLINE_BUTTON}`}>
                 Change objectives
               </button>
@@ -402,6 +406,15 @@ export default function WeekWorkspace({
         )}
       </div>
 
+      {canvasOpen && content && (
+        <SendToCanvasDialog
+          planId={plan.id}
+          defaultTitle={weekTitle(plan)}
+          useFormat
+          formatName={content.templateName}
+          onClose={() => setCanvasOpen(false)}
+        />
+      )}
       {formatsOpen && <LessonFormatsDialog onClose={() => setFormatsOpen(false)} onChanged={() => void loadFormats()} />}
       {wordOpen && content && (
         <ExportModal

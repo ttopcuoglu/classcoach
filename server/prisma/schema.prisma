@@ -98,6 +98,7 @@ model User {
   coachFollowUps    CoachFollowUp[]
   lessonTemplates   LessonTemplate[]
   ltiLinks          LtiUserLink[]
+  canvasTokens      CanvasToken[]
 
   @@index([passwordResetTokenHash])
 }
@@ -891,7 +892,35 @@ model LtiPlatform {
   links           LtiUserLink[]
   pending         LtiPendingLink[]
 
+  // Send to Canvas (routes/canvas.ts) uses Canvas's REST API, which needs a
+  // separate API developer key: the school's Canvas address, that key's
+  // client id, and its secret, encrypted (lib/secretBox.ts). All three unset
+  // means the school has Wivoza in Canvas but not sending to it.
+  canvasUrl          String?
+  apiClientId        String?
+  apiClientSecretEnc String?
+  canvasTokens       CanvasToken[]
+
   @@unique([issuer, clientId])
+}
+
+// A teacher's permission for Wivoza to add pages to their Canvas courses,
+// given once in Canvas's own consent screen. Both tokens encrypted; the
+// access token lasts an hour and is refreshed with the other.
+model CanvasToken {
+  id              String      @id @default(cuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platformId      String
+  platform        LtiPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  canvasUserId    String?
+  accessTokenEnc  String
+  refreshTokenEnc String?
+  expiresAt       DateTime
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([userId, platformId])
 }
 
 // A Canvas user (the token's `sub`) connected to a Wivoza account. Made only

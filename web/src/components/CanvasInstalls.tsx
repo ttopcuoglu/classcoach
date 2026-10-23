@@ -3,6 +3,7 @@ import {
   addCanvasInstall,
   getCanvasInstalls,
   removeCanvasInstall,
+  setCanvasApiKey,
   type CanvasEnvironment,
   type CanvasInstall,
 } from '../lib/api'
@@ -42,8 +43,132 @@ function CopyField({ label, value }: { label: string; value: string }) {
   )
 }
 
+/// The scopes Send to Canvas asks for — the same four as CANVAS_SCOPES in
+/// server/src/lib/canvasApi.ts, in Canvas's own words for the scope list.
+const SCOPES_TO_TICK = [
+  'Courses — GET /api/v1/courses',
+  'Modules — GET /api/v1/courses/:course_id/modules',
+  'Pages — POST /api/v1/courses/:course_id/pages',
+  'Module items — POST /api/v1/courses/:course_id/modules/:module_id/items',
+]
+
+/// Send to Canvas's half of the set-up, for one connected Canvas: an API
+/// developer key, which is what lets a teacher's page land in their course.
+function SendSetup({ install, redirectUri, onSaved }: { install: CanvasInstall; redirectUri: string; onSaved: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [canvasUrl, setCanvasUrl] = useState(install.canvasUrl ?? '')
+  const [apiClientId, setApiClientId] = useState(install.apiClientId ?? '')
+  const [secret, setSecret] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      await setCanvasApiKey(install.id, { canvasUrl, apiClientId: apiClientId.trim(), apiClientSecret: secret.trim() || undefined })
+      setSecret('')
+      setOpen(false)
+      onSaved()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="basis-full border-t border-hairline pt-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        <span className="font-semibold text-forest">Send to Canvas:</span>
+        <span className="text-ink-soft">
+          {install.sendReady
+            ? `on · ${install.sendingTeachers ?? 0} ${install.sendingTeachers === 1 ? 'teacher has' : 'teachers have'} allowed it`
+            : 'not set up — teachers can open Wivoza from Canvas, but not send lessons to it'}
+        </span>
+        <button type="button" onClick={() => setOpen((o) => !o)} className={`rounded font-semibold text-forest underline underline-offset-2 ${FOCUS}`}>
+          {open ? 'Close' : install.sendReady ? 'Change the API key' : 'Set it up'}
+        </button>
+      </div>
+      {open && (
+        <form onSubmit={save} className="mt-3 flex flex-col gap-3 text-sm text-ink">
+          <p>
+            <span className="font-semibold text-forest">1. In Canvas, make an API key.</span> Admin → Developer Keys → + Developer Key → API Key.
+            Name it Wivoza and paste this under Redirect URIs:
+          </p>
+          <CopyField label="Redirect URI" value={redirectUri} />
+          <div>
+            <p>
+              <span className="font-semibold text-forest">2. Turn on Enforce Scopes and tick only these four.</span> Wivoza can then list courses
+              and modules and add pages — nothing else.
+            </p>
+            <ul className="mt-1 list-disc pl-5 text-xs text-ink-soft">
+              {SCOPES_TO_TICK.map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+            </ul>
+          </div>
+          <p>
+            <span className="font-semibold text-forest">3. Save, turn the key on, then copy</span> its client ID (Details column) and its key (Show
+            Key) into the boxes below, with your Canvas address.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 sm:col-span-2">
+              <span className="text-xs font-semibold text-ink-soft">Your Canvas address</span>
+              <input
+                id={`canvas-url-${install.id}`}
+                value={canvasUrl}
+                onChange={(e) => setCanvasUrl(e.target.value)}
+                placeholder="yourschool.instructure.com"
+                className="rounded-xl border border-hairline bg-white px-3 py-2 text-sm text-ink focus:border-forest focus:outline-none"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-semibold text-ink-soft">API key client ID</span>
+              <input
+                id={`canvas-api-id-${install.id}`}
+                inputMode="numeric"
+                value={apiClientId}
+                onChange={(e) => setApiClientId(e.target.value)}
+                className="rounded-xl border border-hairline bg-white px-3 py-2 text-sm text-ink focus:border-forest focus:outline-none"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-semibold text-ink-soft">API key secret</span>
+              <input
+                id={`canvas-api-secret-${install.id}`}
+                type="password"
+                autoComplete="off"
+                value={secret}
+                onChange={(e) => setSecret(e.target.value)}
+                placeholder={install.sendReady ? 'Leave empty to keep the current one' : ''}
+                className="rounded-xl border border-hairline bg-white px-3 py-2 text-sm text-ink focus:border-forest focus:outline-none"
+              />
+            </label>
+          </div>
+          <p className="text-xs text-ink-soft">The secret is stored encrypted and never shown again. Changing the key or address asks each teacher to allow Wivoza once more.</p>
+          {error && (
+            <p role="alert" className="text-sm text-terracotta-600">
+              {error}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={busy || !canvasUrl.trim() || !apiClientId.trim() || (!install.sendReady && !secret.trim())}
+            className={`flex items-center gap-2 self-start rounded-full bg-forest px-5 py-2 text-sm font-bold text-cream hover:bg-forest-soft disabled:opacity-60 ${FOCUS}`}
+          >
+            {busy && <Spinner />}
+            <span className="text-cream">Save</span>
+          </button>
+        </form>
+      )}
+    </div>
+  )
+}
+
 export default function CanvasInstalls() {
-  const [data, setData] = useState<{ configUrl: string; platforms: CanvasInstall[] } | null>(null)
+  const [data, setData] = useState<{ configUrl: string; oauthRedirectUri?: string; platforms: CanvasInstall[] } | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [clientId, setClientId] = useState('')
   const [name, setName] = useState('')
@@ -136,6 +261,7 @@ export default function CanvasInstalls() {
                     Remove
                   </button>
                 )}
+                <SendSetup install={p} redirectUri={data.oauthRedirectUri ?? data.configUrl.replace(/lti\/config\.json$/, 'canvas/oauth/callback')} onSaved={() => void refresh()} />
               </li>
             ))}
           </ul>

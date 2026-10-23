@@ -1374,12 +1374,35 @@ function fillPreviewWeek(body: Json): Json {
   return previewWeek
 }
 
-// Canvas. `?canvas=connected` starts with one install; the connect page is
-// reached at /lti/connect?token=anything.
+// Canvas. `?canvas=connected` starts with one install; `?canvas=send` with
+// one that Send to Canvas is set up on, and a teacher who has allowed it. The
+// connect page is reached at /lti/connect?token=anything.
+const previewCanvasMode = new URLSearchParams(window.location.search).get('canvas')
 const previewCanvas: Json[] =
-  new URLSearchParams(window.location.search).get('canvas') === 'connected'
-    ? [{ id: 'lti-1', name: 'Canvas', environment: 'production', clientId: '10000000000123', createdAt: daysAgo(3), connectedTeachers: 7 }]
+  previewCanvasMode === 'connected' || previewCanvasMode === 'send'
+    ? [
+        {
+          id: 'lti-1',
+          name: 'Canvas',
+          environment: 'production',
+          clientId: '10000000000123',
+          createdAt: daysAgo(3),
+          connectedTeachers: 7,
+          canvasUrl: previewCanvasMode === 'send' ? 'https://preview.instructure.com' : null,
+          apiClientId: previewCanvasMode === 'send' ? '170000000000042' : null,
+          sendReady: previewCanvasMode === 'send',
+          sendingTeachers: previewCanvasMode === 'send' ? 4 : 0,
+        },
+      ]
     : []
+
+function previewCanvasSend(path: string, body: Json): Json | Json[] | null {
+  if (path === '/api/canvas/status') return { available: previewCanvasMode === 'send', connected: true, canvasName: 'Canvas' }
+  if (path === '/api/canvas/courses') return [{ id: '12', name: 'Algebra 2 — Period 3', courseCode: 'ALG2-3' }, { id: '14', name: 'Algebra 2 — Period 5', courseCode: 'ALG2-5' }]
+  if (/^\/api\/canvas\/courses\/\d+\/modules$/.test(path)) return [{ id: '5', name: 'Unit 3: Polynomials' }, { id: '6', name: 'Unit 4: Rational functions' }]
+  if (path === '/api/canvas/send') return { pageUrl: 'https://preview.instructure.com/courses/12/pages/lesson', addedToModule: !!body.moduleId, published: body.published === true }
+  return null
+}
 
 function previewLti(path: string, method: string, body: Json): Json | null {
   if (path.startsWith('/api/lti/pending')) return { canvasName: 'Canvas', schoolName: PREVIEW_SCHOOL, nameInCanvas: 'Jordan Rivera' }
@@ -1391,6 +1414,11 @@ function previewLti(path: string, method: string, body: Json): Json | null {
     const created = { id: `lti-${previewCanvas.length + 1}`, name: body.name ?? 'Canvas', environment: body.environment ?? 'production', clientId: body.clientId, createdAt: new Date().toISOString(), connectedTeachers: 0 }
     previewCanvas.unshift(created)
     return created
+  }
+  if (path.startsWith('/api/lti/platforms/') && method === 'PATCH') {
+    const found = previewCanvas.find((p) => p.id === path.split('/').pop())
+    if (found) Object.assign(found, { canvasUrl: body.canvasUrl, apiClientId: body.apiClientId, sendReady: true })
+    return { ok: true }
   }
   if (path.startsWith('/api/lti/platforms/') && method === 'DELETE') {
     const found = previewCanvas.find((p) => p.id === path.split('/').pop())
@@ -1467,6 +1495,7 @@ const previewQuoteFlags: Json[] = []
 function answer(path: string, method: string, body: Json): Json | Json[] | null {
   if (path.startsWith('/api/auth/me') || path.startsWith('/api/profile')) return PROFILE
   if (path.startsWith('/api/lti/')) return previewLti(path, method, body)
+  if (path.startsWith('/api/canvas/')) return previewCanvasSend(path, body)
   if (path.startsWith('/api/lesson-templates')) return previewTemplates_(path, method, body)
   if (path === '/api/lesson-plans/week') return startPreviewWeek(body)
   if (path.endsWith('/week/fill')) return fillPreviewWeek(body)

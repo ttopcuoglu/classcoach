@@ -12,7 +12,9 @@ import {
   LtiLaunchError,
   verifyLaunch,
 } from '../lib/lti.ts'
+import { normalizeCanvasUrl } from '../lib/canvasApi.ts'
 import { prisma } from '../lib/prisma.ts'
+import { seal } from '../lib/secretBox.ts'
 import { COOKIE_OPTIONS } from './auth.ts'
 
 // Wivoza inside Canvas (LTI 1.3). The protocol lives in lib/lti.ts; this file
@@ -275,11 +277,28 @@ ltiRouter.get('/platforms', requireAuth, async (req, res) => {
   const platforms = await prisma.ltiPlatform.findMany({
     where: { organizationId: admin.organizationId, archivedAt: null },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, name: true, environment: true, clientId: true, createdAt: true, _count: { select: { links: true } } },
+    select: {
+      id: true,
+      name: true,
+      environment: true,
+      clientId: true,
+      createdAt: true,
+      canvasUrl: true,
+      apiClientId: true,
+      apiClientSecretEnc: true,
+      _count: { select: { links: true, canvasTokens: true } },
+    },
   })
   res.json({
     configUrl: `${APP_URL}/api/lti/config.json`,
-    platforms: platforms.map(({ _count, ...p }) => ({ ...p, connectedTeachers: _count.links })),
+    oauthRedirectUri: `${APP_URL}/api/canvas/oauth/callback`,
+    // The secret itself never leaves the server; the page only learns whether one is set.
+    platforms: platforms.map(({ _count, apiClientSecretEnc, ...p }) => ({
+      ...p,
+      sendReady: !!(p.canvasUrl && p.apiClientId && apiClientSecretEnc),
+      connectedTeachers: _count.links,
+      sendingTeachers: _count.canvasTokens,
+    })),
   })
 })
 
@@ -312,6 +331,45 @@ ltiRouter.post('/platforms', requireAuth, async (req, res) => {
         data: { organizationId: admin.organizationId, name: cleanName, environment: env, issuer, clientId: cleanClientId, authUrl, jwksUrl, createdByUserId: admin.id },
       })
   res.status(201).json({ id: platform.id, name: platform.name, environment: platform.environment, clientId: platform.clientId, createdAt: platform.createdAt, connectedTeachers: 0 })
+})
+
+/// Send to Canvas's half of the set-up: the school's Canvas address and its
+/// API developer key. The secret can be left out to keep the one already set.
+ltiRouter.patch('/platforms/:id', requireAuth, async (req, res) => {
+  const admin = await schoolAdmin(req, res)
+  if (!admin) return
+  const platform = await prisma.ltiPlatform.findFirst({ where: { id: String(req.params.id), organizationId: admin.organizationId, archivedAt: null } })
+  if (!platform) {
+    res.status(404).json({ error: 'Canvas install not found' })
+    return
+  }
+  const { canvasUrl, apiClientId, apiClientSecret } = req.body ?? {}
+  const url = normalizeCanvasUrl(canvasUrl)
+  const clientId = typeof apiClientId === 'string' ? apiClientId.trim() : ''
+  const secret = typeof apiClientSecret === 'string' ? apiClientSecret.trim() : ''
+  if (!url) {
+    res.status(400).json({ error: "Enter your school's Canvas address, like yourschool.instructure.com." })
+    return
+  }
+  if (!/^\d{4,30}$/.test(clientId)) {
+    res.status(400).json({ error: "Enter the API key's client ID — the long number Canvas shows under Details." })
+    return
+  }
+  if (!secret && !platform.apiClientSecretEnc) {
+    res.status(400).json({ error: "Enter the API key's secret — Canvas shows it when you click Show Key." })
+    return
+  }
+  const changedKey = clientId !== platform.apiClientId || url !== platform.canvasUrl
+  await prisma.$transaction([
+    prisma.ltiPlatform.update({
+      where: { id: platform.id },
+      data: { canvasUrl: url, apiClientId: clientId, ...(secret ? { apiClientSecretEnc: seal(secret) } : {}) },
+    }),
+    // Teachers' permissions were given to the old key or Canvas; they no
+    // longer work, so they go and each teacher is asked once more.
+    ...(changedKey ? [prisma.canvasToken.deleteMany({ where: { platformId: platform.id } })] : []),
+  ])
+  res.json({ ok: true })
 })
 
 ltiRouter.delete('/platforms/:id', requireAuth, async (req, res) => {

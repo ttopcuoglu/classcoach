@@ -18,6 +18,7 @@ import { followUpsRouter } from './routes/followUps.ts'
 import { lessonPlansRouter } from './routes/lessonPlans.ts'
 import { lessonTemplatesRouter } from './routes/lessonTemplates.ts'
 import { ltiRouter } from './routes/lti.ts'
+import { canvasRouter } from './routes/canvas.ts'
 import { onboardingRouter } from './routes/onboarding.ts'
 import { parentMessageRouter } from './routes/parentMessage.ts'
 import { profileRouter } from './routes/profile.ts'
@@ -117,6 +118,9 @@ app.use('/api/telegram/webhook', telegramWebhookRouter)
 // it that need one (connecting an account, a school's Canvas installs) check
 // for it themselves; see routes/lti.ts.
 app.use('/api/lti', ltiRouter)
+// Send to Canvas. Session-checked inside, so its OAuth pop-up callback can
+// answer with a page; see routes/canvas.ts.
+app.use('/api/canvas', canvasRouter)
 
 // Everything else requires a signed-in user.
 app.use('/api/scenarios', requireAuth, scenariosRouter)

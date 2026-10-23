@@ -46,6 +46,7 @@ import {
 } from './icons'
 import ExportModal from './ExportModal'
 import { LessonFormatsDialog } from './LessonFormats'
+import SendToCanvasDialog, { SendToCanvasButton, useCanvasStatus } from './SendToCanvas'
 import Overlay from './Overlay'
 import { WorkingRing } from './ProgressRing'
 import { Spinner } from './Spinner'
@@ -1360,6 +1361,8 @@ export default function LessonWorkspace({
   const [formatsOpen, setFormatsOpen] = useState(false)
   const [wordOpen, setWordOpen] = useState(false)
   const content = format.content
+  const canvas = useCanvasStatus()
+  const [canvasOpen, setCanvasOpen] = useState(false)
 
   // The preview opens itself when a revision arrives; closing it leaves the
   // revision drafted, with a way back to it in the tools column.
@@ -1472,6 +1475,7 @@ export default function LessonWorkspace({
               label={isIdeas ? 'Copy All Ideas' : 'Copy Entire Lesson'}
               className="justify-center !px-4 !py-2.5 !text-sm !font-bold"
             />
+            {canvas?.available && <SendToCanvasButton onClick={() => setCanvasOpen(true)} />}
           </div>
           {canAdapt && (
             <a
@@ -1579,6 +1583,15 @@ export default function LessonWorkspace({
           changesLabel="How your delivery plan is built in"
           loader={() => generateLessonDeck(plan.id).then((result) => result.model)}
           onClose={() => setSlidesOpen(false)}
+        />
+      )}
+      {canvasOpen && (
+        <SendToCanvasDialog
+          planId={plan.id}
+          defaultTitle={lessonTitle(plan)}
+          useFormat={!!content}
+          formatName={content?.templateName ?? null}
+          onClose={() => setCanvasOpen(false)}
         />
       )}
       {formatsOpen && <LessonFormatsDialog onClose={() => setFormatsOpen(false)} onChanged={() => void format.changed()} />}

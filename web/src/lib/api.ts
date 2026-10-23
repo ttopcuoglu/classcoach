@@ -2363,10 +2363,57 @@ export function connectLti(token: string): Promise<{ ok: true; canvasName: strin
 }
 
 export type CanvasEnvironment = 'production' | 'beta' | 'test'
-export type CanvasInstall = { id: string; name: string; environment: CanvasEnvironment; clientId: string; createdAt: string; connectedTeachers: number }
+export type CanvasInstall = {
+  id: string
+  name: string
+  environment: CanvasEnvironment
+  clientId: string
+  createdAt: string
+  connectedTeachers: number
+  // Send to Canvas's half: the school's Canvas address and its API key. The
+  // key's secret never comes back; sendReady says whether one is set.
+  canvasUrl?: string | null
+  apiClientId?: string | null
+  sendReady?: boolean
+  sendingTeachers?: number
+}
 
-export function getCanvasInstalls(): Promise<{ configUrl: string; platforms: CanvasInstall[] }> {
+export function getCanvasInstalls(): Promise<{ configUrl: string; oauthRedirectUri?: string; platforms: CanvasInstall[] }> {
   return request('/api/lti/platforms')
+}
+
+export function setCanvasApiKey(id: string, data: { canvasUrl: string; apiClientId: string; apiClientSecret?: string }): Promise<{ ok: true }> {
+  return request(`/api/lti/platforms/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+
+// Send to Canvas: a plan as a page in one of the teacher's Canvas courses.
+export type CanvasStatus = { available: boolean; connected: boolean; canvasName: string | null }
+export type CanvasCourse = { id: string; name: string; courseCode: string | null }
+
+export function getCanvasStatus(): Promise<CanvasStatus> {
+  return request('/api/canvas/status')
+}
+
+/// Opened in a pop-up: Canvas's own screen where the teacher allows Wivoza.
+export const CANVAS_CONNECT_URL = `${API_BASE_URL}/api/canvas/oauth/start`
+
+export function getCanvasCourses(): Promise<CanvasCourse[]> {
+  return request('/api/canvas/courses')
+}
+
+export function getCanvasModules(courseId: string): Promise<{ id: string; name: string }[]> {
+  return request(`/api/canvas/courses/${encodeURIComponent(courseId)}/modules`)
+}
+
+export function sendToCanvas(data: {
+  planId: string
+  courseId: string
+  moduleId?: string | null
+  title: string
+  published: boolean
+  useFormat: boolean
+}): Promise<{ pageUrl: string; addedToModule: boolean; published: boolean }> {
+  return request('/api/canvas/send', { method: 'POST', body: JSON.stringify(data) })
 }
 
 export function addCanvasInstall(data: { clientId: string; name?: string; environment?: CanvasEnvironment }): Promise<CanvasInstall> {
