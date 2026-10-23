@@ -46,6 +46,8 @@ import { buildFollowUpContextBlock, snoozedCheckInDate } from './followUps.ts'
 import { extractTag, stripTag } from './extractTag.ts'
 import { classifyModelError, logModelFailure } from './modelErrors.ts'
 import { prisma } from './prisma.ts'
+import { activeFocusFor } from './schoolPriorities.ts'
+import { schoolFocusBlock } from './schoolFocusBlock.ts'
 import {
   answerButtonTap,
   deleteWebhook,
@@ -1269,7 +1271,11 @@ async function coachReply(chatId: string, user: BotUser, text: string, extras: T
   // Not twice in one conversation either — so once an offer is made, the
   // instruction leaves the prompt and Coach stops looking for one.
   const offerAllowed = MINI_APP_AVAILABLE && !followUp && offerTotal(debrief?.id) < MAX_OFFERS_PER_CONVERSATION
-  const basePrompt = `${TALK_TEXT_SYSTEM_PROMPT}${buildRoomContextBlock(user.gradeLevels, user.subjects)}${buildExperienceContextBlock(user.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${offerAllowed ? BETTER_TOOL_INSTRUCTION : ''}`
+  // The school focus the teacher chose, if any. Not on a reply to a check-in,
+  // for the same reason as the tool offer above. Before the memory block,
+  // which says never to record it.
+  const focusBlock = followUp ? '' : schoolFocusBlock(await activeFocusFor(user.id), 'talk')
+  const basePrompt = `${TALK_TEXT_SYSTEM_PROMPT}${buildRoomContextBlock(user.gradeLevels, user.subjects)}${buildExperienceContextBlock(user.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${focusBlock}${offerAllowed ? BETTER_TOOL_INSTRUCTION : ''}`
 
   const stopTyping = keepTyping(chatId)
   let raw: string

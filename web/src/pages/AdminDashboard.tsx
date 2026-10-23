@@ -56,7 +56,8 @@ import {
 } from '../lib/adminLabels'
 import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { CHALLENGE_TYPES, MESSAGE_PURPOSES, challengeLabel, purposeLabel } from '../lib/communicationOptions'
-import { ChartBarIcon, ChatBubbleIcon, GraduationCapIcon, HomeIcon, LessonPlanIcon, LockIcon, ShieldIcon, UserIcon } from '../components/icons'
+import { ChartBarIcon, ChatBubbleIcon, GraduationCapIcon, HomeIcon, LessonPlanIcon, LockIcon, ShieldIcon, TargetIcon, UserIcon } from '../components/icons'
+import { CoachingPrioritiesPanel } from '../components/CoachingPrioritiesPanel'
 import { LessonFormatManager } from '../components/LessonFormats'
 import CanvasInstalls from '../components/CanvasInstalls'
 
@@ -93,7 +94,7 @@ const primaryButtonClass =
   'rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft'
 
 type AnalyticsTab = 'dashboard' | 'engagement' | 'insights'
-type Tab = AnalyticsTab | 'professionalLearning' | 'people' | 'lessonFormat' | 'canvas' | 'organizations' | 'platformUsers' | 'schoolInquiries'
+type Tab = AnalyticsTab | 'professionalLearning' | 'coachingPriorities' | 'people' | 'lessonFormat' | 'canvas' | 'organizations' | 'platformUsers' | 'schoolInquiries'
 
 const ANALYTICS_META: Record<AnalyticsTab, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Are teachers using Wivoza, and what should you do next.' },
@@ -222,6 +223,15 @@ export default function AdminDashboard() {
           </div>
         </div>
 
+        <button
+          type="button"
+          onClick={() => setTab('coachingPriorities')}
+          className={navButtonClass(tab === 'coachingPriorities')}
+        >
+          <TargetIcon className="h-4 w-4 shrink-0" />
+          Coaching Priorities
+        </button>
+
         <button type="button" onClick={() => setTab('people')} className={navButtonClass(tab === 'people')}>
           <UserIcon className="h-4 w-4 shrink-0" />
           People
@@ -319,6 +329,17 @@ export default function AdminDashboard() {
         {tab === 'professionalLearning' && (
           <CardBoundary key="professionalLearning" title="Professional Learning">
             <PdFocusAreaPanel
+              selectedOrgId={selectedOrgId}
+              onOrgChange={handleOrgChange}
+              orgs={orgs}
+              isSuperadmin={isSuperadmin}
+              overview={overview}
+            />
+          </CardBoundary>
+        )}
+        {tab === 'coachingPriorities' && (
+          <CardBoundary key="coachingPriorities" title="Coaching Priorities">
+            <CoachingPrioritiesPanel
               selectedOrgId={selectedOrgId}
               onOrgChange={handleOrgChange}
               orgs={orgs}

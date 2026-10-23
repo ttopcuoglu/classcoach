@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  dismissSchoolFocusIdea,
   generateLessonDeck,
   getLessonTemplates,
   layoutLessonPlan,
@@ -1327,6 +1328,59 @@ function DownloadIcon({ className }: { className?: string }) {
   )
 }
 
+/// The one idea connected to a school focus the teacher chose
+/// (docs/coaching-priorities.md). On screen only: it is not a section, so it is
+/// never in Copy, the printout, the Word document or a Canvas page, and the
+/// label goes nowhere the teacher didn't put it.
+function SchoolFocusIdeaBox({ plan, adaptation }: { plan: LessonPlan; adaptation: WorkspaceAdaptation }) {
+  const idea = plan.schoolFocusIdea
+  const [hidden, setHidden] = useState(false)
+  const [dismissing, setDismissing] = useState(false)
+  if (!idea || idea.dismissed || idea.added || hidden || plan.pendingAdaptation) return null
+  const adding = adaptation.busy === 'school_focus'
+
+  async function notForThisClass() {
+    setDismissing(true)
+    try {
+      await dismissSchoolFocusIdea(plan.id)
+      setHidden(true)
+    } catch {
+      setDismissing(false)
+    }
+  }
+
+  return (
+    <section aria-label="An idea connected to your school focus" className="rounded-2xl border-[1.5px] border-gold bg-gold-tint/40 p-5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <h3 className="font-heading text-base font-bold text-forest">One option here</h3>
+        <span className="rounded-full bg-gold-tint px-2.5 py-0.5 text-xs font-semibold text-ink">
+          Connected to your selected school focus · {idea.name}
+        </span>
+      </div>
+      <p className="mt-2 whitespace-pre-line text-sm text-ink">{idea.text}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={adding || dismissing || adaptation.busy != null}
+          onClick={() => adaptation.adapt('school_focus')}
+          className={`min-h-[44px] rounded-full bg-forest px-4 text-sm font-semibold text-cream disabled:opacity-60 ${FOCUS}`}
+        >
+          {adding ? 'Adding…' : 'Add to lesson'}
+        </button>
+        <button
+          type="button"
+          disabled={adding || dismissing}
+          onClick={notForThisClass}
+          className={`min-h-[44px] px-4 text-sm font-semibold ${OUTLINE_BUTTON} disabled:opacity-60`}
+        >
+          Not for this class
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-warm-gray">Only you see this. It isn&rsquo;t part of the lesson unless you add it.</p>
+    </section>
+  )
+}
+
 export default function LessonWorkspace({
   plan,
   adaptation,
@@ -1544,6 +1598,7 @@ export default function LessonWorkspace({
                 )}
               </>
             )}
+            {canAdapt && isFullLesson && <SchoolFocusIdeaBox plan={plan} adaptation={adaptation} />}
             <p className="text-xs text-warm-gray">
               {isImprove
                 ? 'Coaching on the plan you brought. Your learning goal and the parts that work stay as they are.'

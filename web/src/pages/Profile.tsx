@@ -23,6 +23,7 @@ import TelegramConnect from '../components/TelegramConnect'
 import CanvasConnection from '../components/CanvasConnection'
 import { EXPERIENCE_OPTIONS } from '../lib/experience'
 import { FREE_SUMMARY, PLUS_MONTHLY_PRICE, PLUS_SUMMARY, PLUS_YEARLY_PER_MONTH, PLUS_YEARLY_PRICE } from '../lib/pricing'
+import { SchoolFocusSettings } from '../components/SchoolFocusSettings'
 
 const SECTION_BADGES = ['bg-gold text-forest', 'bg-terracotta text-cream', 'bg-forest text-gold']
 
@@ -604,9 +605,12 @@ export default function Profile() {
       <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
         <SectionHeading n={4 + afterTelegram} title="School" />
         {organizationName ? (
-          <p className="mt-3 text-sm text-ink">
-            Part of: <span className="font-semibold">{organizationName}</span>
-          </p>
+          <>
+            <p className="mt-3 text-sm text-ink">
+              Part of: <span className="font-semibold">{organizationName}</span>
+            </p>
+            <SchoolFocusSettings />
+          </>
         ) : (
           <>
             <p className="mt-3 text-sm text-ink-soft">

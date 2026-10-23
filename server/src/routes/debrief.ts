@@ -31,6 +31,8 @@ import { extractTag, stripStructuralTags, stripTag } from '../lib/extractTag.ts'
 import type { CoachFollowUp, Debrief } from '../generated/prisma/client.ts'
 import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { prisma } from '../lib/prisma.ts'
+import { activeFocusFor } from '../lib/schoolPriorities.ts'
+import { schoolFocusBlock } from '../lib/schoolFocusBlock.ts'
 import { buildDigestFor } from '../lib/coachDigest.ts'
 import { cachedSystem } from '../lib/promptCache.ts'
 import { categoryInArea, isKnownCategory } from '../lib/scenarioCategories.ts'
@@ -492,6 +494,9 @@ debriefRouter.post('/talk/stream', async (req, res) => {
   // One row covers the usage exemption, the plan check and coach memory —
   // these used to be three separate lookups of the same user, run one after
   // another while the teacher waited.
+  // The school focus the teacher chose (usually none), started now so it
+  // overlaps the reads below instead of adding to the wait.
+  const focusPromise = isGreeting ? Promise.resolve([]) : activeFocusFor(userId)
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { ...PLAN_USER_SELECT, coachMemory: true, coachMemoryEnabled: true, experienceLevel: true, name: true, talkVoice: true },
@@ -510,7 +515,9 @@ debriefRouter.post('/talk/stream', async (req, res) => {
   const followUp = await findPendingFollowUp(userId, followUpId)
   // TALK_SYSTEM_PROMPT is byte-identical for every teacher, so it caches once
   // and is reused across all of them; everything per-teacher follows it.
-  const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${isGreeting ? buildGreetingBlock(firstNameOf(user?.name)) : buildFeelingBlock(trimmed)}`
+  // Before the memory block, which says never to record it.
+  const focusBlock = schoolFocusBlock(await focusPromise, 'talk')
+  const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${isGreeting ? buildGreetingBlock(firstNameOf(user?.name)) : buildFeelingBlock(trimmed)}${focusBlock}`
 
   await streamCoachReply(res, 'talk_start', {
     gateMs: Date.now() - gateStart,
@@ -588,7 +595,7 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
   // round trips, and the digest needs a query of its own. Ask only: Talk It
   // Through is the spoken surface, where an extra block costs time to first
   // word and the teacher never asked for the report.
-  const [chatDenied, digest] = await Promise.all([
+  const [chatDenied, digest, focuses] = await Promise.all([
     checkUsage(userId, action, user),
     isTalk
       ? Promise.resolve('')
@@ -600,6 +607,8 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
           focusMetric: user?.focusMetric ?? null,
           enabled: user?.coachDigestEnabled ?? false,
         }),
+    // Talk It Through only, for now (Coaching Priorities phase one).
+    isTalk ? activeFocusFor(userId) : Promise.resolve([]),
   ])
   if (chatDenied) {
     res.status(429).json({ error: chatDenied })
@@ -620,6 +629,8 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
   // a straight question, so a per-turn feeling steer there would be naming a
   // feeling at someone who came for an answer.
   const feelingBlock = isTalk ? buildFeelingBlock(trimmed) : ''
+  // Before the memory block, which says never to record it.
+  const focusBlock = schoolFocusBlock(focuses, 'talk')
   const baseMaxTokens = isTalk ? TALK_REPLY_MAX_TOKENS : 300
   // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
   const writeMemory = memoryOn && shouldWriteMemory(countUserTurns(existing) + 1)
@@ -634,8 +645,8 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
     system: cachedSystem(
       stablePrompt,
       memoryOn
-        ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
-        : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}`,
+        ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}${focusBlock}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
+        : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}${focusBlock}`,
     ),
     maxTokens: writeMemory ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
     // Only the spoken surface has a budget: Lesson Debrief's Reflect chat is
@@ -682,7 +693,8 @@ debriefRouter.post('/talk', async (req, res) => {
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
     const followUp = await findPendingFollowUp(req.user!.userId, followUpId)
-    const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${buildFeelingBlock(trimmed)}`
+    const focusBlock = schoolFocusBlock(await activeFocusFor(req.user!.userId), 'talk')
+    const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${buildFeelingBlock(trimmed)}${focusBlock}`
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -777,6 +789,7 @@ debriefRouter.post('/:id/chat', async (req, res) => {
     const stablePrompt = isTalk ? TALK_SYSTEM_PROMPT : askChatSystemPrompt(findFocusArea(debrief.focusArea))
     const roomBlock = isTalk ? '' : teachingContextBlock(debrief)
     const feelingBlock = isTalk ? buildFeelingBlock(trimmed) : ''
+    const focusBlock = isTalk ? schoolFocusBlock(await activeFocusFor(req.user!.userId), 'talk') : ''
     const baseMaxTokens = isTalk ? TALK_REPLY_MAX_TOKENS : 300
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -785,8 +798,8 @@ debriefRouter.post('/:id/chat', async (req, res) => {
       system: cachedSystem(
         stablePrompt,
         memoryOn
-          ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
-          : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}`,
+          ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}${focusBlock}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
+          : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}${focusBlock}`,
       ),
       messages: toClaudeMessages(existing, trimmed),
     })

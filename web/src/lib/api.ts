@@ -493,6 +493,9 @@ export type LessonPlan = {
   exitTicket: LessonExitTicket | null
   quickIdeas: QuickIdea[] | null
   pendingAdaptation: PendingAdaptation | null
+  /// One idea connected to a school focus the teacher chose. Screen only:
+  /// never printed, copied, exported or sent to Canvas.
+  schoolFocusIdea?: SchoolFocusIdea | null
   versionHistory: LessonVersion[] | null
   // The lesson plan format picked for this lesson: null = the teacher's
   // default, 'wivoza' = Wivoza's own layout, otherwise a LessonTemplate id.
@@ -514,7 +517,9 @@ export type LessonMisconception = { belief: string; surface: string | null; resp
 export type LessonExitTicket = { task: string; expected: string | null; signals: string | null; nextStep: string | null }
 export type QuickIdea = { title: string; how: string }
 
-export type LessonAdaptation = 'simplify' | 'challenge' | 'participation' | 'time'
+// school_focus has no Make It Yours button: it is "Add to lesson" on the one
+// school-focus idea, and only runs from there.
+export type LessonAdaptation = 'simplify' | 'challenge' | 'participation' | 'time' | 'school_focus'
 
 /// A revision Coach has drafted and the teacher has not applied. `sections`
 /// carries the rewritten lesson — the structured fields for a Planning Coach
@@ -1426,6 +1431,100 @@ export function archivePdFocusArea(id: string, organizationId?: string): Promise
     method: 'PATCH',
     body: JSON.stringify({ status: 'archived' }),
   })
+}
+
+// Coaching Priorities (docs/coaching-priorities.md). The admin side never
+// carries anything about a teacher's choice; the teacher side is the signed-in
+// teacher's own answers only.
+
+export type GuidanceFields = {
+  name: string
+  purpose: string
+  looksLike: string
+  whenItFits: string
+  ideas: string
+  whenNotToUse: string
+}
+
+export type SchoolPriority = GuidanceFields & {
+  id: string
+  startsOn: string | null
+  endsOn: string | null
+  status: 'draft' | 'active' | 'archived'
+  version: number
+  changeNote: string | null
+  publishedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type SchoolPriorityEdit = Partial<GuidanceFields> & {
+  startsOn?: string | null
+  endsOn?: string | null
+  change?: 'wording' | 'meaning'
+  changeNote?: string
+}
+
+function orgQuery(organizationId?: string): string {
+  return organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''
+}
+
+export function getCoachingPriorities(organizationId?: string): Promise<{ items: SchoolPriority[]; maxActive: number }> {
+  return request(`/api/admin/coaching-priorities${orgQuery(organizationId)}`)
+}
+
+export function draftCoachingPriority(
+  text: string,
+  organizationId?: string,
+): Promise<{ draft: Partial<GuidanceFields>; warning: string | null }> {
+  return request(`/api/admin/coaching-priorities/draft${orgQuery(organizationId)}`, {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  })
+}
+
+export function createCoachingPriority(data: SchoolPriorityEdit, organizationId?: string): Promise<SchoolPriority> {
+  return request(`/api/admin/coaching-priorities${orgQuery(organizationId)}`, { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function updateCoachingPriority(id: string, data: SchoolPriorityEdit, organizationId?: string): Promise<SchoolPriority> {
+  return request(`/api/admin/coaching-priorities/${id}${orgQuery(organizationId)}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+
+export function publishCoachingPriority(id: string, organizationId?: string): Promise<SchoolPriority> {
+  return request(`/api/admin/coaching-priorities/${id}/publish${orgQuery(organizationId)}`, { method: 'POST' })
+}
+
+export function archiveCoachingPriority(id: string, organizationId?: string): Promise<SchoolPriority> {
+  return request(`/api/admin/coaching-priorities/${id}/archive${orgQuery(organizationId)}`, { method: 'POST' })
+}
+
+export type SchoolFocusState = 'on' | 'paused' | 'off' | 'later'
+
+export type SchoolFocusItem = GuidanceFields & {
+  id: string
+  /// This teacher's own answer at the current version; null = not answered.
+  state: SchoolFocusState | null
+  needsChoice: boolean
+  /// They answered an earlier version, and the school has changed what it means.
+  changed: boolean
+  changeNote: string | null
+  startsOn: string | null
+  endsOn: string | null
+}
+
+export type SchoolFocusIdea = { priorityId: string; name: string; text: string; dismissed?: boolean; added?: boolean }
+
+export function getSchoolFocus(): Promise<{ items: SchoolFocusItem[] }> {
+  return request('/api/school-focus')
+}
+
+export function setSchoolFocus(priorityId: string, state: SchoolFocusState): Promise<{ items: SchoolFocusItem[] }> {
+  return request(`/api/school-focus/${priorityId}`, { method: 'PUT', body: JSON.stringify({ state }) })
+}
+
+export function dismissSchoolFocusIdea(planId: string): Promise<LessonPlan> {
+  return request(`/api/lesson-plans/${planId}/school-focus-idea/dismiss`, { method: 'POST' })
 }
 
 export function updateOrganization(

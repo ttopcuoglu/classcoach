@@ -33,6 +33,7 @@ import {
 import { pickDailyTip, type Mood } from '../lib/dailyTips'
 import { isExperienced } from '../lib/experience'
 import { ACCENTS, ACCENT_CYCLE } from '../components/report'
+import { SchoolFocusInvite } from '../components/SchoolFocusInvite'
 
 type IconComponent = (props: { className?: string }) => React.ReactElement
 
@@ -620,6 +621,8 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      <SchoolFocusInvite />
 
       {needsOnboarding && (
         <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5">

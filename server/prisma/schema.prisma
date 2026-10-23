@@ -99,6 +99,9 @@ model User {
   lessonTemplates   LessonTemplate[]
   ltiLinks          LtiUserLink[]
   canvasTokens      CanvasToken[]
+  // Their own private answers to their school's Coaching Priorities. Never
+  // read by an admin route (see lib/schoolPriorities.ts).
+  priorityChoices   TeacherPriorityChoice[]
 
   @@index([passwordResetTokenHash])
 }
@@ -126,6 +129,7 @@ model Organization {
   pdFocusAreas     PdFocusArea[]
   lessonTemplates  LessonTemplate[]
   ltiPlatforms     LtiPlatform[]
+  schoolPriorities SchoolPriority[]
 }
 
 // A coaching-priority theme (see coachingPriority.ts's PRIORITY_LABELS) an
@@ -153,6 +157,51 @@ model PdFocusArea {
   status          String    @default("active") // "active" | "archived"
   createdAt       DateTime  @default(now())
   archivedAt      DateTime?
+}
+
+// Coaching Priorities: a focus area a school shares (at most two active), as
+// coaching guidance a teacher may choose to bring into their own coaching.
+// See docs/coaching-priorities.md. Information flows one way — this row goes
+// into a teacher's coaching; nothing about a teacher comes back to it.
+model SchoolPriority {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdByUserId String
+  name            String
+  purpose         String
+  looksLike       String
+  whenItFits      String
+  ideas           String
+  whenNotToUse    String
+  startsOn        DateTime?
+  endsOn          DateTime?
+  status          String       @default("draft") // "draft" | "active" | "archived"
+  // Raised when an admin says an edit "changed what it means": a teacher's
+  // choice made on an older version no longer counts, and they're asked again.
+  version         Int          @default(1)
+  changeNote      String?
+  publishedAt     DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  choices         TeacherPriorityChoice[]
+
+  @@index([organizationId, status])
+}
+
+// A teacher's own answer to one SchoolPriority. Private: no admin route reads
+// this table, which a privacy test enforces.
+model TeacherPriorityChoice {
+  id         String         @id @default(cuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  priorityId String
+  priority   SchoolPriority @relation(fields: [priorityId], references: [id], onDelete: Cascade)
+  state      String // "on" | "paused" | "off" | "later"
+  version    Int // the priority's version when this was chosen
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([userId, priorityId])
 }
 
 // One row per Claude-costing call, used to enforce a per-user daily limit
@@ -571,6 +620,10 @@ model LessonPlan {
   // { action, label, summary, minutes, sections } where sections mirrors the
   // lesson fields above, or { planText } for a lesson the teacher brought
   // themselves. Shown for review, never applied on its own.
+  // { priorityId, name, text, dismissed? } — one idea connected to a school
+  // focus the teacher chose. Shown on the Lesson Workspace screen only: no
+  // export, copy, Word document or Canvas page reads it.
+  schoolFocusIdea   Json?
   pendingAdaptation Json?
   // Every version an applied adaptation replaced, oldest first — so index 0
   // is always the original and no adaptation can lose it.

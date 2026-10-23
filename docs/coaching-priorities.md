@@ -1,8 +1,22 @@
 # Coaching Priorities: a school shares a focus, each teacher decides
 
-Status: **not built.** Spec written 2026-10-21, mock-up made 2026-10-23
-(private canvas: https://claude.ai/artifact/S8y2GKa5eMxFqcXLtt9xhB). Next
-step is showing the mock-up to one real principal before any code.
+Status: **phase one built 2026-10-23, not yet deployed.** Spec written
+2026-10-21, mock-up made 2026-10-23 (private canvas:
+https://claude.ai/artifact/S8y2GKa5eMxFqcXLtt9xhB). Phase one is the admin
+screen, the teacher's opt-in (web Home and Profile), Planning Coach's Build a
+Lesson and Talk It Through (web, iPhone, Telegram). Not yet: Lesson Debrief,
+Practice, the iPhone opt-in screens.
+
+**Deploy order.** Migration `20261023210000_add_coaching_priorities` must be
+applied to the production database by hand BEFORE the server deploys: it adds
+`LessonPlan.schoolFocusIdea`, and the regenerated client reads that column on
+every lesson-plan query.
+
+**Tests.** `server/src/routes/schoolPriorities.privacy.test.ts` covers the
+privacy requirements below against a throwaway in-memory Postgres. It walks
+every admin GET route as a school admin and as Wivoza staff. The dry run
+`server/src/scripts/tryCoachingPriorities.ts` makes real model calls and
+stores nothing.
 
 ## What it is
 

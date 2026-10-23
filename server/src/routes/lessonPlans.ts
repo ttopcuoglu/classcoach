@@ -57,6 +57,8 @@ import {
   type TemplateContent,
 } from '../lib/lessonTemplateModel.ts'
 import { prisma } from '../lib/prisma.ts'
+import { activeFocusFor } from '../lib/schoolPriorities.ts'
+import { matchSchoolFocusIdea, schoolFocusBlock } from '../lib/schoolFocusBlock.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
 import { THEME_GUIDE, type SlideDeck } from '../lib/slidesPptx.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
@@ -875,12 +877,15 @@ export async function generateFullLesson(
     kind: 'full' as const,
   }
 
+  // The school focus the teacher chose, if any (usually none — then the
+  // prompt is exactly what it was before Coaching Priorities).
+  const focuses = await activeFocusFor(userId)
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 5000,
       thinking: { type: 'disabled' },
-      system: buildFullLessonPrompt(),
+      system: buildFullLessonPrompt() + schoolFocusBlock(focuses, 'planning'),
       messages: [{ role: 'user', content: buildUserMessage(full) }],
     })
     const lesson = parseFullLesson(
@@ -910,6 +915,7 @@ export async function generateFullLesson(
         checks: lesson.checks,
         misconceptions: lesson.misconceptions,
         exitTicket: lesson.exitTicket ?? undefined,
+        schoolFocusIdea: matchSchoolFocusIdea(lesson.schoolFocusIdea, focuses, lesson.schoolFocusCheck) ?? undefined,
       },
     })
     return { plan }
@@ -1079,6 +1085,8 @@ lessonPlansRouter.post('/generate', async (req, res) => {
   }
 
   const ideasOnly = context.kind === 'ideas'
+  // A school focus is offered on full lessons only (see generateFullLesson).
+  const focuses = ideasOnly ? [] : await activeFocusFor(req.user!.userId)
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -1087,7 +1095,7 @@ lessonPlansRouter.post('/generate', async (req, res) => {
       // would truncate this one mid-sequence.
       max_tokens: ideasOnly ? 1500 : 5000,
       thinking: { type: 'disabled' },
-      system: ideasOnly ? buildQuickIdeasPrompt() : buildFullLessonPrompt(),
+      system: ideasOnly ? buildQuickIdeasPrompt() : buildFullLessonPrompt() + schoolFocusBlock(focuses, 'planning'),
       messages: [{ role: 'user', content: buildUserMessage(context) }],
     })
     const text = response.content
@@ -1141,6 +1149,7 @@ lessonPlansRouter.post('/generate', async (req, res) => {
         checks: lesson.checks,
         misconceptions: lesson.misconceptions,
         exitTicket: lesson.exitTicket ?? undefined,
+        schoolFocusIdea: matchSchoolFocusIdea(lesson.schoolFocusIdea, focuses, lesson.schoolFocusCheck) ?? undefined,
         weekPlanId: fromWeek?.id ?? null,
       },
     })
@@ -1235,6 +1244,13 @@ lessonPlansRouter.post('/:id/adapt', async (req, res) => {
     return
   }
 
+  const focusIdea = plan.schoolFocusIdea as { text?: string; dismissed?: boolean } | null
+  const idea = action === 'school_focus' && focusIdea?.text && !focusIdea.dismissed ? focusIdea.text : null
+  if (action === 'school_focus' && !idea) {
+    res.status(400).json({ error: 'There is no suggested idea on this lesson to add.' })
+    return
+  }
+
   const minutes = action === 'time' ? readMinutes(targetMinutes) : null
   if (action === 'time' && !minutes) {
     res.status(400).json({ error: `Pick a length between ${MIN_LESSON_MINUTES} and ${MAX_LESSON_MINUTES} minutes.` })
@@ -1252,7 +1268,7 @@ lessonPlansRouter.post('/:id/adapt', async (req, res) => {
       model: CLAUDE_MODEL,
       max_tokens: 5000,
       thinking: { type: 'disabled' },
-      system: buildAdaptPrompt(action, structured, minutes),
+      system: buildAdaptPrompt(action, structured, minutes, idea),
       messages: [{ role: 'user', content: adaptUserMessage(sections, currentMinutes) }],
     })
     const text = response.content
@@ -1311,6 +1327,25 @@ lessonPlansRouter.post('/:id/adapt', async (req, res) => {
 
 type PendingAdaptation = { action: string; label: string; minutes: number | null; sections: LessonSections }
 
+// "Not for this class" on the one school-focus idea: it goes away for this
+// lesson and is not offered again on it.
+lessonPlansRouter.post('/:id/school-focus-idea/dismiss', async (req, res) => {
+  const plan = await prisma.lessonPlan.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    select: { id: true, schoolFocusIdea: true },
+  })
+  if (!plan) {
+    res.status(404).json({ error: 'Lesson plan not found' })
+    return
+  }
+  const idea = plan.schoolFocusIdea as Record<string, unknown> | null
+  const updated = await prisma.lessonPlan.update({
+    where: { id: plan.id },
+    data: { schoolFocusIdea: idea ? ({ ...idea, dismissed: true } as Prisma.InputJsonValue) : Prisma.DbNull },
+  })
+  res.json(updated)
+})
+
 /// Writes a drafted adaptation into the plan, keeping the version it replaced.
 /// versionHistory is append-only and index 0 is therefore always the original,
 /// which is what makes "revert" below honest after four adaptations rather
@@ -1358,6 +1393,12 @@ lessonPlansRouter.post('/:id/apply-adaptation', async (req, res) => {
             exitTicket: s.exitTicket ?? undefined,
           }),
       ...(pending.minutes ? { durationMinutes: pending.minutes } : {}),
+      // The school-focus idea is now part of the lesson, so it isn't offered
+      // again. Undo brings the lesson back but not the offer, which is fine:
+      // the teacher has already seen and answered it.
+      ...(pending.action === 'school_focus' && plan.schoolFocusIdea
+        ? { schoolFocusIdea: { ...(plan.schoolFocusIdea as Record<string, unknown>), added: true } as Prisma.InputJsonValue }
+        : {}),
     },
   })
   res.json(updated)

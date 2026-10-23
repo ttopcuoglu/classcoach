@@ -45,8 +45,11 @@ const PROFILE: Json = {
   plan: new URLSearchParams(window.location.search).has('free') ? 'free' : 'plus',
   planStatus: 'active',
   plusAccess: new URLSearchParams(window.location.search).has('free') ? null : 'subscription',
-  organizationId: null,
-  organization: null,
+  // `?focus=1` puts the preview teacher in a school with a shared Coaching
+  // Priority, so the invitation, the Profile control and the labelled idea in
+  // a built lesson can be looked at.
+  organizationId: new URLSearchParams(window.location.search).has('focus') ? 'preview-org' : null,
+  organization: new URLSearchParams(window.location.search).has('focus') ? { name: 'Maple Ridge Academy' } : null,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
@@ -78,8 +81,79 @@ const SEQUENCE = [
   },
 ]
 
+const PREVIEW_FOCUS = {
+  name: 'Academic Discussions',
+  purpose: 'Students explain their reasoning, build on each other\'s ideas, and test claims with evidence.',
+  looksLike: 'A question goes to pairs before anyone answers it.\nStudents respond to each other, not only to the teacher.\n"I agree, and…" / "I see it differently because…"',
+  whenItFits: 'A question with more than one defensible answer.\nComparing sources, methods or solutions.',
+  ideas: 'Two minutes of turn-and-talk before taking answers.\n"Who can add to what was just said?"\nOne claim, one piece of evidence, one challenge.',
+  whenNotToUse: 'Introducing brand-new vocabulary or procedures.\nTimed practice, assessments, safety instructions.',
+}
+
+/// The teacher's own answer in this preview, kept for the page's lifetime.
+let previewFocusState: string | null = null
+
+function previewSchoolFocus(method: string, body: Json): Json {
+  // Like the real route: a teacher with no school has no school focus.
+  if (!new URLSearchParams(window.location.search).has('focus')) return { items: [] }
+  if (method === 'PUT') previewFocusState = String(body.state)
+  return {
+    items: [
+      {
+        id: 'preview-priority',
+        ...PREVIEW_FOCUS,
+        state: previewFocusState,
+        needsChoice: previewFocusState == null,
+        changed: false,
+        changeNote: null,
+        startsOn: '2026-10-27T00:00:00.000Z',
+        endsOn: '2027-01-23T00:00:00.000Z',
+      },
+    ],
+  }
+}
+
+/// Coaching Priorities on the admin side, as an in-memory list so drafting,
+/// saving and sharing can be clicked through.
+const previewPriorities: Json[] = []
+
+function previewAdminPriorities(path: string, method: string, body: Json): Json {
+  const clean = path.split('?')[0]
+  const now = new Date().toISOString()
+  if (clean.endsWith('/draft')) {
+    return { draft: PREVIEW_FOCUS, warning: null }
+  }
+  const publish = clean.match(/coaching-priorities\/([^/]+)\/publish$/)
+  const archive = clean.match(/coaching-priorities\/([^/]+)\/archive$/)
+  const one = clean.match(/coaching-priorities\/([^/]+)$/)
+  const find = (id: string) => previewPriorities.find((p) => p.id === id)
+  if (publish) return Object.assign(find(publish[1]) ?? {}, { status: 'active', publishedAt: now })
+  if (archive) return Object.assign(find(archive[1]) ?? {}, { status: 'archived' })
+  if (one && method === 'PATCH') {
+    const p = find(one[1]) ?? {}
+    if (body.change === 'meaning') Object.assign(p, { version: Number(p.version ?? 1) + 1, changeNote: body.changeNote })
+    const { change: _c, changeNote: _n, ...fields } = body
+    return Object.assign(p, fields, { updatedAt: now })
+  }
+  if (method === 'POST') {
+    const created = { id: `preview-priority-${previewPriorities.length + 1}`, status: 'draft', version: 1, changeNote: null, publishedAt: null, createdAt: now, updatedAt: now, ...body }
+    previewPriorities.push(created)
+    return created
+  }
+  return { items: previewPriorities, maxActive: 2 }
+}
+
 function lesson(overrides: Json = {}): Json {
   return {
+    ...(new URLSearchParams(window.location.search).has('focus')
+      ? {
+          schoolFocusIdea: {
+            priorityId: 'preview-priority',
+            name: 'Academic Discussions',
+            text: 'If it fits your goal, end the dialysis bag lab with three minutes in pairs: each pair agrees on why the starch stayed in the bag, then the next pair to share has to add to or challenge the last answer. It uses what they just saw, so it adds minutes, not a new activity.',
+          },
+        }
+      : {}),
     id: 'preview-lesson',
     mode: 'generated',
     objective: 'Students will be able to explain why a cell membrane lets some things through and not others.',
@@ -1525,6 +1599,8 @@ function previewTemplates_(path: string, method: string, body: Json): Json | nul
 const previewQuoteFlags: Json[] = []
 
 function answer(path: string, method: string, body: Json): Json | Json[] | null {
+  if (path.startsWith('/api/school-focus')) return previewSchoolFocus(method, body)
+  if (path.endsWith('/school-focus-idea/dismiss')) return lesson({ schoolFocusIdea: null })
   if (path.startsWith('/api/auth/me') || path.startsWith('/api/profile')) return PROFILE
   if (path.startsWith('/api/lti/')) return previewLti(path, method, body)
   if (path.startsWith('/api/canvas/')) return previewCanvasSend(path, body)
@@ -1672,6 +1748,7 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
   // returning a bare array here took the whole page to a blank screen rather
   // than failing one card.
   if (path.startsWith('/api/admin/pd-focus-areas')) return { items: [], themeCounts: {} }
+  if (path.startsWith('/api/admin/coaching-priorities')) return previewAdminPriorities(path, method, body)
   if (path.startsWith('/api/admin/members')) return []
   if (path.startsWith('/api/admin/overview')) return adminOverview()
   if (path.startsWith('/api/admin/')) return []

@@ -13,6 +13,9 @@ import {
 import { mergeBreakdownGroups } from '../lib/breakdownGroups.ts'
 import { splitByCoverage } from '../lib/transcriptCoverage.ts'
 import { prisma } from '../lib/prisma.ts'
+import { ADMIN_PRIORITY_SELECT } from '../lib/schoolPriorities.ts'
+import { draftGuidance, MAX_DRAFT_INPUT_CHARS } from '../lib/schoolPriorityDraft.ts'
+import { checkGuidance, GUIDANCE_FIELDS, MAX_ACTIVE_PRIORITIES, type Guidance } from '../lib/schoolPriorityRules.ts'
 import { staffQuestionMix } from '../lib/questionMix.ts'
 import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
 import { stripe } from '../lib/stripe.ts'
@@ -1557,6 +1560,200 @@ adminRouter.patch('/pd-focus-areas/:id', async (req, res) => {
     data: { status: 'archived', archivedAt, finalSnapshot },
   })
   res.json({ ...updated, currentSnapshot: null })
+})
+
+// Coaching Priorities (docs/coaching-priorities.md). Every read here goes
+// through ADMIN_PRIORITY_SELECT, and nothing in this file reads a teacher's
+// choice: an admin sees the guidance as teachers see it, and never who chose
+// it, paused it, or said no. A privacy test holds this file to that.
+
+async function priorityScope(req: Request, res: Response): Promise<string | null> {
+  const resolved = await resolveScope(req, res)
+  if (!resolved) return null
+  if (!resolved.organizationId) {
+    res.status(400).json({ error: 'Select an organization first.' })
+    return null
+  }
+  return resolved.organizationId
+}
+
+/// 'YYYY-MM-DD' → a date; '' or null → none; anything else → undefined (invalid).
+function parseDay(value: unknown): Date | null | undefined {
+  if (value === null || value === '' || value === undefined) return null
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined
+  const d = new Date(`${value}T00:00:00.000Z`)
+  return Number.isNaN(d.getTime()) ? undefined : d
+}
+
+async function staffNames(organizationId: string): Promise<(string | null)[]> {
+  const users = await prisma.user.findMany({ where: { organizationId }, select: { name: true } })
+  return users.map((u) => u.name)
+}
+
+function guidanceInput(body: Record<string, unknown>): Partial<Record<keyof Guidance, unknown>> {
+  const out: Partial<Record<keyof Guidance, unknown>> = {}
+  for (const field of GUIDANCE_FIELDS) out[field] = body[field]
+  return out
+}
+
+adminRouter.get('/coaching-priorities', async (req, res) => {
+  const organizationId = await priorityScope(req, res)
+  if (!organizationId) return
+  const items = await prisma.schoolPriority.findMany({
+    where: { organizationId },
+    orderBy: { createdAt: 'asc' },
+    select: ADMIN_PRIORITY_SELECT,
+  })
+  res.json({ items, maxActive: MAX_ACTIVE_PRIORITIES })
+})
+
+// "Help me write this". Returns a draft for the admin to edit; saves nothing.
+adminRouter.post('/coaching-priorities/draft', async (req, res) => {
+  const organizationId = await priorityScope(req, res)
+  if (!organizationId) return
+  const text = typeof req.body?.text === 'string' ? req.body.text.trim() : ''
+  if (!text) {
+    res.status(400).json({ error: 'Write a few sentences about what your school is working on.' })
+    return
+  }
+  if (text.length > MAX_DRAFT_INPUT_CHARS) {
+    res.status(400).json({ error: `Keep it under ${MAX_DRAFT_INPUT_CHARS} characters.` })
+    return
+  }
+  const draft = await draftGuidance(text)
+  if (!draft) {
+    res.status(502).json({ error: "Couldn't draft it just now. Try again, or fill in the fields yourself." })
+    return
+  }
+  const check = checkGuidance(draft, await staffNames(organizationId))
+  res.json({ draft, warning: check.ok ? null : check.error })
+})
+
+adminRouter.post('/coaching-priorities', async (req, res) => {
+  const organizationId = await priorityScope(req, res)
+  if (!organizationId) return
+  const body = (req.body ?? {}) as Record<string, unknown>
+  const check = checkGuidance(guidanceInput(body), await staffNames(organizationId))
+  if (!check.ok) {
+    res.status(400).json({ error: check.error, field: check.field })
+    return
+  }
+  const startsOn = parseDay(body.startsOn)
+  const endsOn = parseDay(body.endsOn)
+  if (startsOn === undefined || endsOn === undefined || (startsOn && endsOn && endsOn < startsOn)) {
+    res.status(400).json({ error: 'Check the dates: the end has to be on or after the start.' })
+    return
+  }
+  const open = await prisma.schoolPriority.count({ where: { organizationId, status: { not: 'archived' } } })
+  if (open >= MAX_ACTIVE_PRIORITIES) {
+    res.status(409).json({ error: `A school can have ${MAX_ACTIVE_PRIORITIES} priorities at a time. Archive one first.` })
+    return
+  }
+  const created = await prisma.schoolPriority.create({
+    data: { organizationId, createdByUserId: req.user!.userId, ...check.guidance, startsOn, endsOn },
+    select: ADMIN_PRIORITY_SELECT,
+  })
+  res.json(created)
+})
+
+// Editing. A draft just changes. A shared priority needs the admin to say
+// which kind of edit it is: wording only applies as it is, while a change to
+// what it means asks every teacher again (their earlier answer no longer
+// counts, because it was an answer to something else).
+adminRouter.patch('/coaching-priorities/:id', async (req, res) => {
+  const organizationId = await priorityScope(req, res)
+  if (!organizationId) return
+  const existing = await prisma.schoolPriority.findFirst({
+    where: { id: req.params.id as string, organizationId },
+    select: ADMIN_PRIORITY_SELECT,
+  })
+  if (!existing || existing.status === 'archived') {
+    res.status(404).json({ error: 'Priority not found.' })
+    return
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>
+  const merged: Record<string, unknown> = {}
+  for (const field of GUIDANCE_FIELDS) merged[field] = body[field] !== undefined ? body[field] : existing[field]
+  const check = checkGuidance(merged, await staffNames(organizationId))
+  if (!check.ok) {
+    res.status(400).json({ error: check.error, field: check.field })
+    return
+  }
+  const startsOn = body.startsOn !== undefined ? parseDay(body.startsOn) : existing.startsOn
+  const endsOn = body.endsOn !== undefined ? parseDay(body.endsOn) : existing.endsOn
+  if (startsOn === undefined || endsOn === undefined || (startsOn && endsOn && endsOn < startsOn)) {
+    res.status(400).json({ error: 'Check the dates: the end has to be on or after the start.' })
+    return
+  }
+
+  let versionData: { version?: number; changeNote?: string | null } = {}
+  if (existing.status === 'active') {
+    const change = body.change
+    if (change !== 'wording' && change !== 'meaning') {
+      res.status(400).json({ error: "Say whether this edit is wording only or changes what it means." })
+      return
+    }
+    if (change === 'meaning') {
+      const note = typeof body.changeNote === 'string' ? body.changeNote.trim() : ''
+      if (!note || note.length > 300) {
+        res.status(400).json({ error: 'Add a short note (under 300 characters) telling teachers what changed.' })
+        return
+      }
+      versionData = { version: existing.version + 1, changeNote: note }
+    }
+  }
+
+  const updated = await prisma.schoolPriority.update({
+    where: { id: existing.id },
+    data: { ...check.guidance, startsOn, endsOn, ...versionData },
+    select: ADMIN_PRIORITY_SELECT,
+  })
+  res.json(updated)
+})
+
+adminRouter.post('/coaching-priorities/:id/publish', async (req, res) => {
+  const organizationId = await priorityScope(req, res)
+  if (!organizationId) return
+  const existing = await prisma.schoolPriority.findFirst({
+    where: { id: req.params.id as string, organizationId, status: 'draft' },
+    select: ADMIN_PRIORITY_SELECT,
+  })
+  if (!existing) {
+    res.status(404).json({ error: 'No draft to share.' })
+    return
+  }
+  const check = checkGuidance(existing, await staffNames(organizationId))
+  if (!check.ok) {
+    res.status(400).json({ error: check.error, field: check.field })
+    return
+  }
+  const updated = await prisma.schoolPriority.update({
+    where: { id: existing.id },
+    data: { status: 'active', publishedAt: new Date() },
+    select: ADMIN_PRIORITY_SELECT,
+  })
+  res.json(updated)
+})
+
+// Archiving stops it everywhere from now on, for every teacher; past lessons
+// and conversations stay as they were.
+adminRouter.post('/coaching-priorities/:id/archive', async (req, res) => {
+  const organizationId = await priorityScope(req, res)
+  if (!organizationId) return
+  const existing = await prisma.schoolPriority.findFirst({
+    where: { id: req.params.id as string, organizationId, status: { not: 'archived' } },
+    select: { id: true },
+  })
+  if (!existing) {
+    res.status(404).json({ error: 'Priority not found.' })
+    return
+  }
+  const updated = await prisma.schoolPriority.update({
+    where: { id: existing.id },
+    data: { status: 'archived' },
+    select: ADMIN_PRIORITY_SELECT,
+  })
+  res.json(updated)
 })
 
 // Platform-wide roster — the one place a superadmin can find any account,

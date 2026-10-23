@@ -34,7 +34,10 @@ export type LessonSections = {
   planText?: string | null
 }
 
-export const ADAPTATIONS = ['simplify', 'challenge', 'participation', 'time'] as const
+// school_focus is "Add to lesson" on the one idea connected to a school focus
+// the teacher chose (see schoolFocusBlock.ts). It has no Make It Yours
+// button: it only runs from that idea, with the idea's own text.
+export const ADAPTATIONS = ['simplify', 'challenge', 'participation', 'time', 'school_focus'] as const
 export type Adaptation = (typeof ADAPTATIONS)[number]
 
 export const ADAPTATION_LABEL: Record<Adaptation, string> = {
@@ -42,6 +45,7 @@ export const ADAPTATION_LABEL: Record<Adaptation, string> = {
   challenge: 'Add Challenge',
   participation: 'Increase Participation',
   time: 'Adjust Time',
+  school_focus: 'Add the suggested idea',
 }
 
 export function isAdaptation(value: unknown): value is Adaptation {
@@ -150,6 +154,10 @@ export type ParsedFullLesson = {
   checks: LessonCheck[]
   misconceptions: LessonMisconception[]
   exitTicket: LessonExitTicket | null
+  /// The raw <school_focus_idea>, when the prompt carried a school focus and
+  /// the model found one that fits. Matched to its focus by the caller.
+  schoolFocusIdea: string | null
+  schoolFocusCheck: string | null
 }
 
 export function parseFullLesson(text: string): ParsedFullLesson {
@@ -197,6 +205,8 @@ export function parseFullLesson(text: string): ParsedFullLesson {
     sequence,
     checks,
     misconceptions,
+    schoolFocusIdea: extractTag(text, 'school_focus_idea'),
+    schoolFocusCheck: extractTag(text, 'school_focus_check'),
     exitTicket:
       ticketBlock && task
         ? {
@@ -355,6 +365,7 @@ const ADAPTATION_BRIEF: Record<Adaptation, string> = {
   simplify: `Simplify it. Clarify directions, break tasks into steps a student can follow one at a time, and add scaffolds — a sentence starter, a worked example, a word bank, a partially completed organizer. Keep the learning goal exactly as it is: this is the same destination with more support on the way, never a lower bar or less content to reach.`,
   challenge: `Add challenge. Push the reasoning further: ask students to justify, compare, generalize, critique, or apply the idea to a case the lesson did not cover. Transfer and application, not more of the same work or a longer assignment. Keep the learning goal; this reaches past it rather than replacing it.`,
   participation: `Increase participation. Revise the activities so far more students actually contribute and show their thinking, rather than the few who volunteer: every-student response moves (whiteboards, written-first-then-share, turn-and-talk with a reporting structure, assigned roles, polling, sorting cards), and a way for the teacher to see where the quiet students are. Keep the learning goal and the content.`,
+  school_focus: `Add one idea the teacher chose to bring into this lesson. Work it into the step it names (or the step it fits best), adjusting that step's minutes and wording; if the lesson's total would grow, trim the least important step so the length stays the same. Change nothing else.`,
   time: `Adjust the time. Rebuild the sequence and its timings to fit the new length. Cut or combine what matters least, protect the part that carries the learning goal and the check that tells the teacher whether students got there, and say plainly what you dropped. Every part's minutes must add up to the new length.`,
 }
 
@@ -362,8 +373,18 @@ function sectionsForPrompt(sections: LessonSections, minutes: number | null): st
   return lessonAsText({ ...sections, durationMinutes: minutes })
 }
 
-export function buildAdaptPrompt(action: Adaptation, structured: boolean, targetMinutes: number | null): string {
-  const target = action === 'time' && targetMinutes ? `\n\nThe new length is ${targetMinutes} minutes.` : ''
+export function buildAdaptPrompt(
+  action: Adaptation,
+  structured: boolean,
+  targetMinutes: number | null,
+  idea: string | null = null,
+): string {
+  const target =
+    action === 'time' && targetMinutes
+      ? `\n\nThe new length is ${targetMinutes} minutes.`
+      : action === 'school_focus' && idea
+        ? `\n\nThe idea, as it was suggested to the teacher:\n"""\n${idea}\n"""`
+        : ''
   const format = structured
     ? `Return the whole lesson again, with the change made, in exactly this structure:
 
