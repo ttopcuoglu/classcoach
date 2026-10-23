@@ -28,7 +28,22 @@ import {
 } from '../lib/lessonPlanModel.ts'
 import { extractPdfImages, extractPptxImages, orderedSlideParts, type OriginalImage } from '../lib/originalImages.ts'
 import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
-import { loadTemplateOwner, templateForChoice } from '../lib/lessonTemplates.ts'
+import { loadTemplateOwner, templateForChoice, weekTemplateForChoice } from '../lib/lessonTemplates.ts'
+import {
+  buildWeekFillPrompt,
+  buildWeekObjectivesPrompt,
+  cleanObjective,
+  dayLessonContext,
+  DEFAULT_WEEK_SECTIONS,
+  isUsableWeekFill,
+  parseWeekFill,
+  parseWeekObjectives,
+  sanitizeWeekDays,
+  weekFillUserMessage,
+  weekObjectivesUserMessage,
+  type WeekContext,
+  type WeekPlan,
+} from '../lib/lessonWeekModel.ts'
 import {
   buildLayoutPrompt,
   isUsableLayout,
@@ -476,12 +491,15 @@ lessonPlansRouter.post('/presentation-review', async (req, res) => {
 })
 
 lessonPlansRouter.get('/', async (req, res) => {
-  const { saved, mode } = req.query
+  const { saved, mode, includeWeeks } = req.query
   const lessonPlans = await prisma.lessonPlan.findMany({
     where: {
       userId: req.user!.userId,
       ...(saved === 'true' ? { saved: true } : {}),
       ...(typeof mode === 'string' ? { mode } : {}),
+      // A week only opens on the web. The iPhone app decodes every plan in
+      // this list and has no view for one, so it would show an empty lesson.
+      ...(includeWeeks === 'true' ? {} : { OR: [{ planKind: null }, { planKind: { not: 'week' } }] }),
     },
     orderBy: { createdAt: 'desc' },
   })
@@ -1018,6 +1036,23 @@ lessonPlansRouter.post('/infer-context', async (req, res) => {
 lessonPlansRouter.post('/generate', async (req, res) => {
   const context = readBuildContext(req.body ?? {})
 
+  // Opening one day of a week as a full lesson: the week it sits in goes in
+  // as context, and the lesson and the week are linked both ways.
+  const { weekPlanId, weekDay } = req.body ?? {}
+  let fromWeek: { id: string; week: WeekPlan; index: number } | null = null
+  if (typeof weekPlanId === 'string') {
+    const weekPlan = await prisma.lessonPlan.findFirst({ where: { id: weekPlanId, userId: req.user!.userId, planKind: 'week' } })
+    const week = weekPlan?.week as WeekPlan | null | undefined
+    const index = typeof weekDay === 'number' ? weekDay : -1
+    if (!weekPlan || !week?.days[index]) {
+      res.status(404).json({ error: 'That week plan was not found.' })
+      return
+    }
+    fromWeek = { id: weekPlan.id, week, index }
+    const weekContext = dayLessonContext(weekContextOf(weekPlan), week, index)
+    context.additionalContext = [weekContext, context.additionalContext].filter(Boolean).join('\n\n')
+  }
+
   // A topic or a file — one of the two. The old route required a formally
   // written objective; a teacher who has the worksheet in front of them
   // shouldn't have to write a SWBAT to get a lesson built around it.
@@ -1103,8 +1138,19 @@ lessonPlansRouter.post('/generate', async (req, res) => {
         checks: lesson.checks,
         misconceptions: lesson.misconceptions,
         exitTicket: lesson.exitTicket ?? undefined,
+        weekPlanId: fromWeek?.id ?? null,
       },
     })
+    if (fromWeek) {
+      // Re-read rather than writing back the copy from before the call: the
+      // teacher may have opened another day of the same week meanwhile.
+      const current = await prisma.lessonPlan.findUnique({ where: { id: fromWeek.id } })
+      const week = current?.week as WeekPlan | null
+      if (week?.days[fromWeek.index]) {
+        week.days[fromWeek.index].lessonPlanId = lessonPlan.id
+        await prisma.lessonPlan.update({ where: { id: fromWeek.id }, data: { week: week as unknown as Prisma.InputJsonValue } })
+      }
+    }
     res.status(201).json(lessonPlan)
   } catch (error) {
     const failure = classifyModelError(error, 'Could not reach your coach')
@@ -1374,6 +1420,178 @@ async function restoreVersion(req: Request, res: Response, which: 'original' | '
   })
   res.json(updated)
 }
+
+// ---------------------------------------------------------------------------
+// Plan a Week
+// ---------------------------------------------------------------------------
+
+function weekContextOf(plan: {
+  objective: string | null
+  subject: string | null
+  gradeLevel: string | null
+  unitName: string | null
+  essentialQuestion: string | null
+  standard: string | null
+  additionalContext: string | null
+  sourceMaterial: string | null
+}): WeekContext {
+  return {
+    goal: plan.objective ?? '',
+    subject: plan.subject,
+    gradeLevel: plan.gradeLevel,
+    unitName: plan.unitName,
+    essentialQuestion: plan.essentialQuestion,
+    standard: plan.standard,
+    additionalContext: plan.additionalContext,
+    sourceMaterial: plan.sourceMaterial?.slice(0, MAX_SOURCE_MATERIAL_CHARS) ?? null,
+  }
+}
+
+/// Step one: the week's goal and days in, an objective for each day out.
+/// Saved straight away as a week with nothing filled in yet, so the teacher
+/// can leave and come back to check the objectives.
+lessonPlansRouter.post('/week', async (req, res) => {
+  const context = readBuildContext(req.body ?? {})
+  if (!context.objective && !context.sourceMaterial) {
+    res.status(400).json({ error: 'Tell us what the class is learning this week.' })
+    return
+  }
+  const days = sanitizeWeekDays(req.body?.days, (v) => readMinutes(v), context.durationMinutes ?? DEFAULT_LESSON_MINUTES)
+  if (!days) {
+    res.status(400).json({ error: 'Pick the days you teach this week.' })
+    return
+  }
+
+  const access = await checkFeatureAccess(req.user!.userId, 'lesson_planning', () =>
+    countUsageLogActionsThisMonth(req.user!.userId, LESSON_PLANNING_ACTIONS),
+  )
+  if (!access.allowed) {
+    res.status(403).json({ error: access.upgradeMessage })
+    return
+  }
+  const denied = await checkAndLogUsage(req.user!.userId, 'lesson_plan_week')
+  if (denied) {
+    res.status(429).json({ error: denied })
+    return
+  }
+
+  const weekContext = weekContextOf({ ...context, sourceMaterial: context.sourceMaterial })
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 1500,
+      thinking: { type: 'disabled' },
+      system: buildWeekObjectivesPrompt(),
+      messages: [{ role: 'user', content: weekObjectivesUserMessage(weekContext, days) }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+    const objectives = parseWeekObjectives(text, days.length)
+    if (objectives.some((o) => !o)) {
+      console.error('[lesson-plans] week objectives incomplete — stop_reason:', response.stop_reason)
+      res.status(502).json({ error: 'Could not plan the week. Please try again.' })
+      return
+    }
+    const week: WeekPlan = { days: days.map((d, i) => ({ ...d, objective: objectives[i]! })), content: null }
+    const plan = await prisma.lessonPlan.create({
+      data: {
+        userId: req.user!.userId,
+        mode: 'generated',
+        planKind: 'week',
+        objective: context.objective || null,
+        unitName: context.unitName,
+        essentialQuestion: context.essentialQuestion,
+        standard: context.standard,
+        subject: context.subject,
+        gradeLevel: context.gradeLevel,
+        additionalContext: context.additionalContext,
+        sourceMaterial: context.sourceMaterial,
+        durationMinutes: context.durationMinutes,
+        week: week as unknown as Prisma.InputJsonValue,
+      },
+    })
+    res.status(201).json(plan)
+  } catch (error) {
+    const failure = classifyModelError(error, 'Could not plan the week')
+    logModelFailure('[lesson-plans] week objectives failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
+  }
+})
+
+/// Step two: the week filled in. Takes the objectives as the teacher left
+/// them (when sent) and the format to use (when sent: a weekly format id or
+/// "wivoza"), and fills every day in one call.
+lessonPlansRouter.post('/:id/week/fill', async (req, res) => {
+  const userId = req.user!.userId
+  const plan = await prisma.lessonPlan.findFirst({ where: { id: String(req.params.id), userId, planKind: 'week' } })
+  const stored = plan?.week as WeekPlan | null | undefined
+  if (!plan || !stored?.days?.length) {
+    res.status(404).json({ error: 'Week plan not found' })
+    return
+  }
+
+  const { objectives, choice } = req.body ?? {}
+  if (objectives !== undefined && (!Array.isArray(objectives) || objectives.length !== stored.days.length)) {
+    res.status(400).json({ error: 'Send one objective per day.' })
+    return
+  }
+  if (choice !== undefined && choice !== null && typeof choice !== 'string') {
+    res.status(400).json({ error: 'choice must be a format id, "wivoza", or null' })
+    return
+  }
+  const days = stored.days.map((day, i) => {
+    const edited = Array.isArray(objectives) ? cleanObjective(objectives[i]) : null
+    // A day whose objective changed no longer matches the lesson opened from
+    // it, so the link goes; the lesson itself stays in their history.
+    return edited && edited !== day.objective ? { ...day, objective: edited, lessonPlanId: null } : day
+  })
+  const templateChoice = choice === undefined ? plan.templateChoice : choice
+
+  const owner = await loadTemplateOwner(userId)
+  const template = owner ? await weekTemplateForChoice(owner, templateChoice) : null
+  const sections = (template && sanitizeSections(template.sections)) || DEFAULT_WEEK_SECTIONS
+
+  const denied = await checkAndLogUsage(userId, 'lesson_plan_week_fill')
+  if (denied) {
+    res.status(429).json({ error: denied })
+    return
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 8000,
+      thinking: { type: 'disabled' },
+      system: buildWeekFillPrompt(),
+      messages: [{ role: 'user', content: weekFillUserMessage(weekContextOf(plan), days, sections) }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+    const filled = parseWeekFill(text, sections, days)
+    if (!isUsableWeekFill(filled)) {
+      console.error('[lesson-plans] week fill came back empty — stop_reason:', response.stop_reason)
+      res.status(502).json({ error: 'Could not fill in the week. Please try again.' })
+      return
+    }
+    const week: WeekPlan = {
+      days,
+      content: { templateId: template?.id ?? null, templateName: template?.name ?? 'Wivoza weekly plan', ...filled },
+    }
+    const updated = await prisma.lessonPlan.update({
+      where: { id: plan.id },
+      data: { week: week as unknown as Prisma.InputJsonValue, templateChoice: templateChoice ?? null },
+    })
+    res.json(updated)
+  } catch (error) {
+    const failure = classifyModelError(error, 'Could not fill in the week')
+    logModelFailure('[lesson-plans] week fill failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
+  }
+})
 
 // ---------------------------------------------------------------------------
 // Lesson plan formats — the lesson laid out in a school's or teacher's template

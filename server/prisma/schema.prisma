@@ -585,6 +585,15 @@ model LessonPlan {
   // was made from; when either changes the layout is redone on the next view
   // (see server/src/lib/lessonTemplateModel.ts). Derived, never edited.
   templateContent   Json?
+
+  // planKind "week" (Plan a Week, lessonWeekModel.ts): { days: [{ label,
+  // minutes, note, objective, lessonPlanId? }], content } — the daily
+  // objectives the teacher checked, then the week filled in. Weeks are left
+  // out of the list the iPhone app reads, which has no view for them.
+  week              Json?
+  // On a full lesson opened from a day of a week: that week's plan id, so the
+  // lesson can link back to it. Plain text, like templateChoice.
+  weekPlanId        String?
 }
 
 // A school's (organizationId) or a teacher's own (userId) lesson plan

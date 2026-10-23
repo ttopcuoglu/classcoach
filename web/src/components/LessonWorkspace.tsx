@@ -112,7 +112,7 @@ const CopyContext = createContext<{ copy: (blocks: CopyBlock[], what: string) =>
   showFallback: () => {},
 })
 
-function CopyButton({
+export function CopyButton({
   blocks,
   what,
   label = 'Copy',
@@ -189,6 +189,27 @@ function FallbackDialog({ fallback, onClose }: { fallback: Fallback; onClose: ()
   )
 }
 
+/// Copy buttons inside it write to the clipboard, and open the text to copy
+/// by hand when the browser refuses. The Lesson Workspace has its own; this
+/// is for the other documents that reuse its sections (Plan a Week).
+export function CopyScope({ children }: { children: React.ReactNode }) {
+  const [fallback, setFallback] = useState<Fallback | null>(null)
+  const copier = {
+    copy: async (blocks: CopyBlock[], what: string) => {
+      const ok = await writeClipboard(blocks)
+      if (!ok) setFallback({ title: `Copy ${what}`, text: toPlainText(blocks) })
+      return ok
+    },
+    showFallback: setFallback,
+  }
+  return (
+    <CopyContext.Provider value={copier}>
+      {children}
+      {fallback && <FallbackDialog fallback={fallback} onClose={() => setFallback(null)} />}
+    </CopyContext.Provider>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // The document
 // ---------------------------------------------------------------------------
@@ -208,7 +229,7 @@ function Chevron({ open }: { open: boolean }) {
   )
 }
 
-function Blocks({ blocks }: { blocks: CopyBlock[] }) {
+export function Blocks({ blocks }: { blocks: CopyBlock[] }) {
   return (
     <div className="flex flex-col gap-1.5 text-[15px] leading-relaxed text-forest">
       {blocks.map((block, i) => {
@@ -247,7 +268,7 @@ function Blocks({ blocks }: { blocks: CopyBlock[] }) {
   )
 }
 
-type DocSection = {
+export type DocSection = {
   key: string
   title: string
   defaultOpen: boolean
@@ -258,7 +279,7 @@ type DocSection = {
   body: React.ReactNode
 }
 
-function SectionRow({ n, section, preview }: { n: number; section: DocSection; preview: boolean }) {
+export function SectionRow({ n, section, preview }: { n: number; section: DocSection; preview: boolean }) {
   const [open, setOpen] = useState(preview || section.defaultOpen)
   const id = `lesson-section-${section.key}`
   return (
@@ -1300,6 +1321,7 @@ export default function LessonWorkspace({
   onShare,
   onNew,
   onFormatChange,
+  onBackToWeek,
 }: {
   plan: LessonPlan
   adaptation: WorkspaceAdaptation
@@ -1312,6 +1334,8 @@ export default function LessonWorkspace({
   onNew: () => void
   /** Build a Lesson only: lets the lesson be shown in a school's lesson plan format. */
   onFormatChange?: (patch: FormatPatch) => void
+  /** A lesson opened from a day of a week: the way back to that week. */
+  onBackToWeek?: () => void
 }) {
   const [fallback, setFallback] = useState<Fallback | null>(null)
   const copier = {
@@ -1383,6 +1407,20 @@ export default function LessonWorkspace({
         <header className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <nav aria-label="Breadcrumb" className="text-[13px] text-warm-gray">
+              {onBackToWeek && (
+                <>
+                  <button
+                    type="button"
+                    onClick={onBackToWeek}
+                    className={`rounded font-semibold text-forest underline decoration-divider underline-offset-4 hover:decoration-forest ${FOCUS}`}
+                  >
+                    ← Back to the week
+                  </button>
+                  <span aria-hidden="true" className="mx-1.5 text-warm-gray">
+                    ·
+                  </span>
+                </>
+              )}
               <span className="text-warm-gray">Planning Coach</span>
               <span aria-hidden="true" className="mx-1.5 text-warm-gray">
                 ›

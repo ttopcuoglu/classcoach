@@ -1179,7 +1179,8 @@ function debrief(id: string, source: string, text: string, days: number): Json {
 // Kept for the page's lifetime so uploads, edits and deletes can be clicked
 // through.
 const PREVIEW_SCHOOL = 'Preview Middle School'
-const previewTemplates: Json[] = new URLSearchParams(window.location.search).get('formats') === 'school'
+const previewFormats = new URLSearchParams(window.location.search).get('formats')
+const previewTemplates: Json[] = previewFormats === 'school' || previewFormats === 'weekly'
   ? [
       {
         id: 'tpl-school',
@@ -1205,6 +1206,31 @@ const previewTemplates: Json[] = new URLSearchParams(window.location.search).get
         createdAt: daysAgo(20),
         updatedAt: daysAgo(20),
       },
+      ...(previewFormats === 'weekly'
+        ? [
+            {
+              id: 'tpl-weekly',
+              organizationId: 'org-preview',
+              userId: null,
+              name: 'Preview Middle weekly plan',
+              cadence: 'weekly',
+              sections: [
+                { id: 's1', title: 'Teacher / Course / Week of', kind: 'details', prompt: null, scope: 'week' },
+                { id: 's2', title: 'Standards this week', kind: 'standards', prompt: null, scope: 'week' },
+                { id: 's3', title: 'Learning Objective', kind: 'objective', prompt: null, scope: 'day' },
+                { id: 's4', title: 'Warm-Up', kind: 'opening', prompt: null, scope: 'day' },
+                { id: 's5', title: 'Instructional Activities', kind: 'activities', prompt: null, scope: 'day' },
+                { id: 's6', title: 'Assessment / CFU', kind: 'assessment', prompt: null, scope: 'day' },
+                { id: 's7', title: 'Homework', kind: 'homework', prompt: null, scope: 'day' },
+                { id: 's8', title: 'Reflection on the week', kind: 'teacher_fills', prompt: null, scope: 'week' },
+              ],
+              sourceFileName: 'weekly-plan.docx',
+              isDefault: false,
+              createdAt: daysAgo(10),
+              updatedAt: daysAgo(10),
+            },
+          ]
+        : []),
     ]
   : []
 let previewTemplateChoice: string | null = null
@@ -1266,6 +1292,86 @@ function previewLayout(path: string, body: Json): Json {
     },
     appliedTemplateId: template.id,
   }
+}
+
+// Plan a Week. One week per preview page, kept so filling it in and opening
+// its days can be clicked through.
+const PREVIEW_OBJECTIVES = [
+  'Students will be able to identify the degree, leading coefficient and end behavior of a polynomial from its equation or graph.',
+  'Students will be able to find the real zeros of a polynomial by factoring and using the zero product property.',
+  'Students will be able to determine the multiplicity of each zero and describe how the graph behaves at each x-intercept.',
+  'Students will be able to show on a quiz that they can find zeros, multiplicity and end behavior of a polynomial.',
+  'Students will be able to interpret the key values of a polynomial to describe its graph in context.',
+]
+let previewWeek: Json | null = null
+
+function startPreviewWeek(body: Json): Json {
+  const days = (body.days as Json[]).map((d, i) => ({
+    label: d.label,
+    minutes: Number(body.durationMinutes) || 50,
+    note: (d.note as string | undefined) ?? null,
+    objective: PREVIEW_OBJECTIVES[i % PREVIEW_OBJECTIVES.length],
+    lessonPlanId: null,
+  }))
+  previewWeek = lesson({
+    id: 'preview-week',
+    planKind: 'week',
+    objective: body.objective,
+    subject: body.subject ?? 'Algebra 2',
+    gradeLevel: body.gradeLevel ?? '11th',
+    sequence: null,
+    checks: null,
+    misconceptions: null,
+    exitTicket: null,
+    week: { days, content: null },
+  })
+  return previewWeek
+}
+
+function fillPreviewWeek(body: Json): Json {
+  const week = previewWeek!.week as { days: Json[] }
+  const objectives = body.objectives as string[] | undefined
+  const days = week.days.map((d, i) => (objectives?.[i] && objectives[i] !== d.objective ? { ...d, objective: objectives[i], lessonPlanId: null } : d))
+  const template = body.choice === 'wivoza' ? null : previewTemplates.find((t) => t.id === body.choice && t.cadence === 'weekly' && !t.archived)
+  const sections: Json[] = template
+    ? (template.sections as Json[])
+    : [
+        { id: 'w1', title: 'This week', kind: 'other', scope: 'week' },
+        { id: 'w2', title: 'Standards', kind: 'standards', scope: 'week' },
+        { id: 'd1', title: 'Objective', kind: 'objective', scope: 'day' },
+        { id: 'd2', title: 'Opening', kind: 'opening', scope: 'day' },
+        { id: 'd3', title: 'Activities', kind: 'activities', scope: 'day' },
+        { id: 'd4', title: 'Check for understanding', kind: 'checks', scope: 'day' },
+        { id: 'd5', title: 'Materials', kind: 'materials', scope: 'day' },
+        { id: 'd6', title: 'Homework', kind: 'homework', scope: 'day' },
+      ]
+  const text = (s: Json, day: Json | null): string => {
+    if (s.kind === 'teacher_fills') return ''
+    if (!day) return s.kind === 'details' ? 'Teacher:\nCourse: Algebra 2, 11th\nWeek of:' : s.kind === 'standards' ? '' : 'From end behavior to zeros to sketching, then a quiz and an interpretation day.'
+    if (s.kind === 'objective') return String(day.objective)
+    if (s.kind === 'opening') return 'Do Now: three equations on the board — name the degree and leading coefficient of each.'
+    if (s.kind === 'activities') return '- Mini-lesson with two worked examples\n- Partners sort 12 graphs by end behavior\n- Whole-class debrief on the hardest two'
+    if (s.kind === 'checks' || s.kind === 'assessment') return 'Exit ticket: state the end behavior of f(x) = -3x^6 + 2x^2 - 7 and say why. Look for even degree and a negative leading coefficient.'
+    if (s.kind === 'homework') return String(day.note ?? '').includes('quiz') ? '' : 'Practice set: 6 polynomials, degree and end behavior.'
+    return ''
+  }
+  previewWeek = {
+    ...previewWeek!,
+    templateChoice: body.choice ?? null,
+    week: {
+      days,
+      content: {
+        templateId: template?.id ?? null,
+        templateName: template?.name ?? 'Wivoza weekly plan',
+        shared: sections.filter((s) => s.scope === 'week').map((s) => ({ id: s.id, title: s.title, kind: s.kind, text: text(s, null) })),
+        days: days.map((d) => ({
+          label: d.label,
+          sections: sections.filter((s) => s.scope === 'day').map((s) => ({ id: s.id, title: s.title, kind: s.kind, text: text(s, d) })),
+        })),
+      },
+    },
+  }
+  return previewWeek
 }
 
 function previewTemplates_(path: string, method: string, body: Json): Json | null {
@@ -1335,6 +1441,19 @@ const previewQuoteFlags: Json[] = []
 function answer(path: string, method: string, body: Json): Json | Json[] | null {
   if (path.startsWith('/api/auth/me') || path.startsWith('/api/profile')) return PROFILE
   if (path.startsWith('/api/lesson-templates')) return previewTemplates_(path, method, body)
+  if (path === '/api/lesson-plans/week') return startPreviewWeek(body)
+  if (path.endsWith('/week/fill')) return fillPreviewWeek(body)
+  if (path.endsWith('/lesson-plans/generate') && body.weekPlanId && previewWeek) {
+    const index = Number(body.weekDay)
+    const id = `preview-week-day-${index}`
+    const week = previewWeek.week as { days: Json[] }
+    week.days[index] = { ...week.days[index], lessonPlanId: id }
+    return lesson({ id, objective: body.objective, weekPlanId: previewWeek.id, subject: 'Algebra 2', gradeLevel: '11th' })
+  }
+  if (path.startsWith('/api/lesson-plans/preview-week-day-') && method === 'GET') {
+    return lesson({ id: path.split('/').pop(), weekPlanId: 'preview-week', subject: 'Algebra 2', gradeLevel: '11th' })
+  }
+  if (path === '/api/lesson-plans/preview-week' && method === 'GET') return previewWeek
   if (path.startsWith('/api/lesson-plans/') && path.endsWith('/layout')) return previewLayout(path, body)
   if (path.endsWith('/adapt')) {
     const action = String(body.action ?? 'simplify')

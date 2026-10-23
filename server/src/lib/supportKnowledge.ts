@@ -52,7 +52,11 @@ THE TOOLS
   a teacher uploads their own from "Manage formats" on the lesson. Wivoza
   reads its sections; the lesson is laid out in them, ready to copy or
   download as Word. Sections about specific students are left blank for the
-  teacher. Daily forms only for now; weekly plans are not built yet.
+  teacher. Plan a Week (an option on Build a Lesson) takes the week's goal
+  and the days taught, proposes an objective for each day for the teacher
+  to check, then fills in the whole week, in the school's weekly form when
+  there is one. Any day can be opened as a full lesson. Weeks are on the
+  web only, not in the iPhone app.
 - Communication Coach: write a message, prepare for a real meeting or
   conversation (including rehearsing it), or get a second read on a reply
   before sending it.

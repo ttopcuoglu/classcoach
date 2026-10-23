@@ -91,6 +91,11 @@ export type UsageAction =
   // teacher's monthly lessons would halve them for a format they didn't pick.
   | 'lesson_template_read'
   | 'lesson_plan_layout'
+  // Plan a Week (lessonWeekModel.ts). `week` is the teacher asking for a week
+  // — counted like building a lesson. `week_fill` fills in objectives they
+  // already have, so it is not a second week on their allowance.
+  | 'lesson_plan_week'
+  | 'lesson_plan_week_fill'
 
 // Every turn-based call in the two free-forever features. Kept as one list so
 // a future action in either area doesn't silently fall back into the flat cap.

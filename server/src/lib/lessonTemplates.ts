@@ -49,3 +49,14 @@ export async function templateForChoice(owner: TemplateOwner, choice: string | n
   const all = [...personal, ...school]
   return all.find((t) => t.id === choice) ?? all.find((t) => t.id === defaultId) ?? null
 }
+
+/// The weekly format a week is filled in: the one picked for it if it is
+/// weekly, else the teacher's default if that is weekly, else their first
+/// weekly format, their own before their school's. Null means Wivoza's own
+/// weekly layout — picked, or no weekly format exists.
+export async function weekTemplateForChoice(owner: TemplateOwner, choice: string | null): Promise<LessonTemplate | null> {
+  if (choice === 'wivoza') return null
+  const { personal, school, defaultId } = await listTemplatesFor(owner)
+  const weekly = [...personal, ...school].filter((t) => t.cadence === 'weekly')
+  return weekly.find((t) => t.id === choice) ?? weekly.find((t) => t.id === defaultId) ?? weekly[0] ?? null
+}

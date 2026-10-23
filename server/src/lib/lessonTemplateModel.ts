@@ -49,7 +49,7 @@ export type SectionKind = (typeof SECTION_KINDS)[number]
 
 /// One line per kind, for the read prompt (so the model picks from a list it
 /// understands) and for the layout prompt (so it knows what to put there).
-const KIND_MEANING: Record<SectionKind, string> = {
+export const KIND_MEANING: Record<SectionKind, string> = {
   details: 'header information such as subject, grade, unit, class length, date, teacher or period',
   objective: 'the learning objective or target',
   standards: 'the curriculum standard(s) the lesson addresses',
@@ -102,15 +102,25 @@ export function isSectionKind(value: unknown): value is SectionKind {
   return typeof value === 'string' && (SECTION_KINDS as readonly string[]).includes(value)
 }
 
-export type TemplateSection = { id: string; title: string; kind: SectionKind; prompt: string | null }
+/// `scope` only matters on a weekly form: "week" is a box filled once for
+/// the whole week (unit, standards), "day" is one per day. Left unset, it
+/// follows the kind — see sectionScope.
+export type SectionScope = 'week' | 'day'
+export type TemplateSection = { id: string; title: string; kind: SectionKind; prompt: string | null; scope?: SectionScope }
 export type Cadence = 'daily' | 'weekly'
+
+const WEEK_KINDS: readonly SectionKind[] = ['details', 'standards', 'essential_question', 'vocabulary']
+
+export function sectionScope(section: TemplateSection): SectionScope {
+  return section.scope ?? (WEEK_KINDS.includes(section.kind) ? 'week' : 'day')
+}
 
 export const MAX_SECTIONS = 30
 const MAX_TITLE = 120
 const MAX_PROMPT = 400
 export const MAX_NAME = 80
 
-function clean(value: unknown, max: number): string | null {
+export function clean(value: unknown, max: number): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.replace(/\s+/g, ' ').trim()
   return trimmed ? trimmed.slice(0, max) : null
@@ -136,6 +146,7 @@ export function sanitizeSections(raw: unknown): TemplateSection[] | null {
       title,
       kind: isSectionKind(record.kind) ? record.kind : 'other',
       prompt: clean(record.prompt, MAX_PROMPT),
+      ...(record.scope === 'week' || record.scope === 'day' ? { scope: record.scope } : {}),
     })
   }
   return sections.length ? sections : null
@@ -165,7 +176,8 @@ Rules:
 - Keep the form's own section titles, shortened only if a title is a full sentence. Never rename "Do Now" to "Opening" or "Learning Target" to "Objective" — the title is what the teacher's school calls it.
 - Header fields that only identify the lesson (teacher name, date, period, room, subject, grade, unit) go together in ONE section titled "Lesson details" with kind details, unless the form gives one of them its own substantial box.
 - Anything only the teacher can answer, or anything about specific students, is teacher_fills. Never use another kind for accommodations for named students.
-- A grid with a column or row for each day of the week, or headings like "Monday" ... "Friday", is weekly. Otherwise daily. For a weekly form, list the sections a single day has, plus any sections shared by the whole week, once each.
+- A grid with a column or row for each day of the week, or headings like "Monday" ... "Friday", is weekly. Otherwise daily. For a weekly form, list the sections a single day has, plus any sections shared by the whole week, once each — never one section per day.
+- Scope says how often a section is filled in: week for a box filled once for the whole week (unit, standards, essential question), day for a box filled in for each day. On a daily form every section is day.
 - If the document is not a lesson plan template at all, return no sections and say so in the note.
 
 Plain text only. Respond with exactly this structure and nothing outside it:
@@ -176,6 +188,7 @@ Plain text only. Respond with exactly this structure and nothing outside it:
 <section_title>The form's own title for this section</section_title>
 <section_kind>one kind from the list</section_kind>
 <section_prompt>What the form asks for here, in its own words, if it says more than the title. Empty otherwise.</section_prompt>
+<section_scope>week or day</section_scope>
 </section>
 (one <section> per section, in the form's order)
 <note>One sentence on anything the person should check — a part of the form you could not read clearly, or a section you were unsure how to classify. Write "none" if there is nothing.</note>
@@ -184,13 +197,14 @@ ${INSTRUCTION_PRIORITY_NOTICE}`
 export type ReadTemplate = { name: string | null; cadence: Cadence; sections: TemplateSection[]; note: string | null }
 
 export function parseTemplateRead(text: string): ReadTemplate {
-  const raw: { title: string | null; kind: string | null; prompt: string | null }[] = []
+  const raw: { title: string | null; kind: string | null; prompt: string | null; scope: string | null }[] = []
   for (const m of text.matchAll(/<section>([\s\S]*?)<\/section>/g)) {
     const block = m[1]
     raw.push({
       title: extractTag(block, 'section_title'),
       kind: extractTag(block, 'section_kind')?.trim().toLowerCase() ?? null,
       prompt: extractTag(block, 'section_prompt'),
+      scope: extractTag(block, 'section_scope')?.trim().toLowerCase() ?? null,
     })
   }
   const note = extractTag(text, 'note')

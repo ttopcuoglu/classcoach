@@ -480,7 +480,7 @@ export type LessonPlan = {
   // Planning Coach's Build a Lesson. planKind is null on every sample plan
   // generated before it existed — those render from doNow/agenda/closure/
   // hots/homework above and still do.
-  planKind: 'full' | 'ideas' | null
+  planKind: 'full' | 'ideas' | 'week' | null
   durationMinutes: number | null
   additionalContext: string | null
   sourceMaterial: string | null
@@ -500,6 +500,10 @@ export type LessonPlan = {
   // The lesson laid out in that format. Derived on the server and replaced
   // whenever the lesson or the format changes — see layoutLessonPlan.
   templateContent?: TemplateContent | null
+  // Plan a Week (planKind 'week'): the days and their objectives, then the
+  // week filled in. On a lesson opened from a day, the week it came from.
+  week?: WeekPlan | null
+  weekPlanId?: string | null
 }
 
 export type LessonStep = { minutes: number | null; title: string; teacher: string | null; students: string | null }
@@ -2143,12 +2147,16 @@ export type BuildLessonRequest = LessonPlanContext & {
   sourceMaterial?: string
   durationMinutes?: number
   kind: 'full' | 'ideas'
+  /** Opening one day of a week as a full lesson. */
+  weekPlanId?: string
+  weekDay?: number
 }
 
-export function getLessonPlans(params?: { saved?: boolean; mode?: LessonPlanMode }): Promise<LessonPlan[]> {
+export function getLessonPlans(params?: { saved?: boolean; mode?: LessonPlanMode; includeWeeks?: boolean }): Promise<LessonPlan[]> {
   const query = new URLSearchParams()
   if (params?.saved) query.set('saved', 'true')
   if (params?.mode) query.set('mode', params.mode)
+  if (params?.includeWeeks) query.set('includeWeeks', 'true')
   const qs = query.toString()
   return request(`/api/lesson-plans${qs ? `?${qs}` : ''}`)
 }
@@ -2284,7 +2292,8 @@ export type TemplateSectionKind =
   | 'other'
   | 'teacher_fills'
 
-export type TemplateSection = { id: string; title: string; kind: TemplateSectionKind; prompt: string | null }
+/// `scope` matters on a weekly form: 'week' is filled once, 'day' once per day.
+export type TemplateSection = { id: string; title: string; kind: TemplateSectionKind; prompt: string | null; scope?: 'week' | 'day' }
 export type TemplateCadence = 'daily' | 'weekly'
 
 export type LessonTemplate = {
@@ -2313,6 +2322,31 @@ export type TemplateContent = {
   templateName: string
   sourceKey: string
   sections: { id: string; title: string; kind: TemplateSectionKind; text: string }[]
+}
+
+export type WeekDayName = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'
+export type WeekDay = { label: WeekDayName; minutes: number; note: string | null; objective: string; lessonPlanId?: string | null }
+export type LaidOutSection = { id: string; title: string; kind: TemplateSectionKind; text: string }
+export type WeekContent = {
+  templateId: string | null
+  templateName: string
+  shared: LaidOutSection[]
+  days: { label: WeekDayName; sections: LaidOutSection[] }[]
+}
+export type WeekPlan = { days: WeekDay[]; content: WeekContent | null }
+
+/// Plan a Week, step one: an objective for each day, saved as a week with
+/// nothing filled in yet.
+export function startWeekPlan(
+  context: Omit<BuildLessonRequest, 'kind' | 'weekPlanId' | 'weekDay'> & { days: { label: WeekDayName; minutes?: number; note?: string }[] },
+): Promise<LessonPlan> {
+  return request('/api/lesson-plans/week', { method: 'POST', body: JSON.stringify(context) })
+}
+
+/// Step two: the week filled in, with the objectives as the teacher left
+/// them and, when given, the format to use (a weekly format id or 'wivoza').
+export function fillWeekPlan(id: string, data: { objectives?: string[]; choice?: string | null }): Promise<LessonPlan> {
+  return request(`/api/lesson-plans/${id}/week/fill`, { method: 'POST', body: JSON.stringify(data) })
 }
 
 /// What Wivoza read from an uploaded form. Nothing is saved until it is

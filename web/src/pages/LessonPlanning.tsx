@@ -7,6 +7,7 @@ import PastList, { type PastItem } from '../components/PastList'
 import { CameraIcon, ClipboardIcon, CloseIcon, ShareIcon, StarIcon, UploadIcon } from '../components/icons'
 import CoachingChat from '../components/CoachingChat'
 import LessonWorkspace from '../components/LessonWorkspace'
+import WeekWorkspace from '../components/WeekWorkspace'
 import ExportModal from '../components/ExportModal'
 import { PanelHeader } from '../components/PanelHeader'
 import { ProgressRing, WorkingRing } from '../components/ProgressRing'
@@ -23,6 +24,7 @@ import {
   generatePresentation,
   generateLessonPlan,
   getCoachHandoff,
+  getLessonPlan,
   getLessonPlans,
   getPresentationFeedback,
   getProfile,
@@ -35,10 +37,12 @@ import {
   extractAssignmentText,
   submitLessonPlanFeedback,
   submitPresentationReview,
+  startWeekPlan,
   type LessonAdaptation,
   type LessonPlan,
   type LessonPlanDeliveryCoaching,
   type LessonPlanPresentationReview,
+  type WeekDayName,
 } from '../lib/api'
 import { takePlanningPrefill } from '../lib/communicationsPrefill'
 import { DURATION_CHOICES } from '../lib/lessonCopy'
@@ -391,7 +395,7 @@ function toPastItem(plan: LessonPlan): PastItem {
   return {
     id: plan.id,
     createdAt: plan.createdAt,
-    label: [plan.subject, plan.gradeLevel].filter(Boolean).join(' · ') || null,
+    label: [plan.planKind === 'week' ? 'Week' : null, plan.subject, plan.gradeLevel].filter(Boolean).join(' · ') || null,
     text: plan.objective || plan.fileName || plan.planText?.slice(0, 200) || 'Lesson plan',
     saved: plan.saved,
   }
@@ -431,10 +435,24 @@ type BuildForm = {
   unitName: string
   essentialQuestion: string
   additionalContext: string
-  kind: 'full' | 'ideas'
+  kind: 'full' | 'ideas' | 'week'
 }
 
 const DEFAULT_DURATION = 45
+
+/// Plan a Week's days: which ones the class meets, and anything already fixed
+/// on one (a quiz, a half day, an objective the teacher has).
+const WEEKDAYS: WeekDayName[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+type WeekDayChoice = { on: boolean; note: string }
+const EMPTY_WEEK: Record<WeekDayName, WeekDayChoice> = {
+  Monday: { on: true, note: '' },
+  Tuesday: { on: true, note: '' },
+  Wednesday: { on: true, note: '' },
+  Thursday: { on: true, note: '' },
+  Friday: { on: true, note: '' },
+  Saturday: { on: false, note: '' },
+  Sunday: { on: false, note: '' },
+}
 
 const EMPTY_BUILD: BuildForm = {
   topic: '',
@@ -514,7 +532,10 @@ function BuildPanel() {
 
   const [plan, setPlan] = useState<LessonPlan | null>(null)
   const [generating, setGenerating] = useState(false)
-  const generateProgress = useSimulatedProgress(generating, form.kind === 'ideas' ? 10000 : 22000)
+  const generateProgress = useSimulatedProgress(generating, form.kind === 'ideas' ? 10000 : form.kind === 'week' ? 8000 : 22000)
+  const [weekDays, setWeekDays] = useState(EMPTY_WEEK)
+  const [openingDay, setOpeningDay] = useState<number | null>(null)
+  const [dayError, setDayError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Optional starting material: slides, a reading, a worksheet, an activity.
@@ -539,7 +560,7 @@ function BuildPanel() {
   const toggleSaved = useSavedToggle(setAllPlans, setPlan)
 
   useEffect(() => {
-    getLessonPlans({ mode: 'generated' })
+    getLessonPlans({ mode: 'generated', includeWeeks: true })
       .then(setAllPlans)
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
@@ -649,7 +670,9 @@ function BuildPanel() {
     }
   }
 
-  const canGenerate = !!form.topic.trim() || !!material
+  const week = form.kind === 'week'
+  const chosenDays = WEEKDAYS.filter((d) => weekDays[d].on)
+  const canGenerate = (!!form.topic.trim() || !!material) && (!week || chosenDays.length > 0)
 
   function handleGenerate() {
     if (!canGenerate) return
@@ -664,6 +687,23 @@ function BuildPanel() {
     setGenerating(true)
     setError(null)
     try {
+      if (values.kind === 'week') {
+        const result = await startWeekPlan({
+          objective: values.topic.trim(),
+          subject: values.subject.trim() || undefined,
+          gradeLevel: values.gradeLevel.trim() || undefined,
+          standard: values.standard.trim() || undefined,
+          unitName: values.unitName.trim() || undefined,
+          essentialQuestion: values.essentialQuestion.trim() || undefined,
+          additionalContext: values.additionalContext.trim() || undefined,
+          sourceMaterial: material?.text,
+          durationMinutes: values.durationMinutes,
+          days: WEEKDAYS.filter((d) => weekDays[d].on).map((label) => ({ label, note: weekDays[label].note.trim() || undefined })),
+        })
+        setPlan(result)
+        setAllPlans((prev) => [result, ...prev])
+        return
+      }
       const result = await generateLessonPlan({
         objective: values.topic.trim(),
         subject: values.subject.trim() || undefined,
@@ -674,7 +714,7 @@ function BuildPanel() {
         additionalContext: values.additionalContext.trim() || undefined,
         sourceMaterial: material?.text,
         durationMinutes: values.durationMinutes,
-        kind: values.kind,
+        kind: values.kind === 'ideas' ? 'ideas' : 'full',
       })
       setPlan(result)
       setAllPlans((prev) => [result, ...prev])
@@ -689,6 +729,59 @@ function BuildPanel() {
     setPlan(null)
     setError(null)
     setDeliveryError(null)
+    setDayError(null)
+  }
+
+  function replacePlan(updated: LessonPlan) {
+    setPlan((prev) => (prev && prev.id === updated.id ? updated : prev))
+    setAllPlans((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+  }
+
+  // A day of a week, opened as a full lesson: the one already built from it,
+  // or a new one built with the week around it as context.
+  async function handleOpenDay(weekPlan: LessonPlan, index: number) {
+    const day = weekPlan.week?.days[index]
+    if (!day || openingDay != null) return
+    setDayError(null)
+    setOpeningDay(index)
+    try {
+      let lesson: LessonPlan
+      if (day.lessonPlanId) {
+        lesson = allPlans.find((p) => p.id === day.lessonPlanId) ?? (await getLessonPlan(day.lessonPlanId))
+      } else {
+        lesson = await generateLessonPlan({
+          objective: day.objective,
+          subject: weekPlan.subject ?? undefined,
+          gradeLevel: weekPlan.gradeLevel ?? undefined,
+          standard: weekPlan.standard ?? undefined,
+          unitName: weekPlan.unitName ?? undefined,
+          essentialQuestion: weekPlan.essentialQuestion ?? undefined,
+          additionalContext: weekPlan.additionalContext ?? undefined,
+          durationMinutes: day.minutes,
+          kind: 'full',
+          weekPlanId: weekPlan.id,
+          weekDay: index,
+        })
+        const refreshed = await getLessonPlan(weekPlan.id).catch(() => null)
+        setAllPlans((prev) => [lesson, ...prev.map((p) => (refreshed && p.id === refreshed.id ? refreshed : p))])
+      }
+      setPlan(lesson)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch (e) {
+      setDayError(e instanceof Error ? e.message : 'Could not build that lesson. Please try again.')
+    } finally {
+      setOpeningDay(null)
+    }
+  }
+
+  async function handleBackToWeek(weekPlanId: string) {
+    try {
+      const weekPlan = allPlans.find((p) => p.id === weekPlanId && p.week) ?? (await getLessonPlan(weekPlanId))
+      setPlan(weekPlan)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch {
+      // The week was deleted or is out of reach; the lesson stays open.
+    }
   }
 
   // Coach offered Planning Coach in a chat and the teacher tapped "Build
@@ -771,7 +864,17 @@ function BuildPanel() {
 
   return (
     <div className="flex flex-col gap-6">
-      {plan ? (
+      {plan?.planKind === 'week' ? (
+        <WeekWorkspace
+          plan={plan}
+          onPlan={replacePlan}
+          onNew={handleNew}
+          onOpenDay={(index) => void handleOpenDay(plan, index)}
+          openingDay={openingDay}
+          dayError={dayError}
+          onToggleSaved={() => toggleSaved(plan)}
+        />
+      ) : plan ? (
         // Three shapes can come back here: a Planning Coach lesson, a list of
         // teaching ideas, and — reopened from history — one of the old
         // five-slot sample plans. The workspace draws all three.
@@ -797,12 +900,15 @@ function BuildPanel() {
           onShare={() => shareLessonPlan(plan.id)}
           onNew={handleNew}
           onFormatChange={(patch) => setPlan((prev) => (prev && prev.id === plan.id ? { ...prev, ...patch } : prev))}
+          onBackToWeek={plan.weekPlanId ? () => void handleBackToWeek(plan.weekPlanId!) : undefined}
         />
       ) : (
         <div className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-6">
           <div className="flex flex-col gap-4">
-            <PanelHeader eyebrow="Planning Coach" title="Build a lesson">
-              Start with a topic, or the material you already have. Everything else is optional.
+            <PanelHeader eyebrow="Planning Coach" title={week ? 'Plan a week' : 'Build a lesson'}>
+              {week
+                ? 'Start with what the class is learning this week. You check the daily objectives before anything else is written.'
+                : 'Start with a topic, or the material you already have. Everything else is optional.'}
             </PanelHeader>
 
             {fromDebrief && (
@@ -819,16 +925,18 @@ function BuildPanel() {
             )}
 
             <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">Topic or learning goal</span>
+              <span className="text-sm font-medium text-ink">{week ? 'What is the class learning this week?' : 'Topic or learning goal'}</span>
               <span className="text-xs text-ink-soft">
-                What are you teaching? Enter a topic, learning goal, or paste material.
+                {week
+                  ? 'One goal for the whole week. Wivoza writes an objective for each day, and you check them before the week is filled in.'
+                  : 'What are you teaching? Enter a topic, learning goal, or paste material.'}
               </span>
               <textarea
                 value={form.topic}
                 onChange={(e) => set('topic', e.target.value)}
                 disabled={generating}
                 rows={3}
-                placeholder="e.g. introducing cells"
+                placeholder={week ? 'e.g. calculating and interpreting key values of polynomial functions' : 'e.g. introducing cells'}
                 className={INPUT_CLASS}
               />
             </label>
@@ -958,7 +1066,7 @@ function BuildPanel() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-ink">How much time do you have?</span>
+              <span className="text-sm font-medium text-ink">{week ? 'How long is each class?' : 'How much time do you have?'}</span>
               <div className="flex flex-wrap items-center gap-2">
                 {DURATION_CHOICES.map((minutes) => (
                   <button
@@ -1007,6 +1115,48 @@ function BuildPanel() {
                 )}
               </div>
             </div>
+
+            {week && (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="text-sm font-medium text-ink">Which days do you teach this class?</legend>
+                <div className="flex flex-wrap gap-2">
+                  {WEEKDAYS.map((day) => (
+                    <button
+                      key={day}
+                      type="button"
+                      disabled={generating}
+                      aria-pressed={weekDays[day].on}
+                      onClick={() => setWeekDays((prev) => ({ ...prev, [day]: { ...prev[day], on: !prev[day].on } }))}
+                      className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                        weekDays[day].on ? 'bg-forest text-cream' : 'bg-cream text-ink-soft hover:text-ink'
+                      }`}
+                    >
+                      {day.slice(0, 3)}
+                    </button>
+                  ))}
+                </div>
+                <details className="rounded-xl border border-hairline bg-cream/40 px-3.5 py-2.5">
+                  <summary className="cursor-pointer text-xs font-semibold text-forest">Anything already set on a day? — optional</summary>
+                  <p className="mt-1.5 text-xs text-ink-soft">A quiz, a lab, a half day, or an objective you already have. Wivoza plans the week around it.</p>
+                  <div className="mt-2 flex flex-col gap-2">
+                    {chosenDays.map((day) => (
+                      <label key={day} className="flex items-center gap-2">
+                        <span className="w-12 shrink-0 text-xs font-semibold text-ink">{day.slice(0, 3)}</span>
+                        <input
+                          id={`week-note-${day}`}
+                          value={weekDays[day].note}
+                          onChange={(e) => setWeekDays((prev) => ({ ...prev, [day]: { ...prev[day], note: e.target.value } }))}
+                          disabled={generating}
+                          maxLength={300}
+                          placeholder={day === 'Friday' ? 'e.g. quiz' : ''}
+                          className="min-w-0 flex-1 rounded-xl border border-hairline bg-cream px-3 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </details>
+              </fieldset>
+            )}
 
             <details open={fromDebrief != null} className="rounded-2xl border border-hairline bg-cream/60 px-4 py-3">
               <summary className="cursor-pointer list-none text-sm font-semibold text-forest marker:hidden">
@@ -1063,10 +1213,11 @@ function BuildPanel() {
                 want; Quick Ideas is for the plan they are already writing. */}
             <fieldset className="flex flex-col gap-2">
               <legend className="text-sm font-medium text-ink">What do you want back?</legend>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-3">
                 {([
                   ['full', 'Full Lesson', 'A complete lesson you can teach and edit'],
                   ['ideas', 'Quick Ideas', '3-5 practical teaching ideas, briefly explained'],
+                  ['week', 'Plan a Week', 'An objective for each day, then the week filled in'],
                 ] as const).map(([value, label, hint]) => (
                   <label
                     key={value}
@@ -1096,18 +1247,20 @@ function BuildPanel() {
               <div className="flex justify-center py-1 text-forest">
                 <ProgressRing
                   progress={generateProgress}
-                  label={ideas ? 'Putting together ideas' : 'Building your lesson'}
-                  hint={ideas ? 'Usually about ten seconds.' : 'Usually about twenty seconds.'}
+                  label={ideas ? 'Putting together ideas' : week ? 'Planning your week' : 'Building your lesson'}
+                  hint={ideas ? 'Usually about ten seconds.' : week ? 'An objective for each day, in a few seconds.' : 'Usually about twenty seconds.'}
                 />
               </div>
             )}
             <button type="button" onClick={handleGenerate} disabled={generating || !canGenerate} className={`self-end ${PRIMARY_BUTTON}`}>
               {generating ? (
                 <span className="flex items-center gap-2">
-                  <Spinner /> {ideas ? 'Generating...' : 'Building...'}
+                  <Spinner /> {ideas ? 'Generating...' : week ? 'Planning...' : 'Building...'}
                 </span>
               ) : ideas ? (
                 'Generate Ideas'
+              ) : week ? (
+                'Plan My Week'
               ) : (
                 'Build My Lesson'
               )}

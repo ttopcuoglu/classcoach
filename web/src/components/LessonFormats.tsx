@@ -53,6 +53,10 @@ const KIND_LABEL: Record<TemplateSectionKind, string> = {
 
 const ACCEPT = '.docx,.pdf,.txt,.jpg,.jpeg,.png'
 
+/// The same default as sectionScope in server/src/lib/lessonTemplateModel.ts.
+const WEEK_KINDS: TemplateSectionKind[] = ['details', 'standards', 'essential_question', 'vocabulary']
+const scopeOf = (s: TemplateSection) => s.scope ?? (WEEK_KINDS.includes(s.kind) ? 'week' : 'day')
+
 type Draft = {
   templateId: string | null
   name: string
@@ -138,7 +142,8 @@ function FormatEditor({
       </div>
       {draft.cadence === 'weekly' && (
         <p className="rounded-lg bg-sage px-3 py-2 text-[13px] text-forest">
-          Weekly plans are coming next. Until then, each lesson is laid out as one day in these sections.
+          Plan a Week fills this form in for the whole week. Mark which boxes are filled once for the week and which are filled in each
+          day. A single lesson uses the same boxes, as one day.
         </p>
       )}
 
@@ -218,6 +223,18 @@ function FormatEditor({
                     </option>
                   ))}
                 </select>
+                {draft.cadence === 'weekly' && (
+                  <select
+                    id={`format-section-scope-${section.id}`}
+                    aria-label={`How often section ${i + 1} is filled in`}
+                    className="min-w-0 max-w-full rounded-full border border-divider bg-white py-1 pl-2.5 pr-7 text-[13px] text-forest focus:border-forest focus:outline-none"
+                    value={scopeOf(section)}
+                    onChange={(e) => setSection(i, { scope: e.target.value as 'week' | 'day' })}
+                  >
+                    <option value="day">each day</option>
+                    <option value="week">once for the week</option>
+                  </select>
+                )}
               </label>
               {section.kind === 'teacher_fills' && (
                 <p className="mt-1 pl-8 text-xs text-warm-gray">Left blank for the teacher. Wivoza never writes here.</p>

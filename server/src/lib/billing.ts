@@ -100,6 +100,7 @@ export const LESSON_PLANNING_ACTIONS = [
   'lesson_plan_delivery_deck',
   'lesson_plan_adapt',
   'lesson_plan_infer_context',
+  'lesson_plan_week',
 ]
 
 // Accounts that must never hit a wall or a paywall — the App Store review
