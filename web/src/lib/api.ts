@@ -2387,7 +2387,19 @@ export function setCanvasApiKey(id: string, data: { canvasUrl: string; apiClient
 }
 
 // Send to Canvas: a plan as a page in one of the teacher's Canvas courses.
-export type CanvasStatus = { available: boolean; connected: boolean; canvasName: string | null }
+/// available: the school can send to Canvas. connected: this teacher has
+/// allowed Wivoza to add pages. linked: Canvas opens Wivoza signed in.
+export type CanvasStatus = { available: boolean; connected: boolean; linked?: boolean; canvasName: string | null }
+
+/// Undoes both: Canvas stops signing them in, and Wivoza loses (and revokes
+/// in Canvas) its permission to add pages. Pages already sent stay.
+export async function disconnectCanvas(): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/canvas/connection`, { method: 'DELETE', credentials: 'include' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw apiError(body?.error ?? messageForStatus(res.status), res.status)
+  }
+}
 export type CanvasCourse = { id: string; name: string; courseCode: string | null }
 
 export function getCanvasStatus(): Promise<CanvasStatus> {

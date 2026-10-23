@@ -10,6 +10,7 @@ import {
   listTeachingCourses,
   normalizeCanvasUrl,
   refreshAccess,
+  revokeToken,
   type CanvasApp,
 } from './canvasApi.ts'
 import { lessonHtml, textToHtml } from './lessonHtml.ts'
@@ -153,4 +154,14 @@ test('sending creates an unpublished page and adds it to the module', async () =
 test('a revoked token comes back as a 401 the route can act on', async () => {
   const { doFetch } = fakeCanvas({ 'GET /api/v1/courses': () => [401, { errors: [{ message: 'Invalid access token.' }] }] })
   await assert.rejects(listTeachingCourses(APP.canvasUrl, 'old', doFetch), (e: unknown) => e instanceof CanvasApiError && e.status === 401)
+})
+
+test('disconnecting revokes the token in Canvas, and a failure there does not stop it', async () => {
+  const { seen, doFetch } = fakeCanvas({ 'DELETE /login/oauth2/token': () => [200, {}] })
+  await revokeToken(APP.canvasUrl, 'tok', doFetch)
+  assert.deepEqual(seen.map((r) => [r.method, r.path, r.auth]), [['DELETE', '/login/oauth2/token', 'Bearer tok']])
+  const failing = (async () => {
+    throw new Error('network down')
+  }) as unknown as typeof fetch
+  await revokeToken(APP.canvasUrl, 'tok', failing)
 })

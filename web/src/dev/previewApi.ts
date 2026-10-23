@@ -1396,8 +1396,17 @@ const previewCanvas: Json[] =
       ]
     : []
 
+let previewCanvasDisconnected = false
+
 function previewCanvasSend(path: string, body: Json): Json | Json[] | null {
-  if (path === '/api/canvas/status') return { available: previewCanvasMode === 'send', connected: true, canvasName: 'Canvas' }
+  if (path === '/api/canvas/status') {
+    const on = previewCanvasMode === 'send' && !previewCanvasDisconnected
+    return { available: previewCanvasMode === 'send', connected: on, linked: on, canvasName: 'Canvas' }
+  }
+  if (path === '/api/canvas/connection') {
+    previewCanvasDisconnected = true
+    return {}
+  }
   if (path === '/api/canvas/courses') return [{ id: '12', name: 'Algebra 2 — Period 3', courseCode: 'ALG2-3' }, { id: '14', name: 'Algebra 2 — Period 5', courseCode: 'ALG2-5' }]
   if (/^\/api\/canvas\/courses\/\d+\/modules$/.test(path)) return [{ id: '5', name: 'Unit 3: Polynomials' }, { id: '6', name: 'Unit 4: Rational functions' }]
   if (path === '/api/canvas/send') return { pageUrl: 'https://preview.instructure.com/courses/12/pages/lesson', addedToModule: !!body.moduleId, published: body.published === true }

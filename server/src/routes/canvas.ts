@@ -10,6 +10,7 @@ import {
   listModules,
   listTeachingCourses,
   refreshAccess,
+  revokeToken,
   type CanvasApp,
 } from '../lib/canvasApi.ts'
 import { lessonHtml } from '../lib/lessonHtml.ts'
@@ -122,17 +123,22 @@ async function withCanvas(req: Request, res: Response, fn: (canvasUrl: string, t
 
 // ---------------------------------------------------------------------------
 
+/// available: the school can send to Canvas. connected: this teacher has
+/// allowed Wivoza to add pages. linked: their Canvas account opens Wivoza
+/// signed in. Profile shows its Canvas card when either of the last two is true.
 canvasRouter.get('/status', async (req, res) => {
-  const found = await sendablePlatform(req.user!.userId)
-  if (!found) {
-    res.json({ available: false, connected: false, canvasName: null })
-    return
-  }
-  const token = await prisma.canvasToken.findUnique({
-    where: { userId_platformId: { userId: req.user!.userId, platformId: found.platform.id } },
-    select: { id: true },
+  const userId = req.user!.userId
+  const [found, tokens, links] = await Promise.all([
+    sendablePlatform(userId),
+    prisma.canvasToken.count({ where: { userId } }),
+    prisma.ltiUserLink.findMany({ where: { userId, platform: { archivedAt: null } }, select: { platform: { select: { name: true } } } }),
+  ])
+  res.json({
+    available: !!found,
+    connected: tokens > 0,
+    linked: links.length > 0,
+    canvasName: found?.platform.name ?? links[0]?.platform.name ?? null,
   })
-  res.json({ available: true, connected: !!token, canvasName: found.platform.name })
 })
 
 /// Opened in a pop-up: on to Canvas's consent screen.
@@ -245,7 +251,19 @@ canvasRouter.post('/send', async (req, res) => {
   })
 })
 
+/// Disconnect Canvas, from Profile: Canvas stops signing this teacher in and
+/// Wivoza loses its permission to add pages. Each token is revoked in Canvas
+/// too, so it is gone there and not only forgotten here. The pages already
+/// sent stay in Canvas — they are the teacher's.
 canvasRouter.delete('/connection', async (req, res) => {
-  await prisma.canvasToken.deleteMany({ where: { userId: req.user!.userId } })
+  const userId = req.user!.userId
+  const tokens = await prisma.canvasToken.findMany({ where: { userId }, include: { platform: { select: { canvasUrl: true } } } })
+  await Promise.all(
+    tokens.map(async (t) => {
+      const access = open(t.accessTokenEnc)
+      if (access && t.platform.canvasUrl) await revokeToken(t.platform.canvasUrl, access)
+    }),
+  )
+  await prisma.$transaction([prisma.canvasToken.deleteMany({ where: { userId } }), prisma.ltiUserLink.deleteMany({ where: { userId } })])
   res.status(204).end()
 })

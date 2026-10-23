@@ -8,6 +8,8 @@ import {
   restoreCoachMemory,
   getProfile,
   getTelegramStatus,
+  getCanvasStatus,
+  type CanvasStatus,
   resetData,
   TALK_VOICES,
   resolveTalkVoice,
@@ -18,6 +20,7 @@ import {
   type TalkVoice,
 } from '../lib/api'
 import TelegramConnect from '../components/TelegramConnect'
+import CanvasConnection from '../components/CanvasConnection'
 import { EXPERIENCE_OPTIONS } from '../lib/experience'
 import { FREE_SUMMARY, PLUS_MONTHLY_PRICE, PLUS_SUMMARY, PLUS_YEARLY_PER_MONTH, PLUS_YEARLY_PRICE } from '../lib/pricing'
 
@@ -53,6 +56,7 @@ export default function Profile() {
   const [coachMemoryEnabled, setCoachMemoryEnabled] = useState(true)
   const [talkVoice, setTalkVoice] = useState<TalkVoice | null>(null)
   const [telegram, setTelegram] = useState<TelegramStatus | null>(null)
+  const [canvas, setCanvas] = useState<CanvasStatus | null>(null)
   const [plan, setPlan] = useState<'free' | 'plus'>('free')
   const [plusAccess, setPlusAccess] = useState<UserProfile['plusAccess']>(null)
 
@@ -137,6 +141,15 @@ export default function Profile() {
     document.getElementById('telegram')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [hash, showTelegram])
   const afterTelegram = showTelegram ? 1 : 0
+  // Only for a teacher who has connected Canvas — read once, so the card
+  // stays to say "Disconnected" after they use it.
+  useEffect(() => {
+    getCanvasStatus()
+      .then(setCanvas)
+      .catch(() => setCanvas(null))
+  }, [])
+  const showCanvas = !!canvas && (canvas.linked === true || canvas.connected)
+  const afterCanvas = showCanvas ? 1 : 0
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -620,9 +633,22 @@ export default function Profile() {
         )}
       </div>
 
+      {showCanvas && canvas && (
+        <CanvasConnection
+          status={canvas}
+          heading={
+            <SectionHeading
+              n={5 + afterTelegram}
+              title="Canvas"
+              description="Your school's Canvas, connected to Wivoza. Nothing from Wivoza is shown to your students."
+            />
+          }
+        />
+      )}
+
       <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
         <SectionHeading
-          n={5 + afterTelegram}
+          n={5 + afterTelegram + afterCanvas}
           title="Your data"
           description="Export your saved scenarios and starred Q&A, or clear your data from this device."
         />

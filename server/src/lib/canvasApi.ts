@@ -49,6 +49,16 @@ export function authorizeUrl(app: CanvasApp, state: string): string {
   return url.toString()
 }
 
+/// Tells Canvas to forget a token, so a disconnect is not only Wivoza
+/// forgetting it. Best effort: a token Canvas already dropped is fine.
+export async function revokeToken(canvasUrl: string, accessToken: string, doFetch: Fetch = fetch): Promise<void> {
+  await doFetch(new URL('/login/oauth2/token', canvasUrl), {
+    method: 'DELETE',
+    headers: { authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(8000),
+  }).catch(() => undefined)
+}
+
 export type TokenGrant = { accessToken: string; refreshToken: string | null; expiresAt: Date; canvasUserId: string | null }
 
 async function tokenRequest(app: CanvasApp, params: Record<string, string>, doFetch: Fetch): Promise<TokenGrant> {
