@@ -1457,6 +1457,7 @@ function ImprovePanel() {
           plan={plan}
           adaptation={adaptation}
           delivery={{ loading: deliveryLoading, error: deliveryError, onRequest: handlePresentationFeedback }}
+          onFormatChange={(patch) => setPlan((prev) => (prev && prev.id === plan.id ? { ...prev, ...patch } : prev))}
           extras={
             <div className="flex flex-col gap-3">
               <CoachingChat

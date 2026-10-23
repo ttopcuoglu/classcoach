@@ -189,3 +189,26 @@ test('the source key changes with the lesson and with the template, and only the
   assert.notEqual(layoutSourceKey(LESSON, { ...template, updatedAt: new Date('2026-10-23T12:00:00Z') }), key)
   assert.notEqual(layoutSourceKey(LESSON, { ...template, id: 't2' }), key)
 })
+
+test("a teacher's own plan: the prompt asks for the parser's tags, and every box takes the model's text", async () => {
+  const { buildOwnPlanLayoutPrompt, ownPlanLayoutUserMessage, parseOwnPlanLayout } = await import('./lessonTemplateModel.ts')
+  const prompt = buildOwnPlanLayoutPrompt()
+  for (const tag of ['field', 'field_id', 'content']) assert.ok(prompt.includes(`<${tag}>`), `missing <${tag}>`)
+  assert.ok(!prompt.includes('<place>'), 'a plan the teacher wrote has no steps to place')
+
+  const message = ownPlanLayoutUserMessage({ planText: 'warm up - 3 qs on board', subject: 'Science' }, SECTIONS)
+  assert.ok(message.includes("The teacher's plan, as they wrote it:\nwarm up - 3 qs on board"))
+  assert.ok(!message.includes('id s3'), 'teacher-fills section was sent for the model to fill')
+
+  const laidOut = parseOwnPlanLayout(
+    `<field><field_id>s2</field_id><content>warm up - 3 qs on board</content></field>
+<field><field_id>s3</field_id><content>should stay blank</content></field>`,
+    SECTIONS,
+  )
+  assert.deepEqual(laidOut.map((s) => [s.id, s.text]), [
+    ['s1', ''],
+    ['s2', 'warm up - 3 qs on board'],
+    ['s3', ''],
+    ['s4', ''],
+  ])
+})

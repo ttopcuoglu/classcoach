@@ -1266,8 +1266,31 @@ function previewLayout(path: string, body: Json): Json {
   const all = [...list.personal, ...list.school]
   const template =
     previewTemplateChoice === 'wivoza' ? null : (all.find((t) => t.id === previewTemplateChoice) ?? all.find((t) => t.id === list.defaultId) ?? null)
+  if (path.includes('preview-feedback')) {
+    const brought = { ...FEEDBACK, templateChoice: previewTemplateChoice }
+    if (!template) return { plan: brought, appliedTemplateId: null }
+    // The teacher's own lines, moved into the form as they wrote them.
+    const own: Record<string, string> = {
+      opening: 'Do Now: three questions on the board.',
+      instruction: 'Mini-lesson: diffusion, then the membrane.',
+      independent_practice: 'Group work: the dialysis bag lab.',
+      exit_ticket: 'Exit: what does a membrane do?',
+    }
+    return {
+      plan: {
+        ...brought,
+        templateContent: {
+          templateId: template.id,
+          templateName: template.name,
+          sourceKey: `own:${template.id}`,
+          sections: (template.sections as Json[]).map((section) => ({ ...section, text: own[String(section.kind)] ?? '' })),
+        },
+      },
+      appliedTemplateId: template.id,
+    }
+  }
   const plan = lesson({ templateChoice: previewTemplateChoice })
-  if (!template || path.includes('preview-feedback')) return { plan, appliedTemplateId: null }
+  if (!template) return { plan, appliedTemplateId: null }
   const steps = SEQUENCE as unknown as { title: string; minutes: number; teacher: string; students: string }[]
   const stepKinds = new Set(['opening', 'instruction', 'guided_practice', 'independent_practice', 'activities', 'closing'])
   const stepSections = (template.sections as Json[]).filter((s) => stepKinds.has(String(s.kind)))

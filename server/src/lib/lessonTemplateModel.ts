@@ -359,6 +359,59 @@ export function parseLayout(text: string, sections: TemplateSection[], steps: Le
   }))
 }
 
+// ---------------------------------------------------------------------------
+// A plan the teacher wrote themselves (Improve a Lesson)
+// ---------------------------------------------------------------------------
+
+/// The teacher's own plan, moved into their school's sections. Unlike a
+/// Wivoza lesson there are no structured steps to copy, so the model moves the
+/// teacher's own text — and is held to their words, not a rewrite of them.
+export function buildOwnPlanLayoutPrompt(): string {
+  return `A K-12 teacher wrote their own lesson plan, and their school requires it in a particular template. Move what they wrote into the school's sections, so they can hand it in or post it without retyping. It is their plan: this is a move, not a rewrite.
+
+Rules:
+- Keep the teacher's own words. Move sentences and lines into the section they belong in; you may trim a heading of theirs that the section title now says, and join a line split across a page break. Do not reword, summarise, improve or add to what they wrote.
+- Keep the plan in its order. When the template splits the lesson across sections (opening, instruction, practice, closing), the parts of the plan go into them in the order the teacher teaches them.
+- Every line of the plan goes somewhere, whole. A line may be split between two sections, but no words are dropped — a goal written two ways ("kids understand X (SWBAT explain Y)") keeps both. If something fits no section, put it in the section closest to it.
+- Never invent a standard code, an objective, a timing, a check or anything else the plan does not say. A section the plan says nothing about stays empty — the teacher will fill it in.
+- The one exception to moving their text as it is: a details section is the form's header, and you write it as the form's fields. Use the field names in its title as the labels, one line each, in that order — for "Teacher / Date / Course / Room" that is "Teacher:", "Date:", "Course:", "Room:" — and put after each label the matching words from the plan or the details given ("Date: Tues 10/28", "Course: Gr 7 sci, period 2"). A field nothing answers is its label with nothing after it. Do not add labels the title does not name.
+- Never name, describe or guess at a specific student.
+- Plain text, no markdown. A leading "-" for list items, a blank line between paragraphs.
+
+Respond with exactly one <field> per section you were given, in the same order, and nothing outside them:
+
+<field>
+<field_id>the section's id, exactly as given</field_id>
+<content>The teacher's own text for this section. Empty if their plan has nothing for it.</content>
+</field>
+${CORE_COACHING_RULES}`
+}
+
+export function ownPlanLayoutUserMessage(plan: LayoutLesson & { planText: string }, sections: TemplateSection[]): string {
+  const details = [
+    plan.subject && `Subject: ${plan.subject}`,
+    plan.gradeLevel && `Grade: ${plan.gradeLevel}`,
+    plan.unitName && `Unit: ${plan.unitName}`,
+    plan.standard && `Standard (as the teacher gave it): ${plan.standard}`,
+  ].filter(Boolean)
+  return [
+    `The school's sections, in order:\n${sectionsToFill(sections).map(describe).join('\n')}`,
+    details.length ? `Details the teacher gave:\n${details.join('\n')}` : 'The teacher gave no subject, grade, unit or standard.',
+    `The teacher's plan, as they wrote it:\n${plan.planText}`,
+  ].join('\n\n')
+}
+
+/// Every section takes the model's text — there are no steps to place — and
+/// a teacher-fills box stays blank whatever came back.
+export function parseOwnPlanLayout(text: string, sections: TemplateSection[]): LaidOutSection[] {
+  const written = new Map<string, string>()
+  for (const m of text.matchAll(/<field>([\s\S]*?)<\/field>/g)) {
+    const id = extractTag(m[1], 'field_id')?.trim()
+    if (id) written.set(id, extractTag(m[1], 'content')?.trim() ?? '')
+  }
+  return sections.map((s) => ({ id: s.id, title: s.title, kind: s.kind, text: s.kind === 'teacher_fills' ? '' : (written.get(s.id) ?? '') }))
+}
+
 /// A layout with nothing in it is a response that went wrong, not a lesson
 /// that had nothing to say — every lesson has at least an objective and steps.
 export function isUsableLayout(sections: LaidOutSection[]): boolean {

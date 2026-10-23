@@ -46,10 +46,13 @@ import {
 } from '../lib/lessonWeekModel.ts'
 import {
   buildLayoutPrompt,
+  buildOwnPlanLayoutPrompt,
   isUsableLayout,
   layoutSourceKey,
   layoutUserMessage,
+  ownPlanLayoutUserMessage,
   parseLayout,
+  parseOwnPlanLayout,
   sanitizeSections,
   type TemplateContent,
 } from '../lib/lessonTemplateModel.ts'
@@ -1627,8 +1630,12 @@ lessonPlansRouter.post('/:id/layout', async (req, res) => {
   const owner = await loadTemplateOwner(userId)
   const template = owner ? await templateForChoice(owner, plan.templateChoice) : null
   const structured = ((plan.sequence as unknown[] | null) ?? []).length > 0
+  // A plan the teacher wrote (Improve a Lesson) is laid out from their own
+  // text; Quick Ideas and the old five-slot samples are not lesson plans to
+  // hand in, so they have no layout.
+  const ownPlan = !structured && plan.mode === 'feedback' && !!plan.planText?.trim()
   const sections = template ? sanitizeSections(template.sections) : null
-  if (!template || !sections || !structured) {
+  if (!template || !sections || (!structured && !ownPlan)) {
     res.json({ plan, appliedTemplateId: null })
     return
   }
@@ -1652,16 +1659,23 @@ lessonPlansRouter.post('/:id/layout', async (req, res) => {
     flight = (async () => {
       const response = await anthropic.messages.create({
         model: CLAUDE_MODEL,
-        max_tokens: 4000,
+        // A teacher's own plan comes back whole, in their words, so it can
+        // run longer than placing a Wivoza lesson's steps.
+        max_tokens: ownPlan ? 6000 : 4000,
         thinking: { type: 'disabled' },
-        system: buildLayoutPrompt(),
-        messages: [{ role: 'user', content: layoutUserMessage(lesson, sections) }],
+        system: ownPlan ? buildOwnPlanLayoutPrompt() : buildLayoutPrompt(),
+        messages: [
+          {
+            role: 'user',
+            content: ownPlan ? ownPlanLayoutUserMessage({ ...lesson, planText: lesson.planText! }, sections) : layoutUserMessage(lesson, sections),
+          },
+        ],
       })
       const text = response.content
         .filter((block) => block.type === 'text')
         .map((block) => block.text)
         .join('\n')
-      const laidOut = parseLayout(text, sections, (lesson.sequence as unknown as LessonStep[] | null) ?? [])
+      const laidOut = ownPlan ? parseOwnPlanLayout(text, sections) : parseLayout(text, sections, (lesson.sequence as unknown as LessonStep[] | null) ?? [])
       if (!isUsableLayout(laidOut)) {
         console.error('[lesson-plans] layout came back empty — stop_reason:', response.stop_reason)
         return null

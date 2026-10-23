@@ -581,13 +581,15 @@ const HELD_BY: Record<string, TemplateSectionKind[]> = {
   exit: ['exit_ticket', 'assessment'],
 }
 
-function templateSections(content: TemplateContent): DocSection[] {
+function templateSections(content: TemplateContent, ownPlan: boolean): DocSection[] {
   return content.sections.map((section) => {
     const blocks = textBlocks(section.text)
     const empty =
       section.kind === 'teacher_fills'
         ? 'For you to fill in.'
-        : 'Nothing in this lesson goes here. Fill it in yourself, or leave it.'
+        : ownPlan
+          ? 'Your plan has nothing for this box. Fill it in yourself, or leave it.'
+          : 'Nothing in this lesson goes here. Fill it in yourself, or leave it.'
     return {
       key: section.id,
       title: section.title,
@@ -623,12 +625,24 @@ function templateExportDoc(plan: LessonPlan, content: TemplateContent): ExportDo
 
 function TemplateDocument({ plan, content }: { plan: LessonPlan; content: TemplateContent }) {
   const kinds = new Set(content.sections.map((s) => s.kind))
-  const extras = documentSections(plan, false).filter((section) => !(HELD_BY[section.key] ?? []).some((kind) => kinds.has(kind)))
+  // A plan the teacher brought is all of it in the format; Coach's feedback
+  // on it is not part of the plan, and stays open above it rather than being
+  // tucked away with the extras.
+  const isImprove = plan.mode === 'feedback'
+  const feedback = isImprove ? documentSections(plan, false).filter((section) => section.key === 'feedback') : []
+  const extras = isImprove ? [] : documentSections(plan, false).filter((section) => !(HELD_BY[section.key] ?? []).some((kind) => kinds.has(kind)))
   const [extrasOpen, setExtrasOpen] = useState(false)
   return (
     <div className="flex flex-col gap-3">
+      {feedback.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-divider bg-white">
+          {feedback.map((section, i) => (
+            <SectionRow key={section.key} n={i + 1} section={section} preview={false} />
+          ))}
+        </div>
+      )}
       <div className="overflow-hidden rounded-2xl border border-divider bg-white">
-        {templateSections(content).map((section, i) => (
+        {templateSections(content, isImprove).map((section, i) => (
           <SectionRow key={section.key} n={i + 1} section={section} preview={false} />
         ))}
       </div>
@@ -667,6 +681,7 @@ function TemplateDocument({ plan, content }: { plan: LessonPlan; content: Templa
 function lessonSignature(plan: LessonPlan): string {
   return JSON.stringify([
     plan.id,
+    plan.planText,
     plan.objective,
     plan.successCriteria,
     plan.materials,
@@ -1357,7 +1372,10 @@ export default function LessonWorkspace({
   const canDeliver = !isIdeas
   const hasTools = canAdapt || canDeliver
 
-  const format = useLessonFormat(plan, isFullLesson && plan.mode === 'generated' && !!onFormatChange, onFormatChange)
+  // A built lesson, or a plan the teacher brought (Improve a Lesson): both
+  // are lesson plans a school wants in its own form.
+  const formatable = (isFullLesson && plan.mode === 'generated') || (isImprove && !!plan.planText?.trim())
+  const format = useLessonFormat(plan, formatable && !!onFormatChange, onFormatChange)
   const [formatsOpen, setFormatsOpen] = useState(false)
   const [wordOpen, setWordOpen] = useState(false)
   const content = format.content
