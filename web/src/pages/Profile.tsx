@@ -643,8 +643,8 @@ export default function Profile() {
           heading={
             <SectionHeading
               n={5 + afterTelegram}
-              title="Canvas"
-              description="Your school's Canvas, connected to Wivoza. Nothing from Wivoza is shown to your students."
+              title={({ schoology: 'Schoology', brightspace: 'Brightspace', moodle: 'Moodle', blackboard: 'Blackboard' } as Record<string, string>)[canvas.lms ?? ''] ?? 'Canvas'}
+              description="Your school's LMS, connected to Wivoza. Nothing from Wivoza is shown to your students."
             />
           }
         />

@@ -924,17 +924,24 @@ model SchoolInquiry {
   @@index([createdAt])
 }
 
-// A school's Canvas, connected to Wivoza over LTI 1.3 (see routes/lti.ts).
-// A Canvas admin creates a developer key from Wivoza's config URL; the
-// school's Wivoza admin then enters that key's client id here. One row per
-// (issuer, clientId): the issuer names the Canvas environment, the client id
-// the key, and together they identify whose launches these are.
+// A school's LMS, connected to Wivoza over LTI 1.3 (see routes/lti.ts and
+// lib/lti.ts). `lms` says which: Canvas, Brightspace and Moodle register
+// Wivoza per school, so each school has its own client id; Schoology and
+// Blackboard register Wivoza once, so every school shares Wivoza's client id
+// and is told apart by its deploymentId. One row per (issuer, clientId,
+// deploymentId), checked by the routes because a null deploymentId is not
+// unique in Postgres.
 model LtiPlatform {
   id              String       @id @default(cuid())
   organizationId  String
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name            String
-  environment     String // "production" | "beta" | "test" — Instructure-hosted Canvas only
+  lms             String       @default("canvas") // "canvas" | "schoology" | "brightspace" | "moodle" | "blackboard"
+  environment     String // Canvas: "production" | "beta" | "test"; otherwise the lms again
+  // The install this row is for, when the LMS gives one. Required where the
+  // client id is shared (Schoology, Blackboard); optional elsewhere, and
+  // then any deployment of this client id is this school's.
+  deploymentId    String?
   issuer          String
   clientId        String
   authUrl         String
@@ -954,7 +961,7 @@ model LtiPlatform {
   apiClientSecretEnc String?
   canvasTokens       CanvasToken[]
 
-  @@unique([issuer, clientId])
+  @@index([issuer, clientId])
 }
 
 // A teacher's permission for Wivoza to add pages to their Canvas courses,

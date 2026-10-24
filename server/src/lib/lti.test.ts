@@ -2,7 +2,21 @@ import assert from 'node:assert/strict'
 import { generateKeyPairSync } from 'node:crypto'
 import { test } from 'node:test'
 import jwt from 'jsonwebtoken'
-import { authRedirectUrl, CANVAS_ENVIRONMENTS, canvasConfig, getToolKey, isStaff, LtiLaunchError, verifyLaunch } from './lti.ts'
+import {
+  authRedirectUrl,
+  CANVAS_ENVIRONMENTS,
+  canvasConfig,
+  choosePlatform,
+  cleanClientId,
+  cleanDeploymentId,
+  cleanHttpsUrl,
+  cleanIssuer,
+  getToolKey,
+  isStaff,
+  LtiLaunchError,
+  vendorApp,
+  verifyLaunch,
+} from './lti.ts'
 
 // A stand-in for Canvas: its own key pair, its JWKS, and launches signed with
 // it. Every check verifyLaunch makes is one a forged or replayed launch would
@@ -112,4 +126,46 @@ test("the sign-in redirect carries what Canvas's authorize endpoint needs", () =
   })) {
     assert.equal(url.searchParams.get(k), v, k)
   }
+})
+
+test('a launch goes to the school whose deployment it is, never a guess between two', () => {
+  const a = { id: 'a', deploymentId: 'dep-A' }
+  const b = { id: 'b', deploymentId: 'dep-B' }
+  const any = { id: 'any', deploymentId: null }
+  assert.equal(choosePlatform([a, b], 'dep-B')?.id, 'b')
+  assert.equal(choosePlatform([a, b], 'dep-C'), null, 'an unknown deployment of a shared app belongs to no one')
+  assert.equal(choosePlatform([a, b], null), null)
+  assert.equal(choosePlatform([any], 'whatever')?.id, 'any', 'a Canvas key with no deployment set takes any of its deployments')
+  assert.equal(choosePlatform([a, any], 'dep-A')?.id, 'a', 'an exact deployment wins')
+  assert.equal(choosePlatform([any, { id: 'any2', deploymentId: null }], 'x'), null, 'two open installs is ambiguous')
+})
+
+test('what admins paste is checked for its shape', () => {
+  assert.equal(cleanClientId(' 10000000000123 '), '10000000000123')
+  assert.equal(cleanClientId('a1b2-C3d4_e5.f6:7'), 'a1b2-C3d4_e5.f6:7')
+  assert.equal(cleanClientId('has space'), null)
+  assert.equal(cleanDeploymentId('3376:eb4a20e0255e8625f8a829624f2d71e0f065063b'), '3376:eb4a20e0255e8625f8a829624f2d71e0f065063b')
+  assert.equal(cleanDeploymentId('two words'), null)
+  assert.equal(cleanIssuer(' https://moodle.school.org '), 'https://moodle.school.org', 'kept exactly, it is compared exactly')
+  assert.equal(cleanIssuer('http://moodle.school.org'), null)
+  assert.equal(cleanHttpsUrl('https://moodle.school.org/mod/lti/auth.php'), 'https://moodle.school.org/mod/lti/auth.php')
+  assert.equal(cleanHttpsUrl('https://moodle.school.org/'), 'https://moodle.school.org')
+  assert.equal(cleanHttpsUrl('javascript:alert(1)'), null)
+})
+
+test("Wivoza's own Schoology and Blackboard apps come from the environment", () => {
+  const before = { s: process.env.LTI_SCHOOLOGY_CLIENT_ID, b: process.env.LTI_BLACKBOARD_APP_ID }
+  delete process.env.LTI_SCHOOLOGY_CLIENT_ID
+  delete process.env.LTI_BLACKBOARD_APP_ID
+  assert.equal(vendorApp('schoology'), null)
+  assert.equal(vendorApp('blackboard'), null)
+  process.env.LTI_SCHOOLOGY_CLIENT_ID = '7700000123'
+  process.env.LTI_BLACKBOARD_APP_ID = 'app-guid'
+  assert.equal(vendorApp('schoology')?.issuer, 'https://schoology.schoology.com')
+  assert.equal(vendorApp('blackboard')?.issuer, 'https://blackboard.com')
+  assert.equal(vendorApp('blackboard')?.jwksUrl, 'https://developer.blackboard.com/api/v1/management/applications/app-guid/jwks.json')
+  process.env.LTI_SCHOOLOGY_CLIENT_ID = before.s ?? ''
+  process.env.LTI_BLACKBOARD_APP_ID = before.b ?? ''
+  if (!before.s) delete process.env.LTI_SCHOOLOGY_CLIENT_ID
+  if (!before.b) delete process.env.LTI_BLACKBOARD_APP_ID
 })

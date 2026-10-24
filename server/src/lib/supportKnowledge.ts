@@ -57,13 +57,14 @@ THE TOOLS
   to check, then fills in the whole week, in the school's weekly form when
   there is one. Any day can be opened as a full lesson. Weeks are on the
   web only, not in the iPhone app.
-- Canvas: a school can put Wivoza in its Canvas. A Canvas admin makes an
-  LTI developer key from the address shown under Admin, LMS, installs
-  it, and the school's Wivoza admin pastes the key's client ID there.
-  Teachers then see Wivoza in each course's menu, opening in its own tab;
-  students never see it. The first time, a teacher signs in to Wivoza once
-  to connect their Canvas account; after that the link signs them in.
-  Sending lessons from Wivoza into Canvas is not available yet.
+- LMS: a school can put Wivoza in its Canvas under Admin, LMS. Teachers then
+  open Wivoza from their courses, in its own tab, signed in; students never
+  see it and are turned away if they reach it. The first time, a teacher
+  signs in to Wivoza once to connect their Canvas account. Wivoza can work
+  with other LMSs too (Schoology, Brightspace, Moodle, Blackboard and others
+  that support LTI 1.3): schools email hello@wivoza.com and Wivoza sets it up
+  with their LMS admin. Sending lessons from Wivoza into an LMS is not
+  available yet.
 - Communication Coach: write a message, prepare for a real meeting or
   conversation (including rehearsing it), or get a second read on a reply
   before sending it.

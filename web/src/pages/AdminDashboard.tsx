@@ -372,7 +372,8 @@ export default function AdminDashboard() {
                 <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">Your LMS<span className="text-gold">.</span></h1>
                 <p className="mt-1 max-w-2xl text-sm text-ink-soft">
                   Put Wivoza in your school's learning management system, so teachers open it from their courses already signed in.
-                  Students never see it. Canvas is supported today: your Canvas admin does the Canvas half, and you paste one number here.
+                  Canvas connects here: your Canvas admin does the Canvas half, and you paste one number back. Another LMS? We can work
+                  with it — see below.
                 </p>
               </div>
               <div className="max-w-3xl">

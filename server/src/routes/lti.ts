@@ -6,23 +6,33 @@ import {
   authRedirectUrl,
   CANVAS_ENVIRONMENTS,
   canvasConfig,
+  choosePlatform,
+  cleanClientId,
+  cleanDeploymentId,
+  cleanHttpsUrl,
+  cleanIssuer,
   getToolKey,
   isCanvasEnvironment,
+  isLmsKind,
   isStaff,
+  LMS_LABEL,
   LtiLaunchError,
+  vendorApp,
   verifyLaunch,
+  type LmsKind,
 } from '../lib/lti.ts'
 import { normalizeCanvasUrl } from '../lib/canvasApi.ts'
 import { prisma } from '../lib/prisma.ts'
 import { seal } from '../lib/secretBox.ts'
 import { COOKIE_OPTIONS } from './auth.ts'
 
-// Wivoza inside Canvas (LTI 1.3). The protocol lives in lib/lti.ts; this file
-// is the doors: the configuration and public key Canvas reads, the two-step
-// sign-in a launch goes through, connecting a Canvas user to their Wivoza
-// account once, and the admin side where a school adds its Canvas.
+// Wivoza inside a school's LMS (LTI 1.3): Canvas, Schoology, Brightspace,
+// Moodle and Blackboard. The protocol lives in lib/lti.ts; this file is the
+// doors: the configuration and public key an LMS reads, the two-step sign-in
+// a launch goes through, connecting an LMS user to their Wivoza account once,
+// and the admin side where a school adds its LMS.
 //
-// Public, mounted before requireAuth: Canvas's browser redirects carry no
+// Public, mounted before requireAuth: the LMS's browser redirects carry no
 // Wivoza session. The routes that need one say so.
 
 export const ltiRouter = Router()
@@ -89,31 +99,59 @@ const STATE_COOKIE_OPTIONS = {
 // Step one: Canvas sends the browser here; we send it on to Canvas's sign-in
 // ---------------------------------------------------------------------------
 
+const lmsName = (lms: string | undefined) => (lms && isLmsKind(lms) ? LMS_LABEL[lms] : 'LMS')
+
+function notConnectedPage(res: Response, lms: string | undefined, detail: { clientId?: string | null; deploymentId?: string | null }) {
+  const name = lmsName(lms)
+  const ids = [
+    detail.clientId && `the client ID <code>${escapeHtml(detail.clientId)}</code>`,
+    detail.deploymentId && `the deployment ID <code>${escapeHtml(detail.deploymentId)}</code>`,
+  ].filter(Boolean)
+  sendPage(
+    res,
+    404,
+    `This ${name} isn't connected yet`,
+    `<p>Your school's ${name} has Wivoza installed, but Wivoza doesn't know this install yet.</p><p>Your school's Wivoza admin can add it under Admin → LMS${ids.length ? `, using ${ids.join(' and ')}` : ''}.</p>`,
+  )
+}
+
+/// The installs a launch could belong to. Most LMSs send their client id at
+/// step one; Blackboard does not, so an issuer alone is enough when every
+/// install under it shares one client id (Wivoza's own app there).
+async function candidatesFor(issuer: string, clientId: string | null) {
+  const rows = await prisma.ltiPlatform.findMany({ where: { issuer, archivedAt: null, ...(clientId ? { clientId } : {}) } })
+  const clientIds = new Set(rows.map((r) => r.clientId))
+  return clientIds.size > 1 ? [] : rows
+}
+
 async function handleLogin(req: Request, res: Response) {
   const params = { ...(req.query as Record<string, unknown>), ...((req.body as Record<string, unknown>) ?? {}) }
   const str = (v: unknown) => (typeof v === 'string' && v ? v : null)
   const iss = str(params.iss)
   const clientId = str(params.client_id)
+  const deploymentId = str(params.lti_deployment_id) ?? str(params.deployment_id)
   const loginHint = str(params.login_hint)
   if (!iss || !loginHint) {
-    sendPage(res, 400, 'Open Wivoza from Canvas', '<p>This address is the start of Wivoza\'s sign-in from Canvas. Use the Wivoza link in your course instead.</p>')
+    sendPage(res, 400, 'Open Wivoza from your LMS', "<p>This address is the start of Wivoza's sign-in from your school's LMS. Use the Wivoza link in your course instead.</p>")
     return
   }
 
-  const platform = clientId ? await prisma.ltiPlatform.findFirst({ where: { issuer: iss, clientId, archivedAt: null } }) : null
-  if (!platform) {
-    sendPage(
-      res,
-      404,
-      "This Canvas isn't connected yet",
-      `<p>Your school's Canvas has Wivoza installed, but Wivoza doesn't know this install yet.</p><p>Your school's Wivoza admin can add it under Admin → LMS, using the client ID${clientId ? ` <code>${escapeHtml(clientId)}</code>` : ''}.</p>`,
-    )
+  const candidates = await candidatesFor(iss, clientId)
+  // When step one names the install, an install Wivoza doesn't know is said
+  // so now; otherwise the launch itself carries it and step two decides.
+  if (!candidates.length || (deploymentId && !choosePlatform(candidates, deploymentId))) {
+    notConnectedPage(res, candidates[0]?.lms, { clientId, deploymentId })
     return
   }
+  const platform = candidates[0]
 
   const state = randomBytes(24).toString('base64url')
   const nonce = randomBytes(24).toString('base64url')
-  res.cookie(stateCookie(state), jwt.sign({ purpose: 'lti-state', nonce, platformId: platform.id }, JWT_SECRET, { expiresIn: STATE_TTL_SECONDS }), STATE_COOKIE_OPTIONS)
+  res.cookie(
+    stateCookie(state),
+    jwt.sign({ purpose: 'lti-state', nonce, issuer: platform.issuer, clientId: platform.clientId }, JWT_SECRET, { expiresIn: STATE_TTL_SECONDS }),
+    STATE_COOKIE_OPTIONS,
+  )
   res.redirect(
     302,
     authRedirectUrl(platform, { redirectUri: LAUNCH_URL, loginHint, messageHint: str(params.lti_message_hint), state, nonce }),
@@ -130,7 +168,7 @@ ltiRouter.post('/login', form, handleLogin)
 ltiRouter.post('/launch', form, async (req, res) => {
   const { id_token: idToken, state } = (req.body ?? {}) as Record<string, unknown>
   if (typeof idToken !== 'string' || typeof state !== 'string') {
-    sendPage(res, 400, 'Open Wivoza from Canvas', '<p>Use the Wivoza link in your Canvas course.</p>')
+    sendPage(res, 400, 'Open Wivoza from your LMS', '<p>Use the Wivoza link in your course.</p>')
     return
   }
 
@@ -138,10 +176,10 @@ ltiRouter.post('/launch', form, async (req, res) => {
   // the nonce the token has to repeat. One use only.
   const cookie = req.cookies?.[stateCookie(state)]
   res.clearCookie(stateCookie(state), { ...STATE_COOKIE_OPTIONS, maxAge: undefined })
-  let started: { nonce: string; platformId: string } | null = null
+  let started: { nonce: string; issuer: string; clientId: string } | null = null
   try {
-    const payload = jwt.verify(String(cookie ?? ''), JWT_SECRET) as { purpose?: string; nonce: string; platformId: string }
-    if (payload.purpose === 'lti-state') started = payload
+    const payload = jwt.verify(String(cookie ?? ''), JWT_SECRET) as { purpose?: string; nonce: string; issuer?: string; clientId?: string }
+    if (payload.purpose === 'lti-state' && payload.issuer && payload.clientId) started = { nonce: payload.nonce, issuer: payload.issuer, clientId: payload.clientId }
   } catch {
     started = null
   }
@@ -150,29 +188,37 @@ ltiRouter.post('/launch', form, async (req, res) => {
       res,
       400,
       'That took too long',
-      "<p>The sign-in from Canvas expired or was opened in a different browser. Go back to Canvas and click Wivoza again.</p><p>If it keeps happening, check that your browser isn't blocking cookies for wivoza.com.</p>",
+      "<p>The sign-in from your LMS expired or was opened in a different browser. Go back to your course and click Wivoza again.</p><p>If it keeps happening, check that your browser isn't blocking cookies for wivoza.com.</p>",
     )
     return
   }
 
-  const platform = await prisma.ltiPlatform.findFirst({ where: { id: started.platformId, archivedAt: null } })
-  if (!platform) {
-    sendPage(res, 404, "This Canvas isn't connected any more", "<p>Your school's Wivoza admin has removed this Canvas install.</p>")
+  const candidates = await candidatesFor(started.issuer, started.clientId)
+  if (!candidates.length) {
+    sendPage(res, 404, "This LMS isn't connected any more", "<p>Your school's Wivoza admin has removed this install.</p>")
     return
   }
 
+  // Every install under one issuer and client id shares its signing keys,
+  // so any of them checks the token; the token's deployment then says whose
+  // launch it is.
   let claims
   try {
-    claims = await verifyLaunch(idToken, platform, started.nonce)
+    claims = await verifyLaunch(idToken, candidates[0], started.nonce)
   } catch (error) {
     const message = error instanceof LtiLaunchError ? error.message : 'The launch could not be checked.'
-    console.warn('[lti] launch refused:', platform.id, message)
-    sendPage(res, 400, "Wivoza couldn't open", `<p>${escapeHtml(message)}</p><p>Go back to Canvas and try again.</p>`)
+    console.warn('[lti] launch refused:', started.issuer, message)
+    sendPage(res, 400, "Wivoza couldn't open", `<p>${escapeHtml(message)}</p><p>Go back to your course and try again.</p>`)
+    return
+  }
+  const platform = choosePlatform(candidates, claims.deploymentId)
+  if (!platform) {
+    notConnectedPage(res, candidates[0].lms, { clientId: started.clientId, deploymentId: claims.deploymentId })
     return
   }
 
-  // Course navigation is already hidden from students; this is the check that
-  // does not depend on how a Canvas admin set it up.
+  // Where the LMS can hide the link from students it does; this is the check
+  // that does not depend on how an LMS admin set it up.
   if (!isStaff(claims.roles)) {
     sendPage(res, 403, 'Wivoza is for teachers', '<p>Wivoza is a coaching tool for teachers, so there is nothing here for a student account.</p>')
     return
@@ -233,7 +279,12 @@ ltiRouter.get('/pending', requireAuth, async (req, res) => {
     res.status(404).json({ error: 'This link from Canvas has expired. Go back to Canvas and click Wivoza again.' })
     return
   }
-  res.json({ canvasName: pending.platform.name, schoolName: pending.platform.organization.name, nameInCanvas: pending.name })
+  res.json({
+    canvasName: pending.platform.name,
+    lmsName: lmsName(pending.platform.lms),
+    schoolName: pending.platform.organization.name,
+    nameInCanvas: pending.name,
+  })
 })
 
 ltiRouter.post('/connect', requireAuth, async (req, res) => {
@@ -280,8 +331,10 @@ ltiRouter.get('/platforms', requireAuth, async (req, res) => {
     select: {
       id: true,
       name: true,
+      lms: true,
       environment: true,
       clientId: true,
+      deploymentId: true,
       createdAt: true,
       canvasUrl: true,
       apiClientId: true,
@@ -292,6 +345,10 @@ ltiRouter.get('/platforms', requireAuth, async (req, res) => {
   res.json({
     configUrl: `${APP_URL}/api/lti/config.json`,
     oauthRedirectUri: `${APP_URL}/api/canvas/oauth/callback`,
+    // What an LMS admin types into their LMS when it has no configuration URL.
+    toolUrls: { login: `${APP_URL}/api/lti/login`, launch: LAUNCH_URL, jwks: `${APP_URL}/api/lti/jwks`, domain: new URL(APP_URL).host },
+    // Wivoza's own app in Schoology and Blackboard; null until it is registered.
+    vendorApps: { schoology: vendorApp('schoology')?.clientId ?? null, blackboard: vendorApp('blackboard')?.clientId ?? null },
     // The secret itself never leaves the server; the page only learns whether one is set.
     platforms: platforms.map(({ _count, apiClientSecretEnc, ...p }) => ({
       ...p,
@@ -302,35 +359,96 @@ ltiRouter.get('/platforms', requireAuth, async (req, res) => {
   })
 })
 
+type Registration = { lms: LmsKind; environment: string; issuer: string; clientId: string; authUrl: string; jwksUrl: string; deploymentId: string | null }
+
+/// What the admin entered, as an install — or the sentence that says what is
+/// missing. Each LMS asks for only what it cannot be known without the admin.
+function readRegistration(body: Record<string, unknown>): Registration | { error: string; status?: number } {
+  const lms = body.lms ?? 'canvas'
+  if (!isLmsKind(lms)) return { error: 'Pick your LMS.' }
+  const deploymentId = body.deploymentId == null || body.deploymentId === '' ? null : cleanDeploymentId(body.deploymentId)
+  if (body.deploymentId && !deploymentId) return { error: 'That deployment ID has characters an LMS would not use. Paste it again.' }
+
+  if (lms === 'canvas') {
+    const env = body.environment ?? 'production'
+    const clientId = typeof body.clientId === 'string' ? body.clientId.trim() : ''
+    if (!isCanvasEnvironment(env) || !/^\d{4,30}$/.test(clientId)) {
+      return { error: "Enter the developer key's client ID — the long number Canvas shows under Details." }
+    }
+    return { lms, environment: env, ...CANVAS_ENVIRONMENTS[env], clientId, deploymentId }
+  }
+
+  if (lms === 'schoology' || lms === 'blackboard') {
+    const app = vendorApp(lms)
+    if (!app) return { error: `Wivoza's ${LMS_LABEL[lms]} app isn't available yet. Contact Wivoza to set it up for your school.`, status: 409 }
+    if (!deploymentId) return { error: `Enter the deployment ID ${LMS_LABEL[lms]} shows for your Wivoza install.` }
+    return { lms, environment: lms, ...app, deploymentId }
+  }
+
+  // Brightspace and Moodle: each school's own registration, so its own
+  // issuer and endpoints, copied from the LMS's registration details.
+  const clientId = cleanClientId(body.clientId)
+  const issuer = cleanIssuer(body.issuer)
+  const authUrl = cleanHttpsUrl(body.authUrl)
+  const jwksUrl = cleanHttpsUrl(body.jwksUrl)
+  if (!clientId) return { error: 'Enter the client ID your LMS shows for Wivoza.' }
+  if (!issuer) return { error: lms === 'moodle' ? "Enter Moodle's Platform ID — it starts with https://." : "Enter Brightspace's Issuer — it starts with https://." }
+  if (!authUrl) return { error: lms === 'moodle' ? 'Enter the Authentication request URL from Moodle.' : 'Enter the OpenID Connect Authentication Endpoint from Brightspace.' }
+  if (!jwksUrl) return { error: lms === 'moodle' ? 'Enter the Public keyset URL from Moodle.' : 'Enter the Brightspace Keyset URL.' }
+  return { lms, environment: lms, issuer, clientId, authUrl, jwksUrl, deploymentId }
+}
+
 ltiRouter.post('/platforms', requireAuth, async (req, res) => {
   const admin = await schoolAdmin(req, res)
   if (!admin) return
-  const { environment, clientId, name } = req.body ?? {}
-  const env = environment ?? 'production'
-  const cleanClientId = typeof clientId === 'string' ? clientId.trim() : ''
-  if (!isCanvasEnvironment(env) || !/^\d{4,30}$/.test(cleanClientId)) {
-    res.status(400).json({ error: "Enter the developer key's client ID — the long number Canvas shows under Details." })
+  const reg = readRegistration((req.body ?? {}) as Record<string, unknown>)
+  if ('error' in reg) {
+    res.status(reg.status ?? 400).json({ error: reg.error })
     return
   }
-  const cleanName = typeof name === 'string' && name.trim() ? name.trim().slice(0, 80) : 'Canvas'
-  const { issuer, authUrl, jwksUrl } = CANVAS_ENVIRONMENTS[env]
+  const cleanName = typeof req.body?.name === 'string' && req.body.name.trim() ? req.body.name.trim().slice(0, 80) : LMS_LABEL[reg.lms]
 
-  const existing = await prisma.ltiPlatform.findUnique({ where: { issuer_clientId: { issuer, clientId: cleanClientId } } })
-  if (existing && existing.organizationId !== admin.organizationId) {
-    res.status(409).json({ error: 'That Canvas key is already connected to a different school.' })
+  // Two installs clash when a launch could belong to either: the same issuer
+  // and client id, and the same deployment or one that takes any deployment.
+  const sameKey = await prisma.ltiPlatform.findMany({ where: { issuer: reg.issuer, clientId: reg.clientId } })
+  const clashes = sameKey.filter((p) => !reg.deploymentId || !p.deploymentId || p.deploymentId === reg.deploymentId)
+  const elsewhere = clashes.find((p) => p.organizationId !== admin.organizationId && !p.archivedAt)
+  if (elsewhere) {
+    res.status(409).json({ error: `That ${LMS_LABEL[reg.lms]} install is already connected to a different school.` })
     return
   }
-  if (existing && !existing.archivedAt) {
-    res.status(409).json({ error: 'That Canvas key is already connected.' })
+  if (clashes.some((p) => p.organizationId === admin.organizationId && !p.archivedAt)) {
+    res.status(409).json({ error: `That ${LMS_LABEL[reg.lms]} install is already connected.` })
     return
   }
-  // Re-adding a key that was removed brings back its teachers' connections.
-  const platform = existing
-    ? await prisma.ltiPlatform.update({ where: { id: existing.id }, data: { archivedAt: null, name: cleanName } })
+  // Re-adding an install that was removed brings back its teachers' connections.
+  const removed = clashes.find((p) => p.organizationId === admin.organizationId && p.archivedAt && p.deploymentId === reg.deploymentId)
+  const platform = removed
+    ? await prisma.ltiPlatform.update({ where: { id: removed.id }, data: { archivedAt: null, name: cleanName } })
     : await prisma.ltiPlatform.create({
-        data: { organizationId: admin.organizationId, name: cleanName, environment: env, issuer, clientId: cleanClientId, authUrl, jwksUrl, createdByUserId: admin.id },
+        data: {
+          organizationId: admin.organizationId,
+          name: cleanName,
+          lms: reg.lms,
+          environment: reg.environment,
+          issuer: reg.issuer,
+          clientId: reg.clientId,
+          authUrl: reg.authUrl,
+          jwksUrl: reg.jwksUrl,
+          deploymentId: reg.deploymentId,
+          createdByUserId: admin.id,
+        },
       })
-  res.status(201).json({ id: platform.id, name: platform.name, environment: platform.environment, clientId: platform.clientId, createdAt: platform.createdAt, connectedTeachers: 0 })
+  res.status(201).json({
+    id: platform.id,
+    name: platform.name,
+    lms: platform.lms,
+    environment: platform.environment,
+    clientId: platform.clientId,
+    deploymentId: platform.deploymentId,
+    createdAt: platform.createdAt,
+    connectedTeachers: 0,
+  })
 })
 
 /// Send to Canvas's half of the set-up: the school's Canvas address and its
@@ -341,6 +459,10 @@ ltiRouter.patch('/platforms/:id', requireAuth, async (req, res) => {
   const platform = await prisma.ltiPlatform.findFirst({ where: { id: String(req.params.id), organizationId: admin.organizationId, archivedAt: null } })
   if (!platform) {
     res.status(404).json({ error: 'Canvas install not found' })
+    return
+  }
+  if (platform.lms !== 'canvas') {
+    res.status(400).json({ error: 'Sending lessons is only for Canvas.' })
     return
   }
   const { canvasUrl, apiClientId, apiClientSecret } = req.body ?? {}

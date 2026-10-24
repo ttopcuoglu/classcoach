@@ -1525,10 +1525,32 @@ function previewLti(path: string, method: string, body: Json): Json | null {
   if (path.startsWith('/api/lti/pending')) return { canvasName: 'Canvas', schoolName: PREVIEW_SCHOOL, nameInCanvas: 'Jordan Rivera' }
   if (path === '/api/lti/connect') return { ok: true, canvasName: 'Canvas' }
   if (path === '/api/lti/platforms' && method === 'GET') {
-    return { configUrl: 'https://www.wivoza.com/api/lti/config.json', platforms: previewCanvas.filter((p) => !p.archived) }
+    return {
+      configUrl: 'https://www.wivoza.com/api/lti/config.json',
+      toolUrls: {
+        login: 'https://www.wivoza.com/api/lti/login',
+        launch: 'https://www.wivoza.com/api/lti/launch',
+        jwks: 'https://www.wivoza.com/api/lti/jwks',
+        domain: 'www.wivoza.com',
+      },
+      // Blackboard registered, Schoology not yet: both states can be seen.
+      vendorApps: { schoology: null, blackboard: 'preview-blackboard-app-id' },
+      platforms: previewCanvas.filter((p) => !p.archived),
+    }
   }
   if (path === '/api/lti/platforms' && method === 'POST') {
-    const created = { id: `lti-${previewCanvas.length + 1}`, name: body.name ?? 'Canvas', environment: body.environment ?? 'production', clientId: body.clientId, createdAt: new Date().toISOString(), connectedTeachers: 0 }
+    const lms = String(body.lms ?? 'canvas')
+    const label: Record<string, string> = { canvas: 'Canvas', schoology: 'Schoology', brightspace: 'Brightspace', moodle: 'Moodle', blackboard: 'Blackboard' }
+    const created = {
+      id: `lti-${previewCanvas.length + 1}`,
+      name: body.name ?? label[lms],
+      lms,
+      environment: body.environment ?? (lms === 'canvas' ? 'production' : lms),
+      clientId: body.clientId ?? (lms === 'blackboard' ? 'preview-blackboard-app-id' : ''),
+      deploymentId: body.deploymentId ?? null,
+      createdAt: new Date().toISOString(),
+      connectedTeachers: 0,
+    }
     previewCanvas.unshift(created)
     return created
   }

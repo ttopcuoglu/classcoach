@@ -131,13 +131,14 @@ canvasRouter.get('/status', async (req, res) => {
   const [found, tokens, links] = await Promise.all([
     sendablePlatform(userId),
     prisma.canvasToken.count({ where: { userId } }),
-    prisma.ltiUserLink.findMany({ where: { userId, platform: { archivedAt: null } }, select: { platform: { select: { name: true } } } }),
+    prisma.ltiUserLink.findMany({ where: { userId, platform: { archivedAt: null } }, select: { platform: { select: { name: true, lms: true } } } }),
   ])
   res.json({
     available: !!found,
     connected: tokens > 0,
     linked: links.length > 0,
     canvasName: found?.platform.name ?? links[0]?.platform.name ?? null,
+    lms: found?.platform.lms ?? links[0]?.platform.lms ?? null,
   })
 })
 

@@ -2481,11 +2481,15 @@ export function connectLti(token: string): Promise<{ ok: true; canvasName: strin
 }
 
 export type CanvasEnvironment = 'production' | 'beta' | 'test'
+export type LmsKind = 'canvas' | 'schoology' | 'brightspace' | 'moodle' | 'blackboard'
 export type CanvasInstall = {
   id: string
   name: string
-  environment: CanvasEnvironment
+  /** Older rows, from before other LMSs, have no lms and are Canvas. */
+  lms?: LmsKind
+  environment: string
   clientId: string
+  deploymentId?: string | null
   createdAt: string
   connectedTeachers: number
   // Send to Canvas's half: the school's Canvas address and its API key. The
@@ -2496,7 +2500,17 @@ export type CanvasInstall = {
   sendingTeachers?: number
 }
 
-export function getCanvasInstalls(): Promise<{ configUrl: string; oauthRedirectUri?: string; platforms: CanvasInstall[] }> {
+export type LmsInstalls = {
+  configUrl: string
+  oauthRedirectUri?: string
+  /** What an LMS admin types into an LMS that has no configuration URL. */
+  toolUrls?: { login: string; launch: string; jwks: string; domain: string }
+  /** Wivoza's own app in Schoology and Blackboard; null until it is registered. */
+  vendorApps?: { schoology: string | null; blackboard: string | null }
+  platforms: CanvasInstall[]
+}
+
+export function getCanvasInstalls(): Promise<LmsInstalls> {
   return request('/api/lti/platforms')
 }
 
@@ -2507,7 +2521,7 @@ export function setCanvasApiKey(id: string, data: { canvasUrl: string; apiClient
 // Send to Canvas: a plan as a page in one of the teacher's Canvas courses.
 /// available: the school can send to Canvas. connected: this teacher has
 /// allowed Wivoza to add pages. linked: Canvas opens Wivoza signed in.
-export type CanvasStatus = { available: boolean; connected: boolean; linked?: boolean; canvasName: string | null }
+export type CanvasStatus = { available: boolean; connected: boolean; linked?: boolean; canvasName: string | null; lms?: LmsKind | null }
 
 /// Undoes both: Canvas stops signing them in, and Wivoza loses (and revokes
 /// in Canvas) its permission to add pages. Pages already sent stay.
@@ -2546,7 +2560,16 @@ export function sendToCanvas(data: {
   return request('/api/canvas/send', { method: 'POST', body: JSON.stringify(data) })
 }
 
-export function addCanvasInstall(data: { clientId: string; name?: string; environment?: CanvasEnvironment }): Promise<CanvasInstall> {
+export function addCanvasInstall(data: {
+  lms?: LmsKind
+  clientId?: string
+  name?: string
+  environment?: CanvasEnvironment
+  deploymentId?: string
+  issuer?: string
+  authUrl?: string
+  jwksUrl?: string
+}): Promise<CanvasInstall> {
   return request('/api/lti/platforms', { method: 'POST', body: JSON.stringify(data) })
 }
 

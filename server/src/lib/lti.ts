@@ -236,3 +236,98 @@ export function authRedirectUrl(
   url.searchParams.set('nonce', params.nonce)
   return url.toString()
 }
+
+// ---------------------------------------------------------------------------
+// Any LTI 1.3 LMS
+// ---------------------------------------------------------------------------
+
+export const LMS_KINDS = ['canvas', 'schoology', 'brightspace', 'moodle', 'blackboard'] as const
+export type LmsKind = (typeof LMS_KINDS)[number]
+
+export const LMS_LABEL: Record<LmsKind, string> = {
+  canvas: 'Canvas',
+  schoology: 'Schoology',
+  brightspace: 'Brightspace',
+  moodle: 'Moodle',
+  blackboard: 'Blackboard',
+}
+
+export function isLmsKind(value: unknown): value is LmsKind {
+  return typeof value === 'string' && (LMS_KINDS as readonly string[]).includes(value)
+}
+
+/// Schoology and Blackboard register a tool once, with its maker: Wivoza's
+/// own app there has one client id that every school installs. Their
+/// sign-in endpoints are the same for every school. Null until Wivoza's app
+/// is registered and its id is in the environment.
+export function vendorApp(lms: 'schoology' | 'blackboard'): { issuer: string; clientId: string; authUrl: string; jwksUrl: string } | null {
+  if (lms === 'schoology') {
+    const clientId = process.env.LTI_SCHOOLOGY_CLIENT_ID?.trim()
+    return clientId
+      ? {
+          issuer: 'https://schoology.schoology.com',
+          clientId,
+          authUrl: 'https://lti-service.svc.schoology.com/lti-service/authorize-redirect',
+          jwksUrl: 'https://lti-service.svc.schoology.com/lti-service/.well-known/jwks',
+        }
+      : null
+  }
+  const appId = process.env.LTI_BLACKBOARD_APP_ID?.trim()
+  return appId
+    ? {
+        issuer: 'https://blackboard.com',
+        clientId: appId,
+        authUrl: 'https://developer.blackboard.com/api/v1/gateway/oidcauth',
+        jwksUrl: `https://developer.blackboard.com/api/v1/management/applications/${encodeURIComponent(appId)}/jwks.json`,
+      }
+    : null
+}
+
+/// An https address an admin pasted (a Moodle or Brightspace endpoint), as
+/// given minus surrounding spaces. Null for anything else.
+export function cleanHttpsUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null
+  try {
+    const url = new URL(value.trim())
+    if (url.protocol !== 'https:' || url.username || url.password || !url.hostname.includes('.')) return null
+    return url.toString().replace(/\/$/, url.pathname === '/' ? '' : '/')
+  } catch {
+    return null
+  }
+}
+
+/// An issuer is compared exactly with the one in every launch, so it is
+/// kept exactly as the LMS shows it — only surrounding spaces go.
+export function cleanIssuer(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return /^https:\/\/[^\s/]+\.[^\s]*$/.test(trimmed) && trimmed.length <= 300 ? trimmed : null
+}
+
+/// Client ids differ by LMS: Canvas's are numbers, Moodle's short random
+/// strings, Brightspace's and Blackboard's GUIDs.
+export function cleanClientId(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return /^[A-Za-z0-9._:-]{1,200}$/.test(trimmed) ? trimmed : null
+}
+
+/// Deployment ids are opaque strings ("3376:eb4a20…" in Canvas, a GUID or a
+/// number elsewhere): any visible characters, no spaces.
+export function cleanDeploymentId(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return /^[\x21-\x7e]{1,255}$/.test(trimmed) ? trimmed : null
+}
+
+/// Which school a launch belongs to, among the installs sharing its issuer
+/// and client id: the one for its exact deployment, else the one that takes
+/// any deployment of that client id. Never a guess between two schools.
+export function choosePlatform<T extends { deploymentId: string | null }>(candidates: T[], deploymentId: string | null): T | null {
+  if (deploymentId) {
+    const exact = candidates.find((c) => c.deploymentId === deploymentId)
+    if (exact) return exact
+  }
+  const open = candidates.filter((c) => !c.deploymentId)
+  return open.length === 1 ? open[0] : null
+}

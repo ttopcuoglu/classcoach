@@ -6,14 +6,17 @@ import {
   setCanvasApiKey,
   type CanvasEnvironment,
   type CanvasInstall,
+  type LmsInstalls,
+  type LmsKind,
 } from '../lib/api'
 import { SEND_TO_CANVAS_ENABLED } from './SendToCanvas'
 import { Spinner } from './Spinner'
 
-// A school connecting its Canvas to Wivoza. The Canvas side is done by a
-// Canvas admin (a developer key made from Wivoza's configuration URL, then
-// installed by its client ID); the Wivoza side is pasting that client ID
-// here. Teachers then find Wivoza in each course's menu — students never do.
+// A school connecting its LMS to Wivoza (LTI 1.3): Canvas, Schoology,
+// Brightspace, Moodle or Blackboard. The LMS side is done by its admin, using
+// the steps shown for that LMS; the Wivoza side is pasting what the LMS shows
+// back. Canvas is the one tried end to end; the others follow each LMS's own
+// documentation and say so.
 
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest'
 
@@ -168,12 +171,243 @@ function SendSetup({ install, redirectUri, onSaved }: { install: CanvasInstall; 
   )
 }
 
+const LMS_OPTIONS: { lms: LmsKind; label: string }[] = [
+  { lms: 'canvas', label: 'Canvas' },
+  { lms: 'schoology', label: 'Schoology' },
+  { lms: 'brightspace', label: 'Brightspace' },
+  { lms: 'moodle', label: 'Moodle' },
+  { lms: 'blackboard', label: 'Blackboard' },
+]
+const lmsLabel = (lms: LmsKind | undefined) => LMS_OPTIONS.find((o) => o.lms === (lms ?? 'canvas'))!.label
+
+/// Which LMSs a school can connect here by itself. Only Canvas for now
+/// (2026-10-24): it is the one where hiding Wivoza from students is
+/// documented and tried. The others are built (steps below, server routes)
+/// and switched on here once tried with a real school; until then a school
+/// on another LMS contacts Wivoza.
+const OFFERED: LmsKind[] = ['canvas']
+
+const FIELD = 'rounded-xl border border-hairline bg-white px-3 py-2 text-sm text-ink focus:border-forest focus:outline-none'
+
+function Field({ id, label, value, onChange, placeholder, hint }: { id: string; label: string; value: string; onChange: (v: string) => void; placeholder?: string; hint?: string }) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1">
+      <span className="text-xs font-semibold text-ink-soft">{label}</span>
+      <input id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} spellCheck={false} autoComplete="off" className={FIELD} />
+      {hint && <span className="text-[11px] text-ink-soft">{hint}</span>}
+    </label>
+  )
+}
+
+const Step = ({ n, title, children }: { n: number; title: string; children?: React.ReactNode }) => (
+  <li className="flex flex-col gap-2">
+    <p>
+      <span className="font-semibold text-forest">
+        {n}. {title}
+      </span>{' '}
+      {children}
+    </p>
+  </li>
+)
+
+type Draft = { clientId: string; name: string; environment: CanvasEnvironment; deploymentId: string; issuer: string; authUrl: string; jwksUrl: string }
+const EMPTY: Draft = { clientId: '', name: '', environment: 'production', deploymentId: '', issuer: '', authUrl: '', jwksUrl: '' }
+
+/// The steps an LMS admin follows in their LMS, then the fields they paste
+/// back. Everything but Canvas is written from that LMS's documentation and
+/// has not been tried with Wivoza yet.
+function SetupSteps({ lms, data, draft, set }: { lms: LmsKind; data: LmsInstalls; draft: Draft; set: (patch: Partial<Draft>) => void }) {
+  const urls = data.toolUrls ?? {
+    login: data.configUrl.replace(/config\.json$/, 'login'),
+    launch: data.configUrl.replace(/config\.json$/, 'launch'),
+    jwks: data.configUrl.replace(/config\.json$/, 'jwks'),
+    domain: new URL(data.configUrl).host,
+  }
+  const vendor = lms === 'schoology' ? data.vendorApps?.schoology : lms === 'blackboard' ? data.vendorApps?.blackboard : undefined
+
+  if (lms === 'canvas')
+    return (
+      <>
+        <li className="flex flex-col gap-2">
+          <p>
+            <span className="font-semibold text-forest">1. In Canvas, make a developer key.</span> Admin → Developer Keys → + Developer Key → LTI
+            Key. For Method, choose <span className="font-semibold">Enter URL</span> and paste the first address. Paste the second under Redirect
+            URIs.
+          </p>
+          <CopyField label="JSON URL" value={data.configUrl} />
+          <CopyField label="Redirect URI" value={urls.launch} />
+        </li>
+        <Step n={2} title="Turn the key on and copy its client ID">— the long number in the Details column.</Step>
+        <Step n={3} title="Install it.">
+          Admin → Settings → Apps → View App Configurations → + App → Configuration Type: By Client ID. Paste the client ID and install. To try it
+          first, leave it Not Available and add an exception for one test course.
+        </Step>
+        <li className="flex flex-col gap-2">
+          <span className="font-semibold text-forest">4. Paste the client ID here.</span>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field id="lms-client-id" label="Client ID" value={draft.clientId} onChange={(v) => set({ clientId: v })} placeholder="e.g. 10000000000123" />
+            <Field id="lms-name" label="Name (optional)" value={draft.name} onChange={(v) => set({ name: v })} placeholder="Canvas" />
+          </div>
+          <details className="text-xs text-ink-soft">
+            <summary className="cursor-pointer font-semibold">Made the key in Canvas Beta or Test?</summary>
+            <select
+              id="canvas-environment"
+              value={draft.environment}
+              onChange={(e) => set({ environment: e.target.value as CanvasEnvironment })}
+              className="mt-2 rounded-xl border border-hairline bg-white px-3 py-1.5 text-sm text-ink"
+            >
+              <option value="production">Canvas (your school's usual Canvas)</option>
+              <option value="beta">Canvas Beta</option>
+              <option value="test">Canvas Test</option>
+            </select>
+          </details>
+        </li>
+      </>
+    )
+
+  if ((lms === 'schoology' || lms === 'blackboard') && !vendor)
+    return (
+      <li className="rounded-xl bg-pale-gold/50 px-3 py-2 text-forest">
+        Wivoza's {lmsLabel(lms)} app is being registered with {lms === 'schoology' ? 'Schoology' : 'Anthology, which makes Blackboard'}. Once it is,
+        connecting takes one number from your {lmsLabel(lms)} admin. Contact Wivoza if your school needs it now.
+      </li>
+    )
+
+  if (lms === 'schoology')
+    return (
+      <>
+        <Step n={1} title="Install Wivoza for your district.">
+          As a Schoology district admin, find Wivoza in the App Center and install it for your district.
+        </Step>
+        <Step n={2} title="Copy the deployment ID.">
+          In your district's app list, click Configure next to Wivoza. Schoology shows the deployment ID for your district.
+        </Step>
+        <Step n={3} title="Add it to courses.">
+          Install the app to the courses where teachers should find it. Schoology may show it to students in those courses; Wivoza turns students
+          away.
+        </Step>
+        <li className="flex flex-col gap-2">
+          <span className="font-semibold text-forest">4. Paste the deployment ID here.</span>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field id="lms-deployment" label="Deployment ID" value={draft.deploymentId} onChange={(v) => set({ deploymentId: v })} />
+            <Field id="lms-name" label="Name (optional)" value={draft.name} onChange={(v) => set({ name: v })} placeholder="Schoology" />
+          </div>
+        </li>
+      </>
+    )
+
+  if (lms === 'blackboard')
+    return (
+      <>
+        <li className="flex flex-col gap-2">
+          <p>
+            <span className="font-semibold text-forest">1. Register Wivoza.</span> Administrator Panel → LTI Tool Providers → Register LTI 1.3/Advantage
+            Tool. Paste Wivoza's client ID and submit.
+          </p>
+          <CopyField label="Client ID" value={vendor!} />
+        </li>
+        <Step n={2} title="Approve it, sending names only.">
+          Set Tool Status to Approved. Under user fields to send, choose Name only, not email. Submit — Blackboard shows the Deployment ID; copy it.
+        </Step>
+        <li className="flex flex-col gap-2">
+          <p>
+            <span className="font-semibold text-forest">3. Add a course tool for teachers.</span> In the tool's menu, Manage Placements → Create
+            Placement. Label Wivoza, type Course tool, <span className="font-semibold">untick Allow student access</span>, Launch in New Window, and
+            this Target Link URI:
+          </p>
+          <CopyField label="Target Link URI" value={urls.launch} />
+        </li>
+        <li className="flex flex-col gap-2">
+          <span className="font-semibold text-forest">4. Paste the deployment ID here.</span>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field id="lms-deployment" label="Deployment ID" value={draft.deploymentId} onChange={(v) => set({ deploymentId: v })} />
+            <Field id="lms-name" label="Name (optional)" value={draft.name} onChange={(v) => set({ name: v })} placeholder="Blackboard" />
+          </div>
+        </li>
+      </>
+    )
+
+  if (lms === 'brightspace')
+    return (
+      <>
+        <li className="flex flex-col gap-2">
+          <p>
+            <span className="font-semibold text-forest">1. Register Wivoza.</span> Admin Tools → Manage Extensibility → LTI Advantage → Register Tool →
+            Standard. Name it Wivoza and paste these. Leave the extensions unticked, and tick Send Institution Role.
+          </p>
+          <CopyField label="Domain" value={urls.domain} />
+          <CopyField label="Redirect URL" value={urls.launch} />
+          <CopyField label="OpenID Connect Login URL" value={urls.login} />
+          <CopyField label="Keyset URL" value={urls.jwks} />
+        </li>
+        <Step n={2} title="Make a deployment.">
+          View Deployments → New Deployment. Under security settings send the user's name, not email. Add the org units for your school, then create
+          it.
+        </Step>
+        <Step n={3} title="Make a link.">
+          In the deployment, View Links → New Link, with the Redirect URL above as its URL and Basic Launch as its type. Put it where teachers will
+          find it, limited to teaching roles if your Brightspace allows; Wivoza turns students away.
+        </Step>
+        <li className="flex flex-col gap-2">
+          <span className="font-semibold text-forest">4. Copy Brightspace's registration details here.</span>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field id="lms-client-id" label="Client Id" value={draft.clientId} onChange={(v) => set({ clientId: v })} />
+            <Field id="lms-issuer" label="Issuer" value={draft.issuer} onChange={(v) => set({ issuer: v })} placeholder="https://…" />
+            <Field id="lms-auth" label="OpenID Connect Authentication Endpoint" value={draft.authUrl} onChange={(v) => set({ authUrl: v })} placeholder="https://…" />
+            <Field id="lms-jwks" label="Brightspace Keyset URL" value={draft.jwksUrl} onChange={(v) => set({ jwksUrl: v })} placeholder="https://…" />
+            <Field id="lms-deployment" label="Deployment Id (optional)" value={draft.deploymentId} onChange={(v) => set({ deploymentId: v })} />
+            <Field id="lms-name" label="Name (optional)" value={draft.name} onChange={(v) => set({ name: v })} placeholder="Brightspace" />
+          </div>
+        </li>
+      </>
+    )
+
+  return (
+    <>
+      <li className="flex flex-col gap-2">
+        <p>
+          <span className="font-semibold text-forest">1. Add Wivoza as a tool.</span> Site administration → Plugins → Activity modules → External
+          tool → Manage tools → configure a tool manually. Name it Wivoza, choose LTI 1.3, Public key type Keyset URL, Default launch container New
+          window, share the launcher's name always and email never, and paste these:
+        </p>
+        <CopyField label="Tool URL" value={urls.launch} />
+        <CopyField label="Public keyset" value={urls.jwks} />
+        <CopyField label="Initiate login URL" value={urls.login} />
+        <CopyField label="Redirection URI(s)" value={urls.launch} />
+      </li>
+      <Step n={2} title="Copy its details.">
+        In Manage tools, open the tool's View configuration details.
+      </Step>
+      <Step n={3} title="Keep it out of students' view.">
+        Teachers add Wivoza to a course as an activity and hide it from students. Wivoza turns students away either way.
+      </Step>
+      <li className="flex flex-col gap-2">
+        <span className="font-semibold text-forest">4. Paste Moodle's configuration details here.</span>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field id="lms-issuer" label="Platform ID" value={draft.issuer} onChange={(v) => set({ issuer: v })} placeholder="https://moodle.yourschool.org" />
+          <Field id="lms-client-id" label="Client ID" value={draft.clientId} onChange={(v) => set({ clientId: v })} />
+          <Field id="lms-auth" label="Authentication request URL" value={draft.authUrl} onChange={(v) => set({ authUrl: v })} placeholder="https://…/mod/lti/auth.php" />
+          <Field id="lms-jwks" label="Public keyset URL" value={draft.jwksUrl} onChange={(v) => set({ jwksUrl: v })} placeholder="https://…/mod/lti/certs.php" />
+          <Field id="lms-deployment" label="Deployment ID (optional)" value={draft.deploymentId} onChange={(v) => set({ deploymentId: v })} />
+          <Field id="lms-name" label="Name (optional)" value={draft.name} onChange={(v) => set({ name: v })} placeholder="Moodle" />
+        </div>
+      </li>
+    </>
+  )
+}
+
+function ready(lms: LmsKind, d: Draft, data: LmsInstalls): boolean {
+  if (lms === 'canvas') return !!d.clientId.trim()
+  if (lms === 'schoology') return !!data.vendorApps?.schoology && !!d.deploymentId.trim()
+  if (lms === 'blackboard') return !!data.vendorApps?.blackboard && !!d.deploymentId.trim()
+  return !!(d.clientId.trim() && d.issuer.trim() && d.authUrl.trim() && d.jwksUrl.trim())
+}
+
 export default function CanvasInstalls() {
-  const [data, setData] = useState<{ configUrl: string; oauthRedirectUri?: string; platforms: CanvasInstall[] } | null>(null)
+  const [data, setData] = useState<LmsInstalls | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [clientId, setClientId] = useState('')
-  const [name, setName] = useState('')
-  const [environment, setEnvironment] = useState<CanvasEnvironment>('production')
+  const [lms, setLms] = useState<LmsKind>('canvas')
+  const [draft, setDraft] = useState<Draft>(EMPTY)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
@@ -192,13 +426,22 @@ export default function CanvasInstalls() {
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
-    if (!clientId.trim() || busy) return
+    if (!data || !ready(lms, draft, data) || busy) return
     setBusy(true)
     setError(null)
+    const t = (v: string) => v.trim() || undefined
     try {
-      await addCanvasInstall({ clientId: clientId.trim(), name: name.trim() || undefined, environment })
-      setClientId('')
-      setName('')
+      await addCanvasInstall({
+        lms,
+        name: t(draft.name),
+        clientId: t(draft.clientId),
+        environment: lms === 'canvas' ? draft.environment : undefined,
+        deploymentId: t(draft.deploymentId),
+        issuer: t(draft.issuer),
+        authUrl: t(draft.authUrl),
+        jwksUrl: t(draft.jwksUrl),
+      })
+      setDraft(EMPTY)
       await refresh()
     } catch (err) {
       setError((err as Error).message)
@@ -229,7 +472,7 @@ export default function CanvasInstalls() {
       </p>
     )
 
-  const launchUrl = data.configUrl.replace(/config\.json$/, 'launch')
+  const label = lmsLabel(lms)
 
   return (
     <div className="flex flex-col gap-6">
@@ -240,16 +483,19 @@ export default function CanvasInstalls() {
             {data.platforms.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-hairline bg-white px-4 py-3">
                 <span className="min-w-0 flex-1 basis-40">
-                  <span className="block font-semibold text-forest">{p.name}</span>
-                  <span className="block text-xs text-ink-soft">
-                    Client ID {p.clientId}
-                    {p.environment !== 'production' ? ` · ${p.environment}` : ''} · {p.connectedTeachers}{' '}
+                  <span className="block font-semibold text-forest">
+                    {p.name}
+                    {p.name !== lmsLabel(p.lms) && <span className="ml-2 text-xs font-semibold text-ink-soft">{lmsLabel(p.lms)}</span>}
+                  </span>
+                  <span className="block text-xs text-ink-soft [overflow-wrap:anywhere]">
+                    {p.deploymentId && (p.lms === 'schoology' || p.lms === 'blackboard') ? `Deployment ${p.deploymentId}` : `Client ID ${p.clientId}`}
+                    {(p.lms ?? 'canvas') === 'canvas' && p.environment !== 'production' ? ` · ${p.environment}` : ''} · {p.connectedTeachers}{' '}
                     {p.connectedTeachers === 1 ? 'teacher has' : 'teachers have'} connected
                   </span>
                 </span>
                 {confirming === p.id ? (
                   <span className="flex items-center gap-2 text-xs text-forest">
-                    Teachers lose the Wivoza link in Canvas.
+                    Teachers lose the Wivoza link in {lmsLabel(p.lms)}.
                     <button type="button" disabled={busy} onClick={() => handleRemove(p.id)} className={`rounded font-semibold text-terracotta-600 underline underline-offset-2 ${FOCUS}`}>
                       Remove
                     </button>
@@ -262,7 +508,9 @@ export default function CanvasInstalls() {
                     Remove
                   </button>
                 )}
-                {SEND_TO_CANVAS_ENABLED && <SendSetup install={p} redirectUri={data.oauthRedirectUri ?? data.configUrl.replace(/lti\/config\.json$/, 'canvas/oauth/callback')} onSaved={() => void refresh()} />}
+                {SEND_TO_CANVAS_ENABLED && (p.lms ?? 'canvas') === 'canvas' && (
+                  <SendSetup install={p} redirectUri={data.oauthRedirectUri ?? data.configUrl.replace(/lti\/config\.json$/, 'canvas/oauth/callback')} onSaved={() => void refresh()} />
+                )}
               </li>
             ))}
           </ul>
@@ -270,83 +518,68 @@ export default function CanvasInstalls() {
       )}
 
       <section className="flex flex-col gap-4 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-        <h2 className="font-heading text-lg font-bold text-forest">{data.platforms.length ? 'Connect another Canvas' : 'Connect your Canvas'}</h2>
-        <ol className="flex flex-col gap-4 text-sm text-ink">
-          <li className="flex flex-col gap-2">
-            <p>
-              <span className="font-semibold text-forest">1. In Canvas, make a developer key.</span> Admin → Developer Keys → + Developer Key → LTI
-              Key. For Method, choose <span className="font-semibold">Enter URL</span> and paste the first address. Paste the second under
-              Redirect URIs.
+        <h2 className="font-heading text-lg font-bold text-forest">
+          {OFFERED.length > 1 ? (data.platforms.length ? 'Connect another LMS' : 'Connect your LMS') : data.platforms.length ? 'Connect another Canvas' : 'Connect your Canvas'}
+        </h2>
+        {OFFERED.length > 1 && (
+        <div role="radiogroup" aria-label="Your LMS" className="flex flex-wrap gap-2">
+          {LMS_OPTIONS.filter((o) => OFFERED.includes(o.lms)).map((o) => (
+            <button
+              key={o.lms}
+              type="button"
+              role="radio"
+              aria-checked={lms === o.lms}
+              onClick={() => {
+                setLms(o.lms)
+                setError(null)
+              }}
+              className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${FOCUS} ${
+                lms === o.lms ? 'bg-forest text-cream' : 'border border-hairline bg-white text-forest hover:bg-cream'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+        )}
+        {lms !== 'canvas' && (
+          <p className="rounded-xl bg-cream px-3 py-2 text-xs text-ink-soft">
+            These steps follow {label}'s own documentation. Wivoza has been tried end to end with Canvas, not yet with {label}, so tell Wivoza if a
+            step doesn't match what you see.
+          </p>
+        )}
+        <form onSubmit={handleAdd} className="flex flex-col gap-4">
+          <ol className="flex flex-col gap-4 text-sm text-ink">
+            <SetupSteps lms={lms} data={data} draft={draft} set={(patch) => setDraft((d) => ({ ...d, ...patch }))} />
+          </ol>
+          {error && (
+            <p role="alert" className="text-sm text-terracotta-600">
+              {error}
             </p>
-            <CopyField label="JSON URL" value={data.configUrl} />
-            <CopyField label="Redirect URI" value={launchUrl} />
-          </li>
-          <li>
-            <span className="font-semibold text-forest">2. Turn the key on and copy its client ID</span> — the long number in the Details column.
-          </li>
-          <li>
-            <span className="font-semibold text-forest">3. Install it.</span> Admin → Settings → Apps → View App Configurations → + App →
-            Configuration Type: By Client ID. Paste the client ID and install.
-          </li>
-          <li className="flex flex-col gap-2">
-            <span className="font-semibold text-forest">4. Paste the client ID here.</span>
-            <form onSubmit={handleAdd} className="flex flex-col gap-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs font-semibold text-ink-soft">Client ID</span>
-                  <input
-                    id="canvas-client-id"
-                    inputMode="numeric"
-                    value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
-                    placeholder="e.g. 10000000000123"
-                    className="rounded-xl border border-hairline bg-white px-3 py-2 text-sm text-ink focus:border-forest focus:outline-none"
-                  />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs font-semibold text-ink-soft">Name (optional)</span>
-                  <input
-                    id="canvas-name"
-                    value={name}
-                    maxLength={80}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Canvas"
-                    className="rounded-xl border border-hairline bg-white px-3 py-2 text-sm text-ink focus:border-forest focus:outline-none"
-                  />
-                </label>
-              </div>
-              <details className="text-xs text-ink-soft">
-                <summary className="cursor-pointer font-semibold">Made the key in Canvas Beta or Test?</summary>
-                <select
-                  id="canvas-environment"
-                  value={environment}
-                  onChange={(e) => setEnvironment(e.target.value as CanvasEnvironment)}
-                  className="mt-2 rounded-xl border border-hairline bg-white px-3 py-1.5 text-sm text-ink"
-                >
-                  <option value="production">Canvas (your school's usual Canvas)</option>
-                  <option value="beta">Canvas Beta</option>
-                  <option value="test">Canvas Test</option>
-                </select>
-              </details>
-              {error && (
-                <p role="alert" className="text-sm text-terracotta-600">
-                  {error}
-                </p>
-              )}
-              <button
-                type="submit"
-                disabled={busy || !clientId.trim()}
-                className={`flex items-center gap-2 self-start rounded-full bg-forest px-5 py-2.5 text-sm font-bold text-cream hover:bg-forest-soft disabled:opacity-60 ${FOCUS}`}
-              >
-                {busy && <Spinner />}
-                <span className="text-cream">Connect Canvas</span>
-              </button>
-            </form>
-          </li>
-        </ol>
+          )}
+          <button
+            type="submit"
+            disabled={busy || !ready(lms, draft, data)}
+            className={`flex items-center gap-2 self-start rounded-full bg-forest px-5 py-2.5 text-sm font-bold text-cream hover:bg-forest-soft disabled:opacity-60 ${FOCUS}`}
+          >
+            {busy && <Spinner />}
+            <span className="text-cream">Connect {label}</span>
+          </button>
+        </form>
         <p className="text-xs text-ink-soft">
-          Teachers then see Wivoza in each course's menu, opening in its own tab. Students never see it. The first time, each teacher signs in to
-          Wivoza once to connect their Canvas account.
+          Teachers then open Wivoza from their courses, in its own tab. The first time, each teacher signs in to Wivoza once to connect their{' '}
+          {label} account. Students who reach it are turned away.
+        </p>
+      </section>
+
+      <section className="rounded-3xl border border-dashed border-hairline px-6 py-5">
+        <h2 className="font-heading text-base font-bold text-forest">Using a different LMS?</h2>
+        <p className="mt-1 text-sm text-ink-soft">
+          We can work with your LMS too — Schoology, Brightspace, Moodle, Blackboard and others that support LTI 1.3. Email{' '}
+          <a href="mailto:hello@wivoza.com" className={`rounded font-semibold text-forest underline underline-offset-2 ${FOCUS}`}>
+            hello@wivoza.com
+          </a>{' '}
+          and we'll set it up with your LMS admin, including keeping Wivoza out of students' view.
         </p>
       </section>
     </div>
