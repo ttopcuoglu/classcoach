@@ -1,7 +1,32 @@
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { logIn, signInWithGoogle, signUp } from '../lib/api'
+import { getAuthProviders, logIn, microsoftSignInUrl, signInWithGoogle, signUp } from '../lib/api'
+
+/// What a failed Microsoft sign-in comes back as (?authError=…), in words.
+const MICROSOFT_ERRORS: Record<string, string> = {
+  'microsoft-unverified':
+    "Your Microsoft account didn't confirm your email address, so Wivoza can't use it to sign you in. Use Google or your email and password instead — or ask your school's IT to verify its email domain with Microsoft.",
+  'microsoft-other-account': 'That email is already connected to a different Microsoft account. Sign in the way you usually do.',
+  'microsoft-cancelled': 'Microsoft sign-in was cancelled.',
+  'microsoft-expired': 'That took too long. Try signing in with Microsoft again.',
+  'microsoft-unavailable': "Microsoft sign-in isn't available right now.",
+  'microsoft-failed': "Microsoft couldn't sign you in. Please try again.",
+  suspended: 'This account has been suspended. Contact your administrator.',
+}
+
+let providersOnce: Promise<{ microsoft: boolean }> | null = null
+
+function MicrosoftLogo() {
+  return (
+    <svg viewBox="0 0 21 21" aria-hidden="true" className="h-[18px] w-[18px] shrink-0">
+      <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+    </svg>
+  )
+}
 
 type AuthMode = 'signup' | 'login'
 
@@ -24,6 +49,32 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
   const [agreed, setAgreed] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [microsoft, setMicrosoft] = useState(false)
+
+  useEffect(() => {
+    providersOnce ??= getAuthProviders().catch(() => ({ microsoft: false }))
+    let live = true
+    void providersOnce.then((p) => live && setMicrosoft(p.microsoft))
+    // A Microsoft sign-in that failed comes back here with ?authError=…: say
+    // why, then take it out of the address so a reload doesn't say it again.
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('authError')
+    if (code) {
+      setError(MICROSOFT_ERRORS[code] ?? MICROSOFT_ERRORS['microsoft-failed'])
+      setMode('login')
+      params.delete('authError')
+      const rest = params.toString()
+      window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`)
+    }
+    return () => {
+      live = false
+    }
+  }, [])
+
+  function signInWithMicrosoft() {
+    setSubmitting(true)
+    window.location.href = microsoftSignInUrl(`${window.location.pathname}${window.location.search}`)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -120,6 +171,19 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
             />
           )}
         </div>
+
+        {microsoft && !(mode === 'signup' && !agreed) && (
+          <div className="mt-2 flex justify-center">
+            <button
+              type="button"
+              onClick={signInWithMicrosoft}
+              className="flex h-10 w-[336px] max-w-full items-center justify-center gap-2.5 rounded-full border border-[#8C8C8C] bg-white px-3 text-sm font-medium text-[#1F1F1F] transition-colors hover:bg-[#F3F3F3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+            >
+              <MicrosoftLogo />
+              <span className="text-[#1F1F1F]">{mode === 'signup' ? 'Sign up with Microsoft' : 'Sign in with Microsoft'}</span>
+            </button>
+          </div>
+        )}
 
       <div className="my-4 flex items-center gap-3 text-xs text-ink-soft">
         <span className="h-px flex-1 bg-hairline" />

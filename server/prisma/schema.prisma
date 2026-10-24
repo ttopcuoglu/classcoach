@@ -20,6 +20,10 @@ datasource db {
 model User {
   id                    String    @id @default(cuid())
   googleId              String?   @unique
+  // "<tenant id>:<object id>" — the Microsoft account's permanent id. A
+  // returning Microsoft sign-in is matched on this, never on email, which a
+  // Microsoft tenant's admin can set to anything (see lib/microsoftAuth.ts).
+  microsoftId           String?   @unique
   passwordHash          String?
   email                 String    @unique
   name                  String?

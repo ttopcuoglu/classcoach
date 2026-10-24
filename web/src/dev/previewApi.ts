@@ -1643,6 +1643,10 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
       },
     })
   }
+  // `?signedout` shows the signed-out pages (the sign-in card); `?microsoft`
+  // shows its Microsoft button, as when the Microsoft app is registered.
+  if (path.startsWith('/api/auth/providers')) return { microsoft: new URLSearchParams(window.location.search).has('microsoft') }
+  if (path.startsWith('/api/auth/me') && new URLSearchParams(window.location.search).has('signedout')) return null
   if (path.startsWith('/api/auth/me') || path.startsWith('/api/profile')) return PROFILE
   if (path.startsWith('/api/lti/')) return previewLti(path, method, body)
   if (path.startsWith('/api/canvas/')) return previewCanvasSend(path, body)

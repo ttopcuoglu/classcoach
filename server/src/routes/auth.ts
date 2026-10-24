@@ -4,6 +4,16 @@ import { OAuth2Client } from 'google-auth-library'
 import { Router } from 'express'
 import { checkLoginRateLimit, requireAuth, SAFE_USER_OMIT, SESSION_COOKIE, signSession, signWsToken, USER_INCLUDE_ORG } from '../lib/auth.ts'
 import { verifyAppleIdentityToken } from '../lib/appleAuth.ts'
+import jwt from 'jsonwebtoken'
+import {
+  authorizeUrl as microsoftAuthorizeUrl,
+  exchangeCode as exchangeMicrosoftCode,
+  MicrosoftAuthError,
+  microsoftApp,
+  pkcePair,
+  safeNext,
+  verifyIdToken as verifyMicrosoftIdToken,
+} from '../lib/microsoftAuth.ts'
 import { withPlusAccess } from '../lib/billing.ts'
 import { resolveSignInRole } from '../lib/organization.ts'
 import { sendNoPasswordEmail, sendPasswordResetEmail } from '../lib/authEmail.ts'
@@ -148,6 +158,111 @@ authRouter.post('/google', async (req, res) => {
   } catch (error) {
     console.error('[auth] Google sign-in failed:', error)
     res.status(401).json({ error: 'Could not verify Google credential' })
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Sign in with Microsoft — a full-page redirect there and back (see
+// lib/microsoftAuth.ts for why the email is trusted only when verified).
+// ---------------------------------------------------------------------------
+
+const APP_URL = (process.env.APP_URL ?? 'https://www.wivoza.com').replace(/\/$/, '')
+const MICROSOFT_REDIRECT = `${APP_URL}/api/auth/microsoft/callback`
+const MS_STATE_COOKIE = 'ms_signin'
+
+/// Which sign-in buttons the page shows. Google's is always there; the
+/// Microsoft one waits for its app registration.
+authRouter.get('/providers', (_req, res) => {
+  res.json({ microsoft: !!microsoftApp(MICROSOFT_REDIRECT) })
+})
+
+authRouter.get('/microsoft/start', (req, res) => {
+  const next = safeNext(req.query.next)
+  const app = microsoftApp(MICROSOFT_REDIRECT)
+  if (!app) {
+    res.redirect(302, `${APP_URL}${next}${next.includes('?') ? '&' : '?'}authError=microsoft-unavailable`)
+    return
+  }
+  const state = randomBytes(24).toString('base64url')
+  const nonce = randomBytes(24).toString('base64url')
+  const { verifier, challenge } = pkcePair()
+  res.cookie(MS_STATE_COOKIE, jwt.sign({ purpose: 'ms-signin', state, nonce, verifier, next }, process.env.JWT_SECRET ?? '', { expiresIn: 600 }), {
+    httpOnly: true,
+    secure: isProd,
+    // Microsoft sends the browser back with a top-level GET, which carries a
+    // Lax cookie; nothing cross-site needs it.
+    sameSite: 'lax',
+    path: '/api/auth/microsoft',
+    maxAge: 600_000,
+  })
+  res.redirect(302, microsoftAuthorizeUrl(app, { state, nonce, challenge }))
+})
+
+authRouter.get('/microsoft/callback', async (req, res) => {
+  const cookie = req.cookies?.[MS_STATE_COOKIE]
+  res.clearCookie(MS_STATE_COOKIE, { path: '/api/auth/microsoft' })
+  let started: { state: string; nonce: string; verifier: string; next: string } | null = null
+  try {
+    const payload = jwt.verify(String(cookie ?? ''), process.env.JWT_SECRET ?? '') as { purpose?: string; state: string; nonce: string; verifier: string; next: string }
+    if (payload.purpose === 'ms-signin') started = payload
+  } catch {
+    started = null
+  }
+  const next = started ? safeNext(started.next) : '/'
+  const fail = (reason: string) => res.redirect(302, `${APP_URL}${next}${next.includes('?') ? '&' : '?'}authError=${reason}`)
+
+  const { code, state, error } = req.query as Record<string, string | undefined>
+  if (!started || state !== started.state) return fail('microsoft-expired')
+  if (error || !code) return fail(error === 'access_denied' ? 'microsoft-cancelled' : 'microsoft-failed')
+  const app = microsoftApp(MICROSOFT_REDIRECT)
+  if (!app) return fail('microsoft-unavailable')
+
+  let identity
+  try {
+    identity = await verifyMicrosoftIdToken(await exchangeMicrosoftCode(app, code, started.verifier), app.clientId, started.nonce)
+  } catch (err) {
+    console.warn('[auth] Microsoft sign-in refused:', err instanceof MicrosoftAuthError ? err.message : err)
+    return fail('microsoft-failed')
+  }
+
+  try {
+    let user = await prisma.user.findUnique({ where: { microsoftId: identity.microsoftId }, omit: SAFE_USER_OMIT, include: USER_INCLUDE_ORG })
+    if (!user) {
+      // First time with this Microsoft account. Only a verified email may
+      // find an existing account or start a new one.
+      if (!identity.email || !identity.emailVerified) return fail('microsoft-unverified')
+      const isSuperadmin = ADMIN_EMAILS.has(identity.email)
+      const byEmail = await prisma.user.findUnique({ where: { email: identity.email }, omit: SAFE_USER_OMIT, include: USER_INCLUDE_ORG })
+      if (byEmail) {
+        if (byEmail.microsoftId) return fail('microsoft-other-account')
+        const { role, organizationId } = await resolveSignInRole(identity.email, isSuperadmin, byEmail)
+        user = await prisma.user.update({
+          where: { id: byEmail.id },
+          data: { microsoftId: identity.microsoftId, name: byEmail.name ?? identity.name, role, organizationId },
+          omit: SAFE_USER_OMIT,
+          include: USER_INCLUDE_ORG,
+        })
+      } else {
+        const { role, organizationId } = await resolveSignInRole(identity.email, isSuperadmin, null)
+        user = await prisma.user.create({
+          data: { microsoftId: identity.microsoftId, email: identity.email, name: identity.name, role, organizationId, termsAcceptedAt: new Date() },
+          omit: SAFE_USER_OMIT,
+          include: USER_INCLUDE_ORG,
+        })
+      }
+    } else {
+      // The same re-derivation Google sign-in does, from the account's own
+      // email — never the Microsoft one, which may not be verified.
+      const { role, organizationId } = await resolveSignInRole(user.email, ADMIN_EMAILS.has(user.email), user)
+      user = await prisma.user.update({ where: { id: user.id }, data: { role, organizationId }, omit: SAFE_USER_OMIT, include: USER_INCLUDE_ORG })
+    }
+
+    if (user.suspendedAt) return fail('suspended')
+    res.cookie(SESSION_COOKIE, signSession({ userId: user.id, role: user.role }), COOKIE_OPTIONS)
+    res.redirect(302, `${APP_URL}${next}`)
+  } catch (err) {
+    console.error('[auth] Microsoft sign-in failed:', err)
+    fail('microsoft-failed')
   }
 })
 

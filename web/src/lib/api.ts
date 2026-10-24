@@ -1273,6 +1273,16 @@ export function signInWithTelegramWebApp(initData: string): Promise<UserProfile>
   return request('/api/auth/telegram-webapp', { method: 'POST', body: JSON.stringify({ initData }) })
 }
 
+/// Which sign-in buttons to show: Microsoft's appears once its app is registered.
+export function getAuthProviders(): Promise<{ microsoft: boolean }> {
+  return request('/api/auth/providers')
+}
+
+/// A full-page redirect to Microsoft and back; `next` is where to land after.
+export function microsoftSignInUrl(next: string): string {
+  return `${API_BASE_URL}/api/auth/microsoft/start?next=${encodeURIComponent(next)}`
+}
+
 export function signInWithGoogle(credential: string): Promise<UserProfile> {
   return request('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential }) })
 }
