@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { connectLti, getLtiPending, logout, type UserProfile } from '../lib/api'
+import { connectLti, getLtiPending, logout, type LtiPending, type UserProfile } from '../lib/api'
 import AuthCard from '../components/AuthCard'
 import { Spinner } from '../components/Spinner'
 
@@ -26,7 +26,11 @@ export default function LtiConnect({
   const [params] = useSearchParams()
   const token = params.get('token') ?? ''
   const navigate = useNavigate()
-  const [info, setInfo] = useState<{ canvasName: string; lmsName?: string; schoolName: string; nameInCanvas: string | null } | null>(null)
+  const [info, setInfo] = useState<LtiPending | null>(null)
+  // Joining the school is offered ticked: it is why most teachers are here,
+  // and the line under it says exactly what the school can see.
+  const [joinSchool, setJoinSchool] = useState(true)
+  const [joined, setJoined] = useState<string | null>(null)
   const lms = info?.lmsName ?? 'your LMS'
   const [error, setError] = useState<string | null>(null)
   const [connecting, setConnecting] = useState(false)
@@ -47,7 +51,8 @@ export default function LtiConnect({
     setConnecting(true)
     setError(null)
     try {
-      await connectLti(token)
+      const result = await connectLti(token, info?.school === 'offer' && joinSchool)
+      setJoined(result.joinedSchool ? (result.schoolName ?? info?.schoolName ?? null) : null)
       setDone(true)
       // Onboarding, if this is a new account, is the next stop — App sends
       // anyone who hasn't finished it there from any page.
@@ -82,7 +87,8 @@ export default function LtiConnect({
         ) : done ? (
           <>
             <h1 className="mt-2 font-heading text-2xl font-extrabold text-forest">Connected</h1>
-            <p className="mt-2 text-sm text-ink-soft">From now on, the Wivoza link in {lms} opens Wivoza signed in. Taking you there now…</p>
+            <p className="mt-2 text-sm text-ink-soft">From now on, the Wivoza link in {lms} opens Wivoza signed in.
+              {joined ? ` You're also part of ${joined} on Wivoza.` : ''} Taking you there now…</p>
           </>
         ) : error ? (
           <>
@@ -107,6 +113,25 @@ export default function LtiConnect({
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-soft">Your Wivoza account</p>
               <p className="mt-0.5 font-semibold text-forest [overflow-wrap:anywhere]">{user?.email}</p>
             </div>
+            {info.school === 'offer' && (
+              <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-2xl border border-hairline bg-white px-4 py-3">
+                <input
+                  id="join-school"
+                  type="checkbox"
+                  checked={joinSchool}
+                  onChange={(e) => setJoinSchool(e.target.checked)}
+                  className="mt-1 accent-forest"
+                />
+                <span className="text-sm text-ink">
+                  <span className="font-semibold text-forest">Also join {info.schoolName} on Wivoza</span>
+                  <span className="mt-0.5 block text-xs text-ink-soft">
+                    You get your school's Wivoza plan and lesson plan format, and you're counted in its staff-wide numbers. Its Wivoza admins see
+                    your name and when you use Wivoza — never your recordings, reports, plans or conversations.
+                  </span>
+                </span>
+              </label>
+            )}
+            {info.school === 'member' && <p className="mt-3 text-xs text-ink-soft">You're already part of {info.schoolName} on Wivoza.</p>}
             <button
               type="button"
               onClick={handleConnect}

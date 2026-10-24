@@ -2482,12 +2482,16 @@ export function fillWeekPlan(id: string, data: { objectives?: string[]; choice?:
 // ---------------------------------------------------------------------------
 
 /// A Canvas launch waiting for the signed-in teacher to confirm it is them.
-export function getLtiPending(token: string): Promise<{ canvasName: string; schoolName: string; nameInCanvas: string | null }> {
+/// `school`: "member" (already in the LMS's school on Wivoza), "offer" (may
+/// join it while connecting), "other" (in a different school; nothing offered).
+export type LtiPending = { canvasName: string; lmsName?: string; schoolName: string; nameInCanvas: string | null; school?: 'member' | 'offer' | 'other' }
+
+export function getLtiPending(token: string): Promise<LtiPending> {
   return request(`/api/lti/pending?token=${encodeURIComponent(token)}`)
 }
 
-export function connectLti(token: string): Promise<{ ok: true; canvasName: string }> {
-  return request('/api/lti/connect', { method: 'POST', body: JSON.stringify({ token }) })
+export function connectLti(token: string, joinSchool = false): Promise<{ ok: true; canvasName: string; joinedSchool?: boolean; schoolName?: string | null }> {
+  return request('/api/lti/connect', { method: 'POST', body: JSON.stringify({ token, joinSchool }) })
 }
 
 export type CanvasEnvironment = 'production' | 'beta' | 'test'

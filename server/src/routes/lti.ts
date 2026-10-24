@@ -22,6 +22,7 @@ import {
   type LmsKind,
 } from '../lib/lti.ts'
 import { normalizeCanvasUrl } from '../lib/canvasApi.ts'
+import { joiningRole } from '../lib/organization.ts'
 import { prisma } from '../lib/prisma.ts'
 import { seal } from '../lib/secretBox.ts'
 import { COOKIE_OPTIONS } from './auth.ts'
@@ -267,10 +268,19 @@ async function pendingFor(token: unknown) {
   if (typeof token !== 'string' || !token) return null
   const pending = await prisma.ltiPendingLink.findUnique({
     where: { tokenHash: hashToken(token) },
-    include: { platform: { include: { organization: { select: { name: true } } } } },
+    include: { platform: { include: { organization: { select: { id: true, name: true, adminEmails: true } } } } },
   })
   if (!pending || pending.expiresAt < new Date() || pending.platform.archivedAt) return null
   return pending
+}
+
+/// Whether connecting can also put this teacher in the school the LMS belongs
+/// to. Only for someone in no school yet: moving a teacher out of another
+/// school is a choice for Profile, not a box ticked on the way past. Wivoza's
+/// own staff are never assigned to a school.
+async function canJoinSchool(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, role: true, organizationId: true } })
+  return { user, can: !!user && !user.organizationId && user.role !== 'superadmin' }
 }
 
 ltiRouter.get('/pending', requireAuth, async (req, res) => {
@@ -279,11 +289,15 @@ ltiRouter.get('/pending', requireAuth, async (req, res) => {
     res.status(404).json({ error: 'This link from Canvas has expired. Go back to Canvas and click Wivoza again.' })
     return
   }
+  const { user, can } = await canJoinSchool(req.user!.userId)
   res.json({
     canvasName: pending.platform.name,
     lmsName: lmsName(pending.platform.lms),
     schoolName: pending.platform.organization.name,
     nameInCanvas: pending.name,
+    // "member": already in this school; "offer": may join it here; "other":
+    // in a different school, so nothing is offered.
+    school: user?.organizationId === pending.platform.organizationId ? 'member' : can ? 'offer' : 'other',
   })
 })
 
@@ -302,8 +316,24 @@ ltiRouter.post('/connect', requireAuth, async (req, res) => {
   if (!existing) {
     await prisma.ltiUserLink.create({ data: { platformId: pending.platformId, sub: pending.sub, userId, lastLaunchAt: new Date() } })
   }
+  // Joining the school is the teacher's choice, made on the connect page; the
+  // same role rule as joining with the school's code.
+  let joinedSchool = false
+  if (req.body?.joinSchool === true) {
+    const { user, can } = await canJoinSchool(userId)
+    if (user && can) {
+      const org = pending.platform.organization
+      const roleBefore = user.role
+      const role = joiningRole(org.adminEmails, user.email)
+      await prisma.user.update({ where: { id: userId }, data: { organizationId: org.id, role } })
+      // The session carries the role, so a teacher who joins as the school's
+      // admin gets a session that says so, not one that waits for sign-out.
+      if (role !== roleBefore) res.cookie(SESSION_COOKIE, signSession({ userId, role }), COOKIE_OPTIONS)
+      joinedSchool = true
+    }
+  }
   await prisma.ltiPendingLink.delete({ where: { tokenHash: pending.tokenHash } })
-  res.json({ ok: true, canvasName: pending.platform.name })
+  res.json({ ok: true, canvasName: pending.platform.name, joinedSchool, schoolName: joinedSchool ? pending.platform.organization.name : null })
 })
 
 // ---------------------------------------------------------------------------

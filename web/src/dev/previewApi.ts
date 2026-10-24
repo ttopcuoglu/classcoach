@@ -1522,8 +1522,13 @@ function previewCanvasSend(path: string, body: Json): Json | Json[] | null {
 }
 
 function previewLti(path: string, method: string, body: Json): Json | null {
-  if (path.startsWith('/api/lti/pending')) return { canvasName: 'Canvas', schoolName: PREVIEW_SCHOOL, nameInCanvas: 'Jordan Rivera' }
-  if (path === '/api/lti/connect') return { ok: true, canvasName: 'Canvas' }
+  // `?school=member|other` shows the connect page for a teacher already in
+  // this school, or in another; the default offers joining it.
+  if (path.startsWith('/api/lti/pending')) {
+    const school = new URLSearchParams(window.location.search).get('school') ?? 'offer'
+    return { canvasName: 'Canvas', lmsName: 'Canvas', schoolName: PREVIEW_SCHOOL, nameInCanvas: 'Jordan Rivera', school }
+  }
+  if (path === '/api/lti/connect') return { ok: true, canvasName: 'Canvas', joinedSchool: body.joinSchool === true, schoolName: body.joinSchool === true ? PREVIEW_SCHOOL : null }
   if (path === '/api/lti/platforms' && method === 'GET') {
     return {
       configUrl: 'https://www.wivoza.com/api/lti/config.json',

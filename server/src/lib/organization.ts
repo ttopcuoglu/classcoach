@@ -16,17 +16,24 @@ export function parseAdminEmails(raw: string): { emails: string[] } | { error: s
   return { emails }
 }
 
+/// The role someone joining a school gets: its admin if their email is on the
+/// school's admin list, a teacher otherwise. Shared by joining with a code and
+/// joining from the school's LMS.
+export function joiningRole(adminEmails: string | null, email: string): 'org_admin' | 'teacher' {
+  const admins = (adminEmails ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+  return admins.includes(email.toLowerCase()) ? 'org_admin' : 'teacher'
+}
+
 export async function resolveJoinCode(
   email: string,
   rawCode: string,
 ): Promise<{ organizationId: string; role: 'org_admin' | 'teacher' } | { error: string }> {
   const org = await prisma.organization.findUnique({ where: { joinCode: normalizeJoinCode(rawCode) } })
   if (!org) return { error: "That school code wasn't recognized." }
-  const admins = (org.adminEmails ?? '')
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean)
-  return { organizationId: org.id, role: admins.includes(email.toLowerCase()) ? 'org_admin' : 'teacher' }
+  return { organizationId: org.id, role: joiningRole(org.adminEmails, email) }
 }
 
 // Re-derives role for every current member of an org after its adminEmails
