@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { LessonText } from './LessonText'
 import {
   dismissSchoolFocusIdea,
   generateLessonDeck,
@@ -598,7 +599,8 @@ function templateSections(content: TemplateContent, ownPlan: boolean): DocSectio
       defaultOpen: true,
       noCopy: blocks.length === 0,
       copy: () => blocks,
-      body: blocks.length ? <Blocks blocks={blocks} /> : <p className="text-sm italic text-warm-gray">{empty}</p>,
+      // Laid out for reading on screen; `copy` above stays the text as written.
+      body: blocks.length ? <LessonText text={section.text} /> : <p className="text-sm italic text-warm-gray">{empty}</p>,
     }
   })
 }
