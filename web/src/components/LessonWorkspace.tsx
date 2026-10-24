@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   dismissSchoolFocusIdea,
   generateLessonDeck,
+  suggestSchoolFocusIdea,
   getLessonTemplates,
   layoutLessonPlan,
   type ExportDoc,
@@ -1333,9 +1334,14 @@ function DownloadIcon({ className }: { className?: string }) {
 /// never in Copy, the printout, the Word document or a Canvas page, and the
 /// label goes nowhere the teacher didn't put it.
 function SchoolFocusIdeaBox({ plan, adaptation }: { plan: LessonPlan; adaptation: WorkspaceAdaptation }) {
-  const idea = plan.schoolFocusIdea
+  // A suggestion asked for here replaces the stored record on this screen; the
+  // server has saved it too, so it is there next time the lesson opens.
+  const [suggested, setSuggested] = useState<LessonPlan['schoolFocusIdea']>(null)
+  const idea = suggested ?? plan.schoolFocusIdea
   const [hidden, setHidden] = useState(false)
   const [dismissing, setDismissing] = useState(false)
+  const [suggesting, setSuggesting] = useState(false)
+  const [suggestError, setSuggestError] = useState<string | null>(null)
   if (!idea || idea.dismissed || idea.added || hidden || plan.pendingAdaptation) return null
   const adding = adaptation.busy === 'school_focus'
 
@@ -1347,6 +1353,41 @@ function SchoolFocusIdeaBox({ plan, adaptation }: { plan: LessonPlan; adaptation
     } catch {
       setDismissing(false)
     }
+  }
+
+  async function suggestAnyway() {
+    setSuggesting(true)
+    setSuggestError(null)
+    try {
+      const updated = await suggestSchoolFocusIdea(plan.id)
+      setSuggested(updated.schoolFocusIdea ?? null)
+    } catch (err) {
+      setSuggestError((err as Error).message)
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
+  // Considered and left out: one quiet line, so a teacher who turned the
+  // focus on can see it was looked at, and can ask anyway.
+  if (idea.skipped || !idea.text) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-dashed border-gold px-4 py-3 text-sm text-ink">
+        <p className="min-w-0 flex-1">
+          <span className="font-semibold text-forest">{idea.name}:</span> no idea for this lesson.{' '}
+          {idea.reason ? <>It looked like a time your school said it may not fit: &ldquo;{idea.reason}&rdquo;</> : "It didn't look like a fit."}
+        </p>
+        <button
+          type="button"
+          disabled={suggesting}
+          onClick={suggestAnyway}
+          className={`min-h-[40px] px-4 text-sm font-semibold ${OUTLINE_BUTTON} disabled:opacity-60`}
+        >
+          {suggesting ? 'Thinking…' : 'Suggest one anyway'}
+        </button>
+        {suggestError && <p className="w-full text-xs text-terracotta-600">{suggestError}</p>}
+      </div>
+    )
   }
 
   return (

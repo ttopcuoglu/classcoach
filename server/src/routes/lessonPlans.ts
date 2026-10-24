@@ -58,7 +58,7 @@ import {
 } from '../lib/lessonTemplateModel.ts'
 import { prisma } from '../lib/prisma.ts'
 import { activeFocusFor } from '../lib/schoolPriorities.ts'
-import { matchSchoolFocusIdea, schoolFocusBlock } from '../lib/schoolFocusBlock.ts'
+import { focusOutcome, readSchoolFocusIdea, schoolFocusBlock, suggestAnywayPrompt } from '../lib/schoolFocusBlock.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
 import { THEME_GUIDE, type SlideDeck } from '../lib/slidesPptx.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
@@ -915,7 +915,7 @@ export async function generateFullLesson(
         checks: lesson.checks,
         misconceptions: lesson.misconceptions,
         exitTicket: lesson.exitTicket ?? undefined,
-        schoolFocusIdea: matchSchoolFocusIdea(lesson.schoolFocusIdea, focuses, lesson.schoolFocusCheck) ?? undefined,
+        schoolFocusIdea: (focusOutcome(lesson.schoolFocusIdea, focuses, lesson.schoolFocusCheck) as Prisma.InputJsonValue | null) ?? undefined,
       },
     })
     return { plan }
@@ -1149,7 +1149,7 @@ lessonPlansRouter.post('/generate', async (req, res) => {
         checks: lesson.checks,
         misconceptions: lesson.misconceptions,
         exitTicket: lesson.exitTicket ?? undefined,
-        schoolFocusIdea: matchSchoolFocusIdea(lesson.schoolFocusIdea, focuses, lesson.schoolFocusCheck) ?? undefined,
+        schoolFocusIdea: (focusOutcome(lesson.schoolFocusIdea, focuses, lesson.schoolFocusCheck) as Prisma.InputJsonValue | null) ?? undefined,
         weekPlanId: fromWeek?.id ?? null,
       },
     })
@@ -1326,6 +1326,65 @@ lessonPlansRouter.post('/:id/adapt', async (req, res) => {
 })
 
 type PendingAdaptation = { action: string; label: string; minutes: number | null; sections: LessonSections }
+
+// "Suggest one anyway" on a lesson the teacher's focus was considered for and
+// left out of. Only while that focus is still on for them: turning it off
+// stops it from now on, including here.
+lessonPlansRouter.post('/:id/school-focus-idea/suggest', async (req, res) => {
+  const userId = req.user!.userId
+  const plan = await prisma.lessonPlan.findFirst({ where: { id: req.params.id, userId } })
+  if (!plan) {
+    res.status(404).json({ error: 'Lesson plan not found' })
+    return
+  }
+  const stored = plan.schoolFocusIdea as { priorityId?: string; skipped?: boolean; reason?: string | null } | null
+  if (!stored?.skipped) {
+    res.status(400).json({ error: 'This lesson already has its idea, or none was considered.' })
+    return
+  }
+  const focuses = await activeFocusFor(userId)
+  const focus = focuses.find((f) => f.id === stored.priorityId) ?? focuses[0]
+  if (!focus) {
+    res.status(400).json({ error: 'Your school focus is off, so there is nothing to suggest.' })
+    return
+  }
+  const denied = await checkAndLogUsage(userId, 'lesson_plan_adapt')
+  if (denied) {
+    res.status(429).json({ error: denied })
+    return
+  }
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 400,
+      thinking: { type: 'disabled' },
+      system: suggestAnywayPrompt(focus, stored.reason ?? null),
+      messages: [{ role: 'user', content: `The lesson:\n${lessonAsText(plan as Parameters<typeof lessonAsText>[0])}` }],
+    })
+    const text = readSchoolFocusIdea(
+      extractTag(
+        response.content
+          .filter((block) => block.type === 'text')
+          .map((block) => block.text)
+          .join('\n'),
+        'school_focus_idea',
+      ),
+    )
+    if (!text) {
+      res.status(502).json({ error: "Couldn't come up with one just now. Try again." })
+      return
+    }
+    const updated = await prisma.lessonPlan.update({
+      where: { id: plan.id },
+      data: { schoolFocusIdea: { priorityId: focus.id, name: focus.name, text } },
+    })
+    res.json(updated)
+  } catch (error) {
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[lesson-plans] school focus suggestion failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
+  }
+})
 
 // "Not for this class" on the one school-focus idea: it goes away for this
 // lesson and is not offered again on it.

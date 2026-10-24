@@ -66,6 +66,12 @@ export function schoolFocusBlock(focuses: FocusForPrompt[], surface: FocusSurfac
 
 export type SchoolFocusIdea = { priorityId: string; name: string; text: string }
 
+/// A lesson the teacher's focus was considered for and left out of. Shown as
+/// one quiet line with "Suggest one anyway", so a teacher who turned a focus on
+/// can tell it was looked at. `reason` is the school's own not-fit line the
+/// lesson matched, in the school's words, or null when the model gave none.
+export type SkippedFocus = { priorityId: string; name: string; skipped: true; reason: string | null }
+
 /// The idea, tied to the focus it named on its first line. With one focus the
 /// name line may be missing; with two, an idea that names neither is dropped
 /// rather than guessed at.
@@ -94,15 +100,61 @@ export function matchSchoolFocusIdea(
 /// there by mistake); no verdict at all is read as a match, so an unclear check
 /// drops the idea rather than letting it through.
 export function checkFoundMismatch(check: string, focuses: Pick<FocusForPrompt, 'whenNotToUse'>[]): boolean {
-  const lines = check.split('\n').map((l) => l.trim()).filter(Boolean)
-  const verdict = lines.find((l) => /^(no match|match\b)/i.test(l))
+  const verdict = verdictLine(check)
   if (!verdict) return true
   if (/^no match\b/i.test(verdict)) return false
+  return matchedNotFitLine(check, focuses) != null
+}
+
+function verdictLine(check: string): string | undefined {
+  return check
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => /^(no match|match\b)/i.test(l))
+}
+
+/// The school's own not-fit line a MATCH verdict quoted, or null.
+export function matchedNotFitLine(check: string, focuses: Pick<FocusForPrompt, 'whenNotToUse'>[]): string | null {
+  const verdict = verdictLine(check)
+  if (!verdict || /^no match\b/i.test(verdict)) return null
   const quoted = norm(verdict.replace(/^match\s*:?/i, ''))
-  return focuses.flatMap(notFitLines).some((l) => {
-    const n = norm(l)
-    return quoted.length > 0 && (n.includes(quoted) || quoted.includes(n))
-  })
+  if (!quoted) return null
+  return (
+    focuses.flatMap(notFitLines).find((l) => {
+      const n = norm(l)
+      return n.includes(quoted) || quoted.includes(n)
+    }) ?? null
+  )
+}
+
+/// What a built lesson stores about the teacher's focus: the idea, or — when
+/// a focus was in the prompt and no idea survived — a record that it was
+/// considered, so the screen can say so. Null when there was no focus at all.
+export function focusOutcome(
+  raw: string | null | undefined,
+  focuses: FocusForPrompt[],
+  check: string | null,
+): SchoolFocusIdea | SkippedFocus | null {
+  if (focuses.length === 0) return null
+  const idea = matchSchoolFocusIdea(raw, focuses, check)
+  if (idea) return idea
+  const only = focuses.length === 1 ? focuses[0] : null
+  return {
+    priorityId: only?.id ?? focuses[0].id,
+    name: only?.name ?? 'Your school focus',
+    skipped: true,
+    reason: check ? matchedNotFitLine(check, focuses) : null,
+  }
+}
+
+/// "Suggest one anyway": the teacher asked for an idea on a lesson the check
+/// left out, so no check this time — but the same rules, and honesty about
+/// the school's own reservation when there was one.
+export function suggestAnywayPrompt(focus: FocusForPrompt, reason: string | null): string {
+  return `You are helping a K-12 teacher with a lesson they already have. They chose to include a school focus in their coaching, and they asked for one idea for using it in THIS lesson.
+${schoolFocusBlock([focus], 'talk').replace(/\n- When you bring it in[^\n]*/, '')}
+${reason ? `The school noted this focus may not fit when: "${reason}". If that applies to part of this lesson, choose the part where it fits best, and say in a few words why that part works.\n` : ''}
+Write ONE idea inside <${SCHOOL_FOCUS_IDEA_TAG}></${SCHOOL_FOCUS_IDEA_TAG}>: two or three sentences, starting "If it fits your goal," and naming the step it belongs in. Do not rewrite the lesson. Write nothing outside the tag.`
 }
 
 function norm(text: string): string {

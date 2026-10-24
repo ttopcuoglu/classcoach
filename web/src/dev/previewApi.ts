@@ -145,7 +145,18 @@ function previewAdminPriorities(path: string, method: string, body: Json): Json 
 
 function lesson(overrides: Json = {}): Json {
   return {
-    ...(new URLSearchParams(window.location.search).has('focus')
+    // `?focus=skip`: the focus was considered and left out of this lesson.
+    ...(new URLSearchParams(window.location.search).get('focus') === 'skip'
+      ? {
+          schoolFocusIdea: {
+            priorityId: 'preview-priority',
+            name: 'Academic Discussions',
+            skipped: true,
+            reason: 'Introducing brand-new vocabulary or procedures.',
+          },
+        }
+      : {}),
+    ...(new URLSearchParams(window.location.search).has('focus') && new URLSearchParams(window.location.search).get('focus') !== 'skip'
       ? {
           schoolFocusIdea: {
             priorityId: 'preview-priority',
@@ -1601,6 +1612,15 @@ const previewQuoteFlags: Json[] = []
 function answer(path: string, method: string, body: Json): Json | Json[] | null {
   if (path.startsWith('/api/school-focus')) return previewSchoolFocus(method, body)
   if (path.endsWith('/school-focus-idea/dismiss')) return lesson({ schoolFocusIdea: null })
+  if (path.endsWith('/school-focus-idea/suggest')) {
+    return lesson({
+      schoolFocusIdea: {
+        priorityId: 'preview-priority',
+        name: 'Academic Discussions',
+        text: 'If it fits your goal, the pair sort in step 4 is the place: before pairs place a card, each partner says why that function goes with that organelle, and the other adds to it or questions it.',
+      },
+    })
+  }
   if (path.startsWith('/api/auth/me') || path.startsWith('/api/profile')) return PROFILE
   if (path.startsWith('/api/lti/')) return previewLti(path, method, body)
   if (path.startsWith('/api/canvas/')) return previewCanvasSend(path, body)

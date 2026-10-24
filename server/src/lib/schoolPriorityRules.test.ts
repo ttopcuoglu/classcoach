@@ -134,3 +134,20 @@ test("an idea whose own check names a mismatch is dropped", async () => {
   assert.equal(matchSchoolFocusIdea('If it fits your goal, pair them.', [a], 'Vocabulary\nMATCH: Brand-new vocabulary, timed practice.'), null)
   assert.equal(matchSchoolFocusIdea('If it fits your goal, pair them.', [a], 'Comparing sources\nNO MATCH')?.priorityId, 'a')
 })
+
+test('a lesson with no idea records that the focus was considered, and why, in the school’s words', async () => {
+  const { focusOutcome, suggestAnywayPrompt } = await import('./schoolFocusBlock.ts')
+  const a = { id: 'a', ...good, whenNotToUse: "When the group doesn't yet have enough shared background.\nTimed practice." }
+  assert.equal(focusOutcome(null, [], null), null, 'no focus, nothing stored')
+  assert.deepEqual(focusOutcome(null, [a], "Microscope lab\nMATCH: When the group doesn't yet have enough shared background."), {
+    priorityId: 'a',
+    name: 'Academic Discussions',
+    skipped: true,
+    reason: "When the group doesn't yet have enough shared background.",
+  })
+  assert.equal((focusOutcome(null, [a], 'Something\nNO MATCH') as { reason: string | null }).reason, null)
+  assert.equal(focusOutcome('If it fits your goal, pair them.', [a], 'Lab\nNO MATCH')?.priorityId, 'a')
+  const prompt = suggestAnywayPrompt(a, 'Timed practice.')
+  assert.ok(prompt.includes('<school_focus>') && prompt.includes('"Timed practice."'))
+  assert.ok(!prompt.includes('school_focus_check'), 'the teacher asked, so no check this time')
+})

@@ -1517,7 +1517,18 @@ export type SchoolFocusItem = GuidanceFields & {
   endsOn: string | null
 }
 
-export type SchoolFocusIdea = { priorityId: string; name: string; text: string; dismissed?: boolean; added?: boolean }
+/// The idea for this lesson; or, with `skipped`, a record that the focus was
+/// considered and left out — `reason` is the school's own not-fit line it
+/// matched, in the school's words.
+export type SchoolFocusIdea = {
+  priorityId: string
+  name: string
+  text?: string
+  skipped?: boolean
+  reason?: string | null
+  dismissed?: boolean
+  added?: boolean
+}
 
 export function getSchoolFocus(): Promise<{ items: SchoolFocusItem[] }> {
   return request('/api/school-focus')
@@ -1525,6 +1536,10 @@ export function getSchoolFocus(): Promise<{ items: SchoolFocusItem[] }> {
 
 export function setSchoolFocus(priorityId: string, state: SchoolFocusState): Promise<{ items: SchoolFocusItem[] }> {
   return request(`/api/school-focus/${priorityId}`, { method: 'PUT', body: JSON.stringify({ state }) })
+}
+
+export function suggestSchoolFocusIdea(planId: string): Promise<LessonPlan> {
+  return request(`/api/lesson-plans/${planId}/school-focus-idea/suggest`, { method: 'POST' })
 }
 
 export function dismissSchoolFocusIdea(planId: string): Promise<LessonPlan> {
