@@ -1214,6 +1214,8 @@ adminRouter.get('/organizations', requireSuperadmin, async (_req, res) => {
       name: o.name,
       joinCode: o.joinCode,
       adminEmails: o.adminEmails,
+      pilotEndsAt: o.pilotEndsAt,
+      plan: o.plan,
       teacherCount: o._count.users,
     })),
   )
@@ -1271,7 +1273,7 @@ adminRouter.post('/organizations', requireSuperadmin, async (req, res) => {
 
 adminRouter.patch('/organizations/:id', requireSuperadmin, async (req, res) => {
   const id = req.params.id as string
-  const { name, joinCode, adminEmails } = req.body ?? {}
+  const { name, joinCode, adminEmails, pilotEndsOn } = req.body ?? {}
 
   const existing = await prisma.organization.findUnique({ where: { id } })
   if (!existing) {
@@ -1279,7 +1281,26 @@ adminRouter.patch('/organizations/:id', requireSuperadmin, async (req, res) => {
     return
   }
 
-  const data: { name?: string; joinCode?: string; adminEmails?: string | null } = {}
+  const data: { name?: string; joinCode?: string; adminEmails?: string | null; pilotEndsAt?: Date | null } = {}
+
+  // A free Wivoza+ pilot for every member until this day (YYYY-MM-DD),
+  // through the end of it in US Eastern time — see plusAccessFor. Null ends
+  // the pilot.
+  if (pilotEndsOn !== undefined) {
+    if (pilotEndsOn === null || pilotEndsOn === '') {
+      data.pilotEndsAt = null
+    } else if (typeof pilotEndsOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(pilotEndsOn)) {
+      const endsAt = new Date(`${pilotEndsOn}T23:59:59-05:00`)
+      if (Number.isNaN(endsAt.getTime())) {
+        res.status(400).json({ error: 'pilotEndsOn must be a date like 2027-03-08' })
+        return
+      }
+      data.pilotEndsAt = endsAt
+    } else {
+      res.status(400).json({ error: 'pilotEndsOn must be a date like 2027-03-08' })
+      return
+    }
+  }
 
   if (name !== undefined) {
     if (typeof name !== 'string' || !name.trim()) {
@@ -1335,6 +1356,8 @@ adminRouter.patch('/organizations/:id', requireSuperadmin, async (req, res) => {
     name: updated.name,
     joinCode: updated.joinCode,
     adminEmails: updated.adminEmails,
+    pilotEndsAt: updated.pilotEndsAt,
+    plan: updated.plan,
     teacherCount,
   })
 })

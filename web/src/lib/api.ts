@@ -139,6 +139,10 @@ export type Organization = {
   name: string
   joinCode: string
   adminEmails: string | null
+  // A free Wivoza+ pilot for every member while this is in the future.
+  pilotEndsAt?: string | null
+  // 'district' is a paid school-wide license.
+  plan?: string | null
   teacherCount: number
 }
 
@@ -1529,7 +1533,7 @@ export function dismissSchoolFocusIdea(planId: string): Promise<LessonPlan> {
 
 export function updateOrganization(
   id: string,
-  data: { name?: string; joinCode?: string; adminEmails?: string | null },
+  data: { name?: string; joinCode?: string; adminEmails?: string | null; pilotEndsOn?: string | null },
 ): Promise<Organization> {
   return request(`/api/admin/organizations/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 }

@@ -3388,19 +3388,45 @@ function OrganizationsPanel() {
   )
 }
 
+// The pilot end date as the date input holds it, in US Eastern time — the
+// server stores the end of that day.
+function pilotDateInput(endsAt: string | null | undefined): string {
+  if (!endsAt) return ''
+  return new Date(endsAt).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+}
+
+// About one semester, the length the sales conversation offers.
+function semesterFromToday(): string {
+  const d = new Date()
+  d.setMonth(d.getMonth() + 4, d.getDate() + 15)
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+}
+
+function pilotStatus(org: Organization): { label: string; active: boolean } | null {
+  if (org.plan === 'district') return { label: 'Wivoza+ school license', active: true }
+  if (!org.pilotEndsAt) return null
+  const endsAt = new Date(org.pilotEndsAt)
+  const day = endsAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' })
+  return endsAt > new Date()
+    ? { label: `Free Wivoza+ pilot through ${day}`, active: true }
+    : { label: `Pilot ended ${day}`, active: false }
+}
+
 function OrganizationRow({ org, onChanged }: { org: Organization; onChanged: () => void }) {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(org.name)
   const [joinCode, setJoinCode] = useState(org.joinCode)
   const [adminEmails, setAdminEmails] = useState(org.adminEmails ?? '')
+  const [pilotEndsOn, setPilotEndsOn] = useState(pilotDateInput(org.pilotEndsAt))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const pilot = pilotStatus(org)
 
   async function handleSave() {
     setSaving(true)
     setError(null)
     try {
-      await updateOrganization(org.id, { name, joinCode, adminEmails })
+      await updateOrganization(org.id, { name, joinCode, adminEmails, pilotEndsOn: pilotEndsOn || null })
       setEditing(false)
       onChanged()
     } catch (err) {
@@ -3430,6 +3456,20 @@ function OrganizationRow({ org, onChanged }: { org: Organization; onChanged: () 
             placeholder="Admin email(s), comma-separated"
             className={inputClass}
           />
+          <label className="flex flex-col gap-1 text-xs font-medium text-ink-soft">
+            Free Wivoza+ pilot for every teacher, through
+            <div className="flex flex-wrap items-center gap-3">
+              <input type="date" value={pilotEndsOn} onChange={(e) => setPilotEndsOn(e.target.value)} className={inputClass} />
+              <button type="button" onClick={() => setPilotEndsOn(semesterFromToday())} className="text-xs font-medium text-forest hover:underline">
+                One semester
+              </button>
+              {pilotEndsOn && (
+                <button type="button" onClick={() => setPilotEndsOn('')} className="text-xs font-medium text-ink-soft hover:text-terracotta-600">
+                  No pilot
+                </button>
+              )}
+            </div>
+          </label>
           {error && <p className="text-sm text-terracotta-600">{error}</p>}
           <div className="flex gap-3">
             <button type="button" onClick={handleSave} disabled={saving} className={primaryButtonClass}>
@@ -3453,6 +3493,7 @@ function OrganizationRow({ org, onChanged }: { org: Organization; onChanged: () 
           {org.teacherCount === 1 ? '' : 's'}
           {org.adminEmails ? ` · Admins: ${org.adminEmails}` : ''}
         </p>
+        {pilot && <p className={`mt-0.5 text-xs font-medium ${pilot.active ? 'text-forest' : 'text-ink-soft'}`}>{pilot.label}</p>}
       </div>
       <div className="flex shrink-0 gap-3">
         <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-ink-soft hover:text-ink">
