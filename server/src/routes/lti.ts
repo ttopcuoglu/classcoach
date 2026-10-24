@@ -106,7 +106,7 @@ async function handleLogin(req: Request, res: Response) {
       res,
       404,
       "This Canvas isn't connected yet",
-      `<p>Your school's Canvas has Wivoza installed, but Wivoza doesn't know this install yet.</p><p>Your school's Wivoza admin can add it under Admin → Canvas, using the client ID${clientId ? ` <code>${escapeHtml(clientId)}</code>` : ''}.</p>`,
+      `<p>Your school's Canvas has Wivoza installed, but Wivoza doesn't know this install yet.</p><p>Your school's Wivoza admin can add it under Admin → LMS, using the client ID${clientId ? ` <code>${escapeHtml(clientId)}</code>` : ''}.</p>`,
     )
     return
   }

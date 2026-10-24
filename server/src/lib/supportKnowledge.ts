@@ -58,7 +58,7 @@ THE TOOLS
   there is one. Any day can be opened as a full lesson. Weeks are on the
   web only, not in the iPhone app.
 - Canvas: a school can put Wivoza in its Canvas. A Canvas admin makes an
-  LTI developer key from the address shown under Admin, Canvas, installs
+  LTI developer key from the address shown under Admin, LMS, installs
   it, and the school's Wivoza admin pastes the key's client ID there.
   Teachers then see Wivoza in each course's menu, opening in its own tab;
   students never see it. The first time, a teacher signs in to Wivoza once

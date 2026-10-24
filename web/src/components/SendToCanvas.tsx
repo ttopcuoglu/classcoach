@@ -24,7 +24,7 @@ const FIELD = 'w-full rounded-xl border border-divider bg-white px-3 py-2 text-s
 /// Send to Canvas is switched off for now (2026-10-23): schools keep the
 /// Wivoza link inside Canvas, but lesson plans get no Send to Canvas button
 /// and admins no set-up for it. The server routes stay; flip this to bring
-/// the button and the Admin → Canvas set-up back.
+/// the button and the Admin → LMS set-up back.
 export const SEND_TO_CANVAS_ENABLED = false
 
 // One status check per page load: whether the button shows at all.

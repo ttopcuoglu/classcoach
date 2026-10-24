@@ -244,7 +244,7 @@ export default function AdminDashboard() {
 
         <button type="button" onClick={() => setTab('canvas')} className={navButtonClass(tab === 'canvas')}>
           <GraduationCapIcon className="h-4 w-4 shrink-0" />
-          Canvas
+          LMS
         </button>
 
         {isSuperadmin && (
@@ -366,13 +366,13 @@ export default function AdminDashboard() {
           </CardBoundary>
         )}
         {tab === 'canvas' && (
-          <CardBoundary key="canvas" title="Canvas">
+          <CardBoundary key="canvas" title="LMS">
             <div className="flex flex-col gap-6">
               <div>
-                <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">Canvas<span className="text-gold">.</span></h1>
+                <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">Your LMS<span className="text-gold">.</span></h1>
                 <p className="mt-1 max-w-2xl text-sm text-ink-soft">
-                  Put Wivoza in your school's Canvas, so teachers open it from any course already signed in. Your Canvas admin does the
-                  Canvas half; you paste one number here.
+                  Put Wivoza in your school's learning management system, so teachers open it from their courses already signed in.
+                  Students never see it. Canvas is supported today: your Canvas admin does the Canvas half, and you paste one number here.
                 </p>
               </div>
               <div className="max-w-3xl">
