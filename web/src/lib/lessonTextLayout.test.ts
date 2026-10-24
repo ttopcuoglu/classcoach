@@ -23,15 +23,15 @@ test('activity titles with minutes, and Teacher / Students lines, become structu
 })
 
 test('heading forms teachers and models write', () => {
-  assert.deepEqual(readHeading('Hook: What is really there? (5 min)'), { title: 'Hook: What is really there?', minutes: '5' })
-  assert.deepEqual(readHeading('Warm-up — 5 minutes'), { title: 'Warm-up', minutes: '5' })
-  assert.deepEqual(readHeading('Group work (10-12 min):'), { title: 'Group work', minutes: '10-12' })
+  assert.deepEqual(readHeading('Hook: What is really there? (5 min)'), { title: 'Hook: What is really there?', minutes: '5', rest: null })
+  assert.deepEqual(readHeading('Warm-up — 5 minutes'), { title: 'Warm-up', minutes: '5', rest: null })
+  assert.deepEqual(readHeading('Group work (10-12 min):'), { title: 'Group work', minutes: '10-12', rest: null })
   assert.equal(readHeading('Teacher: Give them 5 min'), null)
   assert.equal(readHeading('Students write for a while.'), null)
 })
 
 test('prose with no structure stays prose, with short leads set apart', () => {
-  const parts = layoutLessonText('During the observation step, circulate and ask pairs to describe.\n\nExit ticket (used as the HOT question): In 2-3 sentences, what did you observe?\n\nA plain paragraph, nothing special.')
+  const parts = layoutLessonText('During the observation step, circulate and ask pairs to describe.\n\nExpected (from the lab): In 2-3 sentences, what did you observe?\n\nA plain paragraph, nothing special.')
   assert.equal(parts.length, 1)
   assert.equal(parts[0].t, 'prose')
   const blocks = parts[0].t === 'prose' ? parts[0].blocks : []
@@ -78,4 +78,47 @@ test('other labels are bold lead-ins, the same in and out of an activity', () =>
   assert.deepEqual(blocks.map((b) => (b.t === 'lead' ? b.lead : b.t)), ['Support:', 'Stretch:'])
   const inside = layoutLessonText('Lab (10 min)\nTeacher: Circulate and ask each pair what they saw.\nLook for: pairs who predict first.')[0] as LessonActivity
   assert.deepEqual(inside.notes, [{ t: 'lead', lead: 'Look for:', text: 'pairs who predict first.' }])
+})
+
+test('I Do / We Do / You Do and other lesson parts start activities, with or without minutes', () => {
+  const parts = layoutLessonText(`I Do: Modeling (8 min)
+T: Solve the first problem aloud, naming each step as you go.
+We Do
+Teacher: Work problem two together, asking a student to name each step.
+Students: Name the next step and say why it comes next.
+You Do: Students solve three problems on their own and check with a partner.
+Exit Ticket:
+Students: Solve one problem and explain the first step.`) as LessonActivity[]
+  assert.deepEqual(parts.map((p) => [p.title, p.minutes, p.phase]), [
+    ['I Do: Modeling', '8', 'i'],
+    ['We Do', null, 'we'],
+    ['You Do', null, 'you'],
+    ['Exit Ticket', null, null],
+  ])
+  assert.deepEqual(parts[0].rows.map((r) => r.role), ['teacher'])
+  assert.deepEqual(parts[1].rows.map((r) => r.role), ['teacher', 'students'])
+  assert.equal(parts[2].rows[0]?.role, 'students', 'the sentence after You Do: names who does it')
+  assert.deepEqual(parts[3].rows.map((r) => r.role), ['students'])
+})
+
+test('a sentence that starts like a phase name is not a heading', () => {
+  assert.equal(readHeading('Explain why a cell membrane lets some things through.'), null)
+  assert.equal(readHeading('Hook students with a short video.'), null)
+  assert.deepEqual(readHeading('Do Now'), { title: 'Do Now', minutes: null, rest: null })
+  assert.deepEqual(readHeading('Warm-up: Number talk'), { title: 'Warm-Up: Number talk', minutes: null, rest: null })
+})
+
+test('shorthand and other ways of writing who does what', () => {
+  const [a] = layoutLessonText('Teacher actions: Model the first problem aloud.\nStudent actions: Copy the steps into notes.\nSs: Turn and tell a partner.') as LessonActivity[]
+  assert.deepEqual(a.rows.map((r) => [r.role, r.label]), [['teacher', 'Teacher'], ['students', 'Students'], ['students', 'Students']])
+  assert.equal(layoutLessonText('s: lowercase is not a role, it is prose here')[0].t, 'prose')
+})
+
+test('an objective that starts with Students stays prose outside an activity', () => {
+  assert.equal(layoutLessonText('Students will be able to explain why a membrane is selective.')[0].t, 'prose')
+})
+
+test('a two-word term in quotes is not a line to say', () => {
+  assert.equal(splitQuotes('Introduce "selectively permeable". Connect it back.').some((p) => p.quote), false)
+  assert.equal(splitQuotes('Ask: "Why?" and wait.').some((p) => p.quote), true)
 })

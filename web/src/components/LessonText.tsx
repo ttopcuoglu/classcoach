@@ -43,12 +43,30 @@ function RowText({ row }: { row: LessonRow }) {
   )
 }
 
+// Gradual release in three steady colours, so I Do / We Do / You Do read as
+// one sequence down the page.
+const PHASE_TAG: Record<NonNullable<LessonActivity['phase']>, { text: string; style: string }> = {
+  i: { text: 'I Do', style: 'bg-peach-tint text-terracotta-strong' },
+  we: { text: 'We Do', style: 'bg-gold-tint text-forest' },
+  you: { text: 'You Do', style: 'bg-mint-tint text-forest' },
+}
+
 function Activity({ activity }: { activity: LessonActivity }) {
+  const tag = activity.phase ? PHASE_TAG[activity.phase] : null
+  // With a tag, the heading is what follows the phase name ("I Do: Modeling"
+  // → tag "I Do", heading "Modeling"); a bare "We Do" is the tag alone.
+  const title = tag && activity.title ? activity.title.replace(/^(?:i|we|you|y['’]?all) do\b(?:\s+(?:together|alone|independently))?\s*[:–—-]?\s*/i, '') : activity.title
+  const tagText = tag && activity.title ? (activity.title.match(/^(?:i|we|you|y['’]?all) do\b(?:\s+(?:together|alone|independently))?/i)?.[0] ?? tag.text) : tag?.text
   return (
     <div className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0">
       {(activity.title || activity.minutes) && (
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          {activity.title && <h4 className="font-heading text-[16px] font-bold leading-snug text-forest">{activity.title}</h4>}
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            {tag && (
+              <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.1em] ${tag.style}`}>{tagText}</span>
+            )}
+            {title && <h4 className="font-heading text-[16px] font-bold leading-snug text-forest">{title}</h4>}
+          </div>
           {activity.minutes && (
             <span className="shrink-0 rounded-full bg-sage px-2.5 py-0.5 text-xs font-semibold text-forest">{activity.minutes} min</span>
           )}

@@ -10,7 +10,16 @@ import { textBlocks, type CopyBlock } from './lessonCopy'
 
 export type LessonRole = 'teacher' | 'students'
 export type LessonRow = { role: LessonRole; label: string; blocks: CopyBlock[] }
-export type LessonActivity = { t: 'activity'; title: string | null; minutes: string | null; rows: LessonRow[]; notes: LeadBlock[] }
+/// Gradual release, when the activity is one of its three moves.
+export type LessonPhase = 'i' | 'we' | 'you'
+export type LessonActivity = {
+  t: 'activity'
+  title: string | null
+  minutes: string | null
+  phase: LessonPhase | null
+  rows: LessonRow[]
+  notes: LeadBlock[]
+}
 export type LessonProse = { t: 'prose'; blocks: LeadBlock[] }
 export type LessonPart = LessonActivity | LessonProse
 /// A paragraph may open with a short lead ("During the observation step,",
@@ -25,23 +34,67 @@ const HEADING = [
 ]
 
 // Only who does what. Any other label (Support:, Stretch:, Expected:) is a
-// lead-in on its own line, set bold by splitLead.
-const ROLE = /^(teacher(?: prompt| says| does| moves)?|students?(?: task| do| does)?)\s*:\s*(.*)$/i
+// lead-in on its own line, set bold by splitLead. "T:", "S:" and "Ss:" are the
+// shorthand many plans use; only in capitals, so a stray "s:" is not a role.
+const ROLE = /^(teacher(?: prompt| says| does| moves| actions?| will| role)?|students?(?: task| do| does| actions?| will| role)?|T|S|Ss)\s*:\s*(.*)$/i
+const SHORT_ROLE = /^(T|S|Ss)\s*:/
+
+function matchRole(line: string): RegExpMatchArray | null {
+  const m = line.match(ROLE)
+  if (!m) return null
+  if (m[1].length <= 2 && !SHORT_ROLE.test(line)) return null
+  return m
+}
+
+/// Inside an activity, a sentence that opens with who does it ("Students
+/// solve three problems…", "The teacher models…") is that person's line,
+/// kept whole. Outside one it is just prose, so an objective such as
+/// "Students will be able to…" is never turned into a line.
+const SUBJECT = /^(?:the )?(teacher|students?)\s+(?!:)[a-z]/i
 
 function roleOf(label: string): LessonRole {
-  return label.toLowerCase().startsWith('teacher') ? 'teacher' : 'students'
+  return label.toLowerCase().startsWith('t') ? 'teacher' : 'students'
+}
+
+// The named parts of a lesson: gradual release, the 5E model and the parts
+// most school forms use. One of these at the start of a line, on its own or
+// before a colon or dash, starts an activity even without minutes. ("Explain
+// why a membrane…" is a sentence, not the Explain phase: it has no colon.)
+const PHASE = /^(I do|We do|You do(?: together| alone| independently)?|Y['’]?all do|Do now|Warm[- ]?up|Hook|Launch|Engage|Explore|Explain|Elaborate|Extend|Evaluate|Mini[- ]?lesson|Direct instruction|Modell?ing|Guided practice|Independent practice|Work time|Closing|Closure|Wrap[- ]?up|Exit ticket)\b\s*(\([^)]*\))?\s*(?:([:–—-])\s*(.*))?$/i
+
+export function phaseOf(title: string): LessonPhase | null {
+  const t = title.trim().toLowerCase()
+  if (/^i do\b/.test(t)) return 'i'
+  if (/^we do\b/.test(t)) return 'we'
+  if (/^(you do|y['’]?all do)\b/.test(t)) return 'you'
+  return null
 }
 
 function niceLabel(label: string): string {
-  return label.trim().toLowerCase().startsWith('teacher') ? 'Teacher' : 'Students'
+  return label.trim().toLowerCase().startsWith('t') ? 'Teacher' : 'Students'
 }
 
-export function readHeading(line: string): { title: string; minutes: string } | null {
+export type Heading = { title: string; minutes: string | null; rest: string | null }
+
+/// An activity's opening line: a title with its minutes, or a named lesson
+/// part ("We Do", "Exit Ticket:"). When a part's name is followed by a whole
+/// sentence ("I Do: Model the first problem aloud…"), the name is the title
+/// and the sentence comes back as `rest`, the activity's first line.
+export function readHeading(line: string): Heading | null {
   const trimmed = line.trim()
-  if (ROLE.test(trimmed)) return null
+  if (matchRole(trimmed)) return null
   for (const re of HEADING) {
     const m = trimmed.match(re)
-    if (m) return { title: m[1].replace(/[:\s]+$/, '').trim(), minutes: m[2].replace(/\s+/g, '') }
+    if (m) return { title: m[1].replace(/[:\s]+$/, '').trim(), minutes: m[2].replace(/\s+/g, ''), rest: null }
+  }
+  const p = trimmed.match(PHASE)
+  if (p && (p[3] || !p[4]) && !(p[3] === undefined && trimmed.length > p[1].length + (p[2]?.length ?? 0) + 1)) {
+    const name = p[1].replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bDo\b/g, 'Do')
+    const label = `${name}${p[2] ? ` ${p[2]}` : ''}`
+    const rest = (p[4] ?? '').trim()
+    if (!rest) return { title: label, minutes: null, rest: null }
+    const short = rest.split(/\s+/).length <= 8 && !/[.!?]$/.test(rest)
+    return short ? { title: `${label}: ${rest}`, minutes: null, rest: null } : { title: label, minutes: null, rest }
   }
   return null
 }
@@ -100,16 +153,25 @@ export function layoutLessonText(value: string | null | undefined): LessonPart[]
     if (heading) {
       closeProse()
       closeActivity()
-      activity = { t: 'activity', title: heading.title, minutes: heading.minutes, rows: [], notes: [] }
+      activity = { t: 'activity', title: heading.title, minutes: heading.minutes, phase: phaseOf(heading.title), rows: [], notes: [] }
+      if (heading.rest) {
+        // "I Do: Teacher models…" — the sentence after the name is the first
+        // line of the activity, and may itself name who does it.
+        const inner = matchRole(heading.rest)
+        const subject = heading.rest.match(SUBJECT)
+        if (inner && inner[2].trim()) row = { role: roleOf(inner[1]), label: niceLabel(inner[1]), lines: [inner[2]] }
+        else if (subject) row = { role: roleOf(subject[1]), label: niceLabel(subject[1]), lines: [heading.rest] }
+        else activity.notes.push(splitLead(heading.rest))
+      }
       continue
     }
     // A role line says something: "Teacher:" left blank, or "Teacher: Ms.
     // Rivera", is a form field to fill in, not a line of the lesson.
-    const roleMatch = line.match(ROLE)
-    const role = roleMatch && roleMatch[2].trim().split(/\s+/).length >= 4 ? roleMatch : null
+    const roleMatch = matchRole(line)
+    const role = roleMatch && roleMatch[2].trim().split(/\s+/).length >= 3 ? roleMatch : null
     if (role) {
       closeProse()
-      if (!activity) activity = { t: 'activity', title: null, minutes: null, rows: [], notes: [] }
+      if (!activity) activity = { t: 'activity', title: null, minutes: null, phase: null, rows: [], notes: [] }
       closeRow()
       row = { role: roleOf(role[1]), label: niceLabel(role[1]), lines: role[2] ? [role[2]] : [] }
       continue
@@ -128,6 +190,12 @@ export function layoutLessonText(value: string | null | undefined): LessonPart[]
       return b.t === 'lead' && b.lead.endsWith(':')
     })()
     if (row && labelled) closeRow()
+    const subject = activity && !labelled ? line.match(SUBJECT) : null
+    if (subject) {
+      closeRow()
+      row = { role: roleOf(subject[1]), label: niceLabel(subject[1]), lines: [line] }
+      continue
+    }
     if (row) {
       row.lines.push(line)
     } else if (activity) {
@@ -145,10 +213,13 @@ export function layoutLessonText(value: string | null | undefined): LessonPart[]
 /// eye can find them.
 export function splitQuotes(text: string): { text: string; quote: boolean }[] {
   const out: { text: string; quote: boolean }[] = []
-  // A phrase, not a single quoted word ("cells"), which is a term, not a line to say.
-  const re = /("[^"\n]*\S\s+\S[^"\n]*"|“[^”\n]*\S\s+\S[^”\n]*”)/g
+  // Something to say aloud, not a quoted term ("cells", "selectively
+  // permeable"): three words or more, or a line that ends like speech.
+  const spoken = (q: string) => q.slice(1, -1).trim().split(/\s+/).length >= 3 || /[?!.,]\s*$/.test(q.slice(1, -1))
+  const re = /("[^"\n]+"|“[^”\n]+”)/g
   let last = 0
   for (const m of text.matchAll(re)) {
+    if (!spoken(m[0])) continue
     if (m.index! > last) out.push({ text: text.slice(last, m.index), quote: false })
     out.push({ text: m[0], quote: true })
     last = m.index! + m[0].length
