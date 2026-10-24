@@ -21,11 +21,18 @@ import { Spinner } from './Spinner'
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest'
 const FIELD = 'w-full rounded-xl border border-divider bg-white px-3 py-2 text-sm text-forest focus:border-forest focus:outline-none'
 
+/// Send to Canvas is switched off for now (2026-10-23): schools keep the
+/// Wivoza link inside Canvas, but lesson plans get no Send to Canvas button
+/// and admins no set-up for it. The server routes stay; flip this to bring
+/// the button and the Admin → Canvas set-up back.
+export const SEND_TO_CANVAS_ENABLED = false
+
 // One status check per page load: whether the button shows at all.
 let statusOnce: Promise<CanvasStatus> | null = null
 export function useCanvasStatus(): CanvasStatus | null {
   const [status, setStatus] = useState<CanvasStatus | null>(null)
   useEffect(() => {
+    if (!SEND_TO_CANVAS_ENABLED) return
     statusOnce ??= getCanvasStatus().catch(() => ({ available: false, connected: false, canvasName: null }))
     let live = true
     void statusOnce.then((s) => live && setStatus(s))

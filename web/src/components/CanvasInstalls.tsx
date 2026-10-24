@@ -7,6 +7,7 @@ import {
   type CanvasEnvironment,
   type CanvasInstall,
 } from '../lib/api'
+import { SEND_TO_CANVAS_ENABLED } from './SendToCanvas'
 import { Spinner } from './Spinner'
 
 // A school connecting its Canvas to Wivoza. The Canvas side is done by a
@@ -261,7 +262,7 @@ export default function CanvasInstalls() {
                     Remove
                   </button>
                 )}
-                <SendSetup install={p} redirectUri={data.oauthRedirectUri ?? data.configUrl.replace(/lti\/config\.json$/, 'canvas/oauth/callback')} onSaved={() => void refresh()} />
+                {SEND_TO_CANVAS_ENABLED && <SendSetup install={p} redirectUri={data.oauthRedirectUri ?? data.configUrl.replace(/lti\/config\.json$/, 'canvas/oauth/callback')} onSaved={() => void refresh()} />}
               </li>
             ))}
           </ul>

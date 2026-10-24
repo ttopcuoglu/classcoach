@@ -63,11 +63,7 @@ THE TOOLS
   Teachers then see Wivoza in each course's menu, opening in its own tab;
   students never see it. The first time, a teacher signs in to Wivoza once
   to connect their Canvas account; after that the link signs them in.
-  Send to Canvas puts a lesson or a week on a page in one of the teacher's
-  Canvas courses, optionally in a module, unpublished unless they choose to
-  publish it. It needs a second, API developer key set up under Admin,
-  Canvas, and each teacher allows Wivoza once in a Canvas window. Wivoza can
-  only list courses and modules and add pages.
+  Sending lessons from Wivoza into Canvas is not available yet.
 - Communication Coach: write a message, prepare for a real meeting or
   conversation (including rehearsing it), or get a second read on a reply
   before sending it.
