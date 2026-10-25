@@ -385,3 +385,42 @@ export function ShieldIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function GridIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <rect x="4" y="4" width="6.5" height="7.5" rx="1.5" />
+      <rect x="13.5" y="4" width="6.5" height="4.5" rx="1.5" />
+      <rect x="13.5" y="11.5" width="6.5" height="8.5" rx="1.5" />
+      <rect x="4" y="14.5" width="6.5" height="5.5" rx="1.5" />
+    </svg>
+  )
+}
+
+export function LightbulbIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.5h6M10 20.5h4" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.5a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3.5Z" />
+    </svg>
+  )
+}
+
+export function SchoolIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 20.5h17M5 20.5V10l7-4.5 7 4.5v10.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 20.5v-4.5h4v4.5M12 5.5V2.5h3" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12.5h.01M16 12.5h.01" />
+    </svg>
+  )
+}
+
+export function GearIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.3 3.6c.4-1.5 2.9-1.5 3.4 0a1.7 1.7 0 0 0 2.6 1c1.3-.8 3.1 1 2.3 2.3a1.7 1.7 0 0 0 1 2.6c1.5.4 1.5 2.9 0 3.4a1.7 1.7 0 0 0-1 2.6c.8 1.3-1 3.1-2.3 2.3a1.7 1.7 0 0 0-2.6 1c-.4 1.5-2.9 1.5-3.4 0a1.7 1.7 0 0 0-2.6-1c-1.3.8-3.1-1-2.3-2.3a1.7 1.7 0 0 0-1-2.6c-1.5-.4-1.5-2.9 0-3.4a1.7 1.7 0 0 0 1-2.6c-.8-1.3 1-3.1 2.3-2.3a1.7 1.7 0 0 0 2.6-1Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { ADMIN_NAV, adminPageFor, adminPath, type AdminPage } from '../lib/adminNav'
 import {
   archivePdFocusArea,
   createOrganization,
@@ -56,8 +57,9 @@ import {
 } from '../lib/adminLabels'
 import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { CHALLENGE_TYPES, MESSAGE_PURPOSES, challengeLabel, purposeLabel } from '../lib/communicationOptions'
-import { ChartBarIcon, ChatBubbleIcon, GraduationCapIcon, HomeIcon, LessonPlanIcon, LockIcon, ShieldIcon, TargetIcon, UserIcon } from '../components/icons'
+import { ChatBubbleIcon, LockIcon } from '../components/icons'
 import { CoachingPrioritiesPanel } from '../components/CoachingPrioritiesPanel'
+import { ExploreYourSchool, SchoolFocusCard } from '../components/AdminDashboardTop'
 import { LessonFormatManager } from '../components/LessonFormats'
 import CanvasInstalls from '../components/CanvasInstalls'
 
@@ -94,18 +96,13 @@ const primaryButtonClass =
   'rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft'
 
 type AnalyticsTab = 'dashboard' | 'engagement' | 'insights'
-type Tab = AnalyticsTab | 'professionalLearning' | 'coachingPriorities' | 'people' | 'lessonFormat' | 'canvas' | 'organizations' | 'platformUsers' | 'schoolInquiries'
+// The page comes from the address (lib/adminNav.ts); the sidebar is the menu.
+type Tab = AdminPage
 
 const ANALYTICS_META: Record<AnalyticsTab, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Are teachers using Wivoza, and what should you do next.' },
-  engagement: { title: 'Adoption & engagement', subtitle: 'How consistently your staff is using Wivoza.' },
-  insights: { title: 'Coaching insights', subtitle: 'Shared strengths and growth areas emerging across your staff.' },
-}
-
-function navButtonClass(active: boolean) {
-  return `flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
-    active ? 'bg-forest font-semibold text-cream' : 'text-ink-soft hover:bg-cream hover:text-ink'
-  }`
+  engagement: { title: 'Usage & Engagement', subtitle: 'How consistently your staff is using Wivoza.' },
+  insights: { title: 'Coaching Insights', subtitle: 'Shared strengths and growth areas emerging across your staff.' },
 }
 
 const GRADE_BAND_OPTIONS = ['K-2', '3-5', '6-8', '9-12', 'Unspecified'] as const
@@ -129,7 +126,9 @@ function presetRange(preset: DatePreset): { startDate: string; endDate: string }
 
 export default function AdminDashboard() {
   const [me, setMe] = useState<UserProfile | null>(null)
-  const [tab, setTab] = useState<Tab>('dashboard')
+  const location = useLocation()
+  const navigate = useNavigate()
+  const routed = adminPageFor(location.pathname)
   const [overview, setOverview] = useState<AdminOverview | null>(null)
   const [overviewError, setOverviewError] = useState<string | null>(null)
   const [orgs, setOrgs] = useState<Organization[]>([])
@@ -147,6 +146,11 @@ export default function AdminDashboard() {
   }, [])
 
   const isSuperadmin = me?.role === 'superadmin'
+  // Wivoza's own pages are only ever superadmin's; anyone else asking for one
+  // gets the Dashboard, the same as the menu never offering it.
+  const internal = ADMIN_NAV.find((i) => i.page === routed)?.superadminOnly ?? false
+  const tab: Tab = internal && me != null && !isSuperadmin ? 'dashboard' : routed
+  const setTab = (next: Tab) => navigate(adminPath(next))
 
   useEffect(() => {
     if (isSuperadmin) {
@@ -194,92 +198,7 @@ export default function AdminDashboard() {
   const isAnalyticsTab = tab === 'dashboard' || tab === 'engagement' || tab === 'insights'
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
-      <nav className="flex shrink-0 flex-col gap-6 lg:w-56">
-        <button type="button" onClick={() => setTab('dashboard')} className={navButtonClass(tab === 'dashboard')}>
-          <HomeIcon className="h-4 w-4 shrink-0" />
-          Dashboard
-        </button>
-
-        <div>
-          <p className="flex items-center gap-1.5 px-3 text-xs font-semibold text-ink-soft">
-            <ChartBarIcon className="h-3.5 w-3.5 shrink-0" />
-            Analytics
-          </p>
-          <div className="mt-1 flex flex-col gap-0.5">
-            <button type="button" onClick={() => setTab('engagement')} className={navButtonClass(tab === 'engagement')}>
-              Adoption &amp; engagement
-            </button>
-            <button type="button" onClick={() => setTab('insights')} className={navButtonClass(tab === 'insights')}>
-              Coaching insights
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('professionalLearning')}
-              className={navButtonClass(tab === 'professionalLearning')}
-            >
-              Professional Learning
-            </button>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setTab('coachingPriorities')}
-          className={navButtonClass(tab === 'coachingPriorities')}
-        >
-          <TargetIcon className="h-4 w-4 shrink-0" />
-          Coaching Priorities
-        </button>
-
-        <button type="button" onClick={() => setTab('people')} className={navButtonClass(tab === 'people')}>
-          <UserIcon className="h-4 w-4 shrink-0" />
-          People
-        </button>
-
-        <button type="button" onClick={() => setTab('lessonFormat')} className={navButtonClass(tab === 'lessonFormat')}>
-          <LessonPlanIcon className="h-4 w-4 shrink-0" />
-          Lesson plan format
-        </button>
-
-        <button type="button" onClick={() => setTab('canvas')} className={navButtonClass(tab === 'canvas')}>
-          <GraduationCapIcon className="h-4 w-4 shrink-0" />
-          LMS
-        </button>
-
-        {isSuperadmin && (
-          <div>
-            <p className="flex items-center gap-1.5 px-3 text-xs font-semibold text-ink-soft">
-              <ShieldIcon className="h-3.5 w-3.5 shrink-0" />
-              Wivoza internal
-            </p>
-            <div className="mt-1 flex flex-col gap-0.5">
-              <button
-                type="button"
-                onClick={() => setTab('organizations')}
-                className={navButtonClass(tab === 'organizations')}
-              >
-                Organizations
-              </button>
-              <button
-                type="button"
-                onClick={() => setTab('platformUsers')}
-                className={navButtonClass(tab === 'platformUsers')}
-              >
-                Platform users
-              </button>
-              <button
-                type="button"
-                onClick={() => setTab('schoolInquiries')}
-                className={navButtonClass(tab === 'schoolInquiries')}
-              >
-                School inquiries
-              </button>
-            </div>
-          </div>
-        )}
-      </nav>
-
+    <div className="flex flex-col gap-6">
       <div className="flex min-w-0 flex-1 flex-col gap-6">
         {isAnalyticsTab && (
           <FilterBar
@@ -317,12 +236,12 @@ export default function AdminDashboard() {
           </CardBoundary>
         )}
         {tab === 'engagement' && overview && (
-          <CardBoundary key="engagement" title="Adoption & engagement">
+          <CardBoundary key="engagement" title="Usage & Engagement">
             <EngagementPanel overview={overview} />
           </CardBoundary>
         )}
         {tab === 'insights' && overview && (
-          <CardBoundary key="insights" title="Coaching insights">
+          <CardBoundary key="insights" title="Coaching Insights">
             <CoachingInsightsPanel overview={overview} selectedOrgId={selectedOrgId} />
           </CardBoundary>
         )}
@@ -361,15 +280,15 @@ export default function AdminDashboard() {
           </CardBoundary>
         )}
         {tab === 'lessonFormat' && (
-          <CardBoundary key="lessonFormat" title="Lesson plan format">
+          <CardBoundary key="lessonFormat" title="Lesson Plan Format">
             <LessonFormatPanel />
           </CardBoundary>
         )}
         {tab === 'canvas' && (
-          <CardBoundary key="canvas" title="LMS">
+          <CardBoundary key="canvas" title="LMS Connections">
             <div className="flex flex-col gap-6">
               <div>
-                <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">Your LMS<span className="text-gold">.</span></h1>
+                <h1 className="font-heading text-2xl font-extrabold text-forest md:text-[34px]">LMS Connections<span className="text-gold">.</span></h1>
                 <p className="mt-1 max-w-2xl text-sm text-ink-soft">
                   Put Wivoza in your school's learning management system, so teachers open it from their courses already signed in.
                   Canvas connects here: your Canvas admin does the Canvas half, and you paste one number back. Another LMS? We can work
@@ -2384,6 +2303,10 @@ function DashboardPanel({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* The school's focus and where to look further, above the reports
+          that were already here. */}
+      {overview.scope === 'organization' && <SchoolFocusCard organizationId={organizationId} />}
+      <ExploreYourSchool />
       {glance.length > 0 && (
         <div className="rounded-3xl bg-forest p-6 text-cream">
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">At a glance</p>

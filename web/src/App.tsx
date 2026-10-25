@@ -266,7 +266,7 @@ export default function App() {
               {/* Always registered, so /admin never falls through to a blank page
                   (e.g. right after logging out on it) — a teacher is sent home. */}
               <Route
-                path="admin"
+                path="admin/*"
                 element={user != null && user.role !== 'teacher' ? <AdminDashboard /> : <Navigate to="/" replace />}
               />
             </Route>

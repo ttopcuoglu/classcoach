@@ -6,15 +6,18 @@ import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import {
   UserIcon,
   ChatBubbleIcon,
-  ChecklistIcon,
+  CloseIcon,
   HomeIcon,
   LessonPlanIcon,
   MailIcon,
+  MenuIcon,
   MicIcon,
   TargetIcon,
   WaveformIcon,
 } from './icons'
 import { PLUS_MONTHLY_PRICE, PLUS_SUMMARY } from '../lib/pricing'
+import { isAdminPath } from '../lib/adminNav'
+import { AdminNav, isAdminRole, WorkspaceSwitch } from './AdminSidebar'
 
 type IconComponent = (props: { className?: string }) => React.ReactElement
 type NavItem = { to: string; label: string; icon: IconComponent; subtitle?: string }
@@ -85,10 +88,20 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
   const location = useLocation()
   const navigate = useNavigate()
   const [openGroup, setOpenGroup] = useState<string | null>(null)
+  // The phone's School Admin menu. Closes on every page change, like the
+  // bottom bar's group menus.
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   useEffect(() => {
     setOpenGroup(null)
+    setDrawerOpen(false)
   }, [location.pathname])
+
+  // Two workspaces in one sidebar: My Coaching (the teacher's own tools, as
+  // they always were) and School Admin. Which one is showing follows the
+  // address, so back, forward and a shared /admin link all keep it right.
+  const canAdmin = isAdminRole(user)
+  const admin = canAdmin && isAdminPath(location.pathname)
 
   async function handleLogout() {
     await logout().catch(() => {})
@@ -114,6 +127,16 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           <img src="/logo/wivoza-lockup-dark.png" alt="Wivoza" className="h-10 w-auto" />
           <p className="text-[11px] text-cream/50">Practice. Reflect. Grow.</p>
         </div>
+        {canAdmin && (
+          <div className="px-3 pb-4">
+            <WorkspaceSwitch admin={admin} />
+          </div>
+        )}
+        {admin ? (
+          <nav aria-label="School Admin" className="flex flex-1 flex-col overflow-y-auto px-3 pb-4">
+            <AdminNav user={user} />
+          </nav>
+        ) : (
         <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 pb-4">
           <div className="flex flex-col gap-1">
             <NavLink to="/" end className={({ isActive }) => navLinkClasses(isActive)}>
@@ -146,9 +169,11 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             </div>
           ))}
         </nav>
+        )}
 
         {/* Real data only — the teacher's own chosen My Growth focus metric,
             not an invented streak or weekly-action count. */}
+        {!admin && (
         <div className="mx-3 mb-3 rounded-2xl bg-forest-soft p-4">
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold-tint text-terracotta-600">
             <TargetIcon className="h-5 w-5" />
@@ -161,8 +186,9 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             View your trends →
           </Link>
         </div>
+        )}
 
-        {user != null && !hasPlus && (
+        {user != null && !hasPlus && !admin && (
           <div className="mx-3 mb-3 rounded-2xl bg-gold-tint p-4">
             <p className="text-sm font-semibold text-terracotta-600">Wivoza Plus</p>
             <p className="mt-1 text-xs text-forest/70">
@@ -174,15 +200,6 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             >
               Upgrade — {PLUS_MONTHLY_PRICE}/month
             </Link>
-          </div>
-        )}
-
-        {user != null && user.role !== 'teacher' && (
-          <div className="border-t border-cream/10 px-3 py-3">
-            <NavLink to="/admin" className={({ isActive }) => navLinkClasses(isActive)}>
-              <ChecklistIcon className="h-5 w-5 shrink-0" />
-              Admin
-            </NavLink>
           </div>
         )}
 
@@ -216,11 +233,55 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
       <div className="flex min-h-screen flex-1 flex-col print:min-h-0">
         {/* Mobile top bar */}
         <header className="flex items-center justify-between border-b border-hairline bg-cream-card px-4 py-3 md:hidden print:!hidden">
-          <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-6 w-auto" />
-          <button type="button" onClick={handleLogout} className="text-sm font-medium text-ink-soft">
-            Log out
-          </button>
+          <div className="flex items-center gap-3">
+            {admin && (
+              <button
+                type="button"
+                aria-label="Open the School Admin menu"
+                onClick={() => setDrawerOpen(true)}
+                className="-ml-1 flex h-10 w-10 items-center justify-center rounded-lg text-forest hover:bg-cream"
+              >
+                <MenuIcon className="h-5 w-5" />
+              </button>
+            )}
+            <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-6 w-auto" />
+          </div>
+          <div className="flex items-center gap-4">
+            {canAdmin && !admin && (
+              <Link to="/admin" className="text-sm font-semibold text-forest">
+                School Admin
+              </Link>
+            )}
+            <button type="button" onClick={handleLogout} className="text-sm font-medium text-ink-soft">
+              Log out
+            </button>
+          </div>
         </header>
+
+        {/* School Admin on a phone: the same menu as the sidebar, in a drawer,
+            with the switch back to My Coaching at the top. */}
+        {admin && drawerOpen && (
+          <div className="fixed inset-0 z-30 md:hidden print:!hidden" role="dialog" aria-modal="true" aria-label="School Admin menu">
+            <button type="button" aria-label="Close the menu" className="absolute inset-0 bg-black/40" onClick={() => setDrawerOpen(false)} />
+            <div className="absolute inset-y-0 left-0 flex w-[280px] max-w-[85vw] flex-col overflow-y-auto bg-forest px-3 py-4 shadow-xl">
+              <div className="mb-4 flex items-center justify-between px-3">
+                <img src="/logo/wivoza-lockup-dark.png" alt="Wivoza" className="h-8 w-auto" />
+                <button
+                  type="button"
+                  aria-label="Close the menu"
+                  onClick={() => setDrawerOpen(false)}
+                  className="flex h-10 w-10 items-center justify-center rounded-lg text-cream/80 hover:bg-forest-soft"
+                >
+                  <CloseIcon className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="mb-4">
+                <WorkspaceSwitch admin={admin} onPick={() => setDrawerOpen(false)} />
+              </div>
+              <AdminNav user={user} onPick={() => setDrawerOpen(false)} />
+            </div>
+          </div>
+        )}
 
         {user != null && !hasPlus && (
           <Link
@@ -231,7 +292,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           </Link>
         )}
 
-        <main className="flex-1 px-4 py-6 pb-24 md:px-10 md:py-10 md:pb-10 print:!p-0">
+        <main className={`flex-1 px-4 py-6 md:px-10 md:py-10 md:pb-10 print:!p-0 ${admin ? 'pb-10' : 'pb-24'}`}>
           {/* Reading width everywhere except the admin reports, which carry their
               own section menu beside the content — at the reading width that
               left the dashboards about 670px, too narrow for a row of stats. */}
@@ -253,6 +314,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             picking one page for the user. Profile is the last slot rather than
             a category of its own, matching the account block the sidebar puts
             in the same corner on a wide screen. */}
+        {!admin && (
         <nav className="fixed inset-x-0 bottom-0 z-10 flex items-center justify-around border-t border-hairline bg-cream-card py-2 md:hidden print:!hidden">
           <NavLink to="/" end className={({ isActive }) => mobileNavClasses(isActive)}>
             <HomeIcon className="h-5 w-5" />
@@ -315,6 +377,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             You
           </NavLink>
         </nav>
+        )}
       </div>
     </div>
   )

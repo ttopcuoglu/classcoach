@@ -249,7 +249,7 @@ function PrivacyBox() {
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-gold">You will see</p>
           <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm text-cream/90">
             <li>Each priority, exactly as teachers see it.</li>
-            <li>The staff-wide lesson numbers you already have in Coaching insights.</li>
+            <li>The staff-wide lesson numbers you already have in Coaching Insights.</li>
           </ul>
         </div>
         <div>
