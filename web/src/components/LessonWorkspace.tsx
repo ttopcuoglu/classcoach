@@ -790,7 +790,7 @@ function FormatBar({ format, onManage }: { format: LessonFormat; onManage: () =>
   if (!format.hasAny)
     return (
       <p className="text-[13px] text-warm-gray">
-        Does your school use its own lesson plan form?{' '}
+        Have your own lesson plan form, or one your school uses?{' '}
         <button type="button" onClick={onManage} className={`rounded font-semibold text-forest underline decoration-forest/30 underline-offset-4 hover:decoration-forest ${FOCUS}`}>
           Set up your format
         </button>{' '}
