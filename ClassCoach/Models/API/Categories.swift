@@ -9,6 +9,11 @@ let scenarioCategories: [(label: String, value: String?)] =
         area.subCategories.map { (label: $0.label, value: Optional($0.value)) }
     }
 
+/// What a teacher's own situation from Practice's "Something I'm facing"
+/// carries until the coach has read it and assigned a real category.
+let ownSituationCategory = "own_situation"
+
 func categoryLabel(_ value: String) -> String {
-    scenarioCategories.first { $0.value == value }?.label ?? value
+    if value == ownSituationCategory { return "Your situation" }
+    return scenarioCategories.first { $0.value == value }?.label ?? value
 }

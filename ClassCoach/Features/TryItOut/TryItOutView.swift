@@ -36,6 +36,9 @@ struct TryItOutContent: View {
     /// Unlike Ask, this is the primary control here: it decides what scenario
     /// the teacher gets handed.
     var focusArea: String? = nil
+    /// "Something I'm facing": the teacher writes the situation instead of
+    /// being handed one. After the first coaching it is the same attempt view.
+    var real = false
 
     @EnvironmentObject private var authManager: AuthManager
     @State private var category: String?
@@ -44,6 +47,10 @@ struct TryItOutContent: View {
 
     @State private var attempt: ScenarioAttempt?
     @State private var responseText = ""
+    @State private var situationText = ""
+    /// The stored situation, so a retry after a failed coaching call doesn't
+    /// save the same words twice. Dropped as soon as the words change.
+    @State private var realScenario: (id: String, text: String)?
     /// Nil until a teacher asks. Cycles rather than showing the whole list, so a
     /// hint stays a nudge rather than becoming a menu to choose from.
     @State private var hintIndex: Int?
@@ -65,10 +72,25 @@ struct TryItOutContent: View {
 
     private var savedAttempts: [ScenarioAttempt] { allAttempts.filter(\.saved) }
     private var hasFeedback: Bool { attempt?.feedback != nil || attempt?.modelResponse != nil }
+    /// The teacher's own situation, not a generated one: there is no other
+    /// scenario to swap in, only a fresh situation of their own.
+    private var isOwn: Bool { attempt?.scenario.source == "teacher" }
+    private var trimmedSituation: String { situationText.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var trimmedResponse: String { responseText.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                if real {
+                    PanelHeader(
+                        eyebrow: "Practice",
+                        title: "Practice something real",
+                        subtitle: "Describe a moment you\u{2019}re facing and how you\u{2019}d handle it. Your coach responds to your words, and you can keep working on them together."
+                    )
+                    if attempt == nil {
+                        TeachingContextFields(focusArea: nil, value: $room)
+                    }
+                } else {
                 PanelHeader(
                     eyebrow: "Practice a scenario",
                     title: "Rehearse a hard moment",
@@ -78,6 +100,7 @@ struct TryItOutContent: View {
                 )
                 narrowingRow
                 TeachingContextFields(focusArea: focusArea, value: $room)
+                }
 
                 scenarioCard
 
@@ -131,6 +154,8 @@ struct TryItOutContent: View {
         VStack(alignment: .leading, spacing: 16) {
             if let attempt {
                 scenarioDetail(attempt)
+            } else if real {
+                realForm
             } else {
                 emptyState
             }
@@ -171,20 +196,86 @@ struct TryItOutContent: View {
         .padding(.vertical, 12)
     }
 
+    private var realForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("What\u{2019}s happening?")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(AppTheme.textPrimary)
+            editor($situationText, placeholder: "e.g. A student in my third period calls out every answer before anyone else can think, and the quieter kids have stopped trying.")
+            Text("No need to sort it into a type \u{2014} your coach works that out. Leave out names.")
+                .font(.caption)
+                .foregroundStyle(AppTheme.textSecondary)
+
+            Text("How would you handle it?")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(AppTheme.textPrimary)
+                .padding(.top, 4)
+            editor($responseText, placeholder: "What you\u{2019}d say, word for word, and what you\u{2019}d do.")
+
+            ProgressRing(active: submitting, estimatedSeconds: 8, label: "Reading your situation", hint: "Usually under ten seconds.")
+
+            let ready = trimmedSituation.count >= 15 && !trimmedResponse.isEmpty
+            Button {
+                Task { await submitReal() }
+            } label: {
+                Text(submitting ? "Getting coaching..." : "Get coaching")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(ready ? AppTheme.terracotta : AppTheme.textSecondary.opacity(0.35), in: Capsule())
+            }
+            .disabled(submitting || !ready)
+        }
+    }
+
+    private func editor(_ text: Binding<String>, placeholder: String) -> some View {
+        TextEditor(text: text)
+            .scrollContentBackground(.hidden)
+            .frame(minHeight: 100)
+            .padding(8)
+            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(alignment: .topLeading) {
+                if text.wrappedValue.isEmpty {
+                    Text(placeholder)
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 16)
+                        .allowsHitTesting(false)
+                }
+            }
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
+            .disabled(submitting)
+    }
+
+    private func tagLine(_ attempt: ScenarioAttempt) -> String {
+        let scenario = attempt.scenario
+        let parts: [String?]
+        if scenario.source == "teacher" {
+            parts = [
+                "Your situation",
+                scenario.category == ownSituationCategory ? nil : categoryLabel(scenario.category),
+                "Grades \(scenario.gradeBand)",
+            ]
+        } else {
+            parts = [
+                focusAreaLabel(scenario.focusArea ?? focusAreaForCategory(scenario.category)?.value),
+                categoryLabel(scenario.category),
+                "Grades \(scenario.gradeBand)",
+                scenario.course ?? scenario.subject,
+                scenario.courseLevel,
+                scenario.subject,
+                difficultyLabel(scenario.difficulty),
+            ]
+        }
+        return parts.compactMap { $0 }.joined(separator: " · ")
+    }
+
     @ViewBuilder
     private func scenarioDetail(_ attempt: ScenarioAttempt) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(
-                [
-                    focusAreaLabel(attempt.scenario.focusArea ?? focusAreaForCategory(attempt.scenario.category)?.value),
-                    categoryLabel(attempt.scenario.category),
-                    "Grades \(attempt.scenario.gradeBand)",
-                    attempt.scenario.course ?? attempt.scenario.subject,
-                    attempt.scenario.courseLevel,
-                    attempt.scenario.subject,
-                    difficultyLabel(attempt.scenario.difficulty),
-                ].compactMap { $0 }.joined(separator: " · ")
-            )
+            Text(tagLine(attempt))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(AppTheme.primary)
                 .padding(.horizontal, 10)
@@ -251,8 +342,8 @@ struct TryItOutContent: View {
             ProgressRing(active: submitting, estimatedSeconds: 8, label: "Reading your response", hint: "Usually under ten seconds.")
 
             HStack {
-                Button("Try a different scenario") {
-                    Task { await generateScenario() }
+                Button(isOwn ? "Something else" : "Try a different scenario") {
+                    if isOwn { startOver() } else { Task { await generateScenario() } }
                 }
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(AppTheme.textSecondary)
@@ -301,9 +392,9 @@ struct TryItOutContent: View {
                 Spacer()
 
                 Button {
-                    Task { await generateScenario() }
+                    if isOwn { startOver() } else { Task { await generateScenario() } }
                 } label: {
-                    Text(generating ? "Generating..." : "New Scenario")
+                    Text(generating ? "Generating..." : isOwn ? "Something else" : "New Scenario")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 20)
@@ -423,6 +514,40 @@ struct TryItOutContent: View {
             self.error = "Could not get coaching feedback. Please try again."
         }
         submitting = false
+    }
+
+    private func submitReal() async {
+        let situation = trimmedSituation
+        let response = trimmedResponse
+        guard !situation.isEmpty, !response.isEmpty, !submitting else { return }
+        submitting = true
+        error = nil
+        do {
+            var scenarioId = realScenario?.text == situation ? realScenario?.id : nil
+            if scenarioId == nil {
+                let created = try await TryItOutService.createRealScenario(text: situation, gradeBand: room.gradeBand)
+                scenarioId = created.id
+                realScenario = (created.id, situation)
+            }
+            let result = try await TryItOutService.submitAttempt(scenarioId: scenarioId!, responseText: response)
+            attempt = result
+            allAttempts.insert(result, at: 0)
+        } catch {
+            self.error = "Could not get coaching feedback. Please try again."
+        }
+        submitting = false
+    }
+
+    /// Back to an empty "Something I'm facing" form, for the next situation.
+    private func startOver() {
+        attempt = nil
+        situationText = ""
+        responseText = ""
+        realScenario = nil
+        hintIndex = nil
+        chatDraft = ""
+        chatError = nil
+        error = nil
     }
 
     private func toggleSaved(_ target: ScenarioAttempt) async {

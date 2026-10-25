@@ -20,6 +20,9 @@ import SwiftUI
 struct PracticeView: View {
     @EnvironmentObject private var authManager: AuthManager
     @State private var focusArea: String?
+    /// "Something I'm facing": the teacher writes the situation, so there is no
+    /// section to pick first — the coach works that out from the words.
+    @State private var real = false
     /// Seeded from the profile so a teacher who has set a grade band and
     /// subject never types them again.
     @State private var room = TeachingContextValue()
@@ -27,46 +30,64 @@ struct PracticeView: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
-                Text("WHAT'S THIS ABOUT?")
-                    .font(.caption2.weight(.bold)).tracking(0.8)
-                    .foregroundStyle(AppTheme.terracotta600)
-                    .padding(.horizontal)
-                    .padding(.top, 12)
                 ChipRow(
-                    items: [("Not sure yet", nil)] + focusAreas.map { ($0.label, Optional($0.value)) },
-                    selection: focusArea
-                ) { focusArea = $0 }
+                    items: [("Make one up for me", nil), ("Something I\u{2019}m facing", "real")],
+                    selection: real ? "real" : nil
+                ) { real = $0 != nil }
+                .padding(.horizontal)
+                .padding(.top, 12)
 
-                if let blurb = findFocusArea(focusArea)?.blurb {
-                    Text(blurb)
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .padding(.horizontal)
-                }
-
-                // Parent and colleague work overlaps Communication Coach on
-                // purpose: one rehearsed exchange belongs here, an actual
-                // drafted email or a prepared meeting there.
-                if let note = findFocusArea(focusArea)?.handoffNote {
-                    Text(note)
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal)
-                }
-
-                // No section chosen keeps the scenario engine: the coach
-                // picking for you only makes sense where it can pick, and a
-                // role-play needs to know who you are facing.
-                if findFocusArea(focusArea)?.engine == .conversation {
-                    PracticeConversationView()
+                if real {
+                    // Keyed so switching ways in starts the form clean.
+                    TryItOutContent(real: true, room: $room)
+                        .id("real")
                 } else {
-                    TryItOutContent(focusArea: focusArea, room: $room)
+                    practiceBody
                 }
             }
             .background(AppTheme.background)
             .navigationTitle("Practice")
             .onAppear { room.seed(from: authManager.currentUser) }
+        }
+    }
+
+    @ViewBuilder
+    private var practiceBody: some View {
+        Text("WHAT'S THIS ABOUT?")
+            .font(.caption2.weight(.bold)).tracking(0.8)
+            .foregroundStyle(AppTheme.terracotta600)
+            .padding(.horizontal)
+        ChipRow(
+            items: [("Not sure yet", nil)] + focusAreas.map { ($0.label, Optional($0.value)) },
+            selection: focusArea
+        ) { focusArea = $0 }
+
+        if let blurb = findFocusArea(focusArea)?.blurb {
+            Text(blurb)
+                .font(.caption)
+                .foregroundStyle(AppTheme.textSecondary)
+                .padding(.horizontal)
+        }
+
+        // Parent and colleague work overlaps Communication Coach on
+        // purpose: one rehearsed exchange belongs here, an actual
+        // drafted email or a prepared meeting there.
+        if let note = findFocusArea(focusArea)?.handoffNote {
+            Text(note)
+                .font(.caption)
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal)
+        }
+
+        // No section chosen keeps the scenario engine: the coach
+        // picking for you only makes sense where it can pick, and a
+        // role-play needs to know who you are facing.
+        if findFocusArea(focusArea)?.engine == .conversation {
+            PracticeConversationView()
+        } else {
+            TryItOutContent(focusArea: focusArea, room: $room)
+                .id("made-up")
         }
     }
 }

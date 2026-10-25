@@ -36,6 +36,22 @@ enum TryItOutService {
         )
     }
 
+    private struct RealScenarioBody: Encodable {
+        let text: String
+        let gradeBand: String?
+    }
+
+    /// Practice's "Something I'm facing": the teacher's own situation, stored
+    /// privately. It arrives as `own_situation`; the coach assigns a real
+    /// category on the first coaching.
+    static func createRealScenario(text: String, gradeBand: String?) async throws -> Scenario {
+        try await APIClient.shared.request(
+            "/api/scenarios/real",
+            method: "POST",
+            body: RealScenarioBody(text: text, gradeBand: gradeBand)
+        )
+    }
+
     static func getAttempts() async throws -> [ScenarioAttempt] {
         try await APIClient.shared.request("/api/attempts")
     }
