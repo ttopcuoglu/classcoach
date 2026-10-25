@@ -467,6 +467,9 @@ private struct BuildPanel: View {
     @State private var reverting = false
     @State private var adaptError: String?
 
+    @StateObject private var format = LessonFormatModel()
+    @State private var formatsOpen = false
+
     private var savedPlans: [LessonPlan] { allPlans.filter(\.saved) }
     private var isIdeas: Bool { kind == "ideas" }
     private var canGenerate: Bool {
@@ -504,9 +507,15 @@ private struct BuildPanel: View {
             historySection
         }
         .task { await loadHistory() }
+        .task(id: plan.map(LessonFormatModel.signature)) {
+            if let plan { await format.sync(plan, apply: replace) }
+        }
         .onAppear(perform: prefillFromProfile)
         .fileImporter(isPresented: $showImporter, allowedContentTypes: importTypes) { result in
             if case .success(let url) = result { Task { await readMaterial(url) } }
+        }
+        .sheet(isPresented: $formatsOpen) {
+            LessonFormatsSheet { Task { await format.changed(plan, apply: replace) } }
         }
     }
 
@@ -705,7 +714,17 @@ private struct BuildPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             planHeadline(plan)
 
-            if plan.isFullLesson {
+            if plan.isFormatable {
+                formatControls(plan, model: format, onManage: { formatsOpen = true }, apply: replace)
+            }
+
+            if let content = format.content(for: plan) {
+                TemplatedLessonView(content: content, ownPlan: false)
+                // Nothing Wivoza wrote is lost to a form with fewer boxes.
+                Expandable(summary: "The full lesson, as Wivoza wrote it") {
+                    lessonSections(plan)
+                }
+            } else if plan.isFullLesson {
                 lessonSections(plan)
             } else if plan.isQuickIdeas {
                 quickIdeaSections(plan)
@@ -949,6 +968,9 @@ private struct FeedbackPanel: View {
     @State private var reverting = false
     @State private var adaptError: String?
 
+    @StateObject private var format = LessonFormatModel()
+    @State private var formatsOpen = false
+
     private var savedPlans: [LessonPlan] { allPlans.filter(\.saved) }
 
     private var importTypes: [UTType] {
@@ -985,8 +1007,14 @@ private struct FeedbackPanel: View {
             }
         }
         .task { await loadHistory() }
+        .task(id: plan.map(LessonFormatModel.signature)) {
+            if let plan { await format.sync(plan, apply: replace) }
+        }
         .fileImporter(isPresented: $showImporter, allowedContentTypes: importTypes) { result in
             if case .success(let url) = result { Task { await readFile(url) } }
+        }
+        .sheet(isPresented: $formatsOpen) {
+            LessonFormatsSheet { Task { await format.changed(plan, apply: replace) } }
         }
     }
 
@@ -1038,9 +1066,18 @@ private struct FeedbackPanel: View {
     @ViewBuilder
     private func resultView(_ plan: LessonPlan) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            labeledBlock("YOUR PLAN", plan.planText ?? "", AppTheme.textSecondary)
+            if plan.isFormatable {
+                formatControls(plan, model: format, onManage: { formatsOpen = true }, apply: replace)
+            }
+            // Coach's read stays above the plan whichever way the plan is shown:
+            // it is about the plan, not part of it.
             if let feedback = plan.feedback {
                 labeledBlock("COACHING", feedback, AppTheme.accent)
+            }
+            if let content = format.content(for: plan) {
+                TemplatedLessonView(content: content, ownPlan: true)
+            } else {
+                labeledBlock("YOUR PLAN", plan.planText ?? "", AppTheme.textSecondary)
             }
 
             AdaptationTools(plan: plan, busy: adaptBusy) { action, minutes in
@@ -1233,6 +1270,30 @@ private struct FeedbackPanel: View {
         chatDraft = ""
         chatError = nil
         revisionDismissed = false
+    }
+}
+
+/// The format line above a lesson, and what it shows while the lesson is
+/// being put into a format.
+@MainActor @ViewBuilder
+private func formatControls(
+    _ plan: LessonPlan,
+    model: LessonFormatModel,
+    onManage: @escaping () -> Void,
+    apply: @escaping (LessonPlan) -> Void
+) -> some View {
+    LessonFormatBar(
+        model: model,
+        onChoose: { choice in Task { await model.choose(choice, for: plan, apply: apply) } },
+        onManage: onManage
+    )
+    ProgressRing(active: model.loading, estimatedSeconds: 10, label: "Putting it in your format")
+    if let error = model.error {
+        HStack(spacing: 6) {
+            Text(error).font(.caption).foregroundStyle(AppTheme.terracotta600)
+            Button("Try again") { Task { await model.retry(plan, apply: apply) } }
+                .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.forest)
+        }
     }
 }
 

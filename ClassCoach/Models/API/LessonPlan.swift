@@ -62,6 +62,23 @@ struct LessonPlan: Codable, Identifiable {
     /// the original, which is what makes "go back to it" honest.
     let versionHistory: [LessonVersion]?
 
+    // MARK: Lesson plan formats
+
+    /// Which format this lesson uses: a format id, "wivoza", or nil for the
+    /// teacher's default.
+    let templateChoice: String?
+    /// The lesson laid out in that format. Decoded leniently — see
+    /// `TemplateContent` — so a shape this build does not expect can never
+    /// fail the whole lesson, and with it the lesson list.
+    let templateContent: TemplateContent?
+
+    /// A lesson a teacher would hand in on their own form: one Planning Coach
+    /// built, or a plan they brought to Improve a Lesson.
+    var isFormatable: Bool {
+        (isFullLesson && mode == "generated")
+            || (mode == "feedback" && !(planText ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
     /// A lesson Planning Coach built, as opposed to teaching ideas or one of
     /// the older five-slot samples.
     var isFullLesson: Bool { !(sequence ?? []).isEmpty }
@@ -242,4 +259,90 @@ struct LessonPlanDeliveryCoaching: Codable {
             return (title, body)
         }
     }
+}
+
+// MARK: - Lesson plan formats
+
+/// Decodes an element when it can and drops it when it cannot, so one odd
+/// entry in a list never fails the list.
+struct Lenient<Value: Decodable>: Decodable {
+    let value: Value?
+    init(from decoder: Decoder) throws { value = try? Value(from: decoder) }
+}
+
+/// One box of the teacher's (or school's) form, filled in. `kind` stays a
+/// string: the server may grow new kinds, and an unknown one must still show.
+struct LaidOutSection: Codable, Identifiable {
+    let id: String
+    let title: String
+    let kind: String
+    let text: String
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        title = (try? c.decode(String.self, forKey: .title)) ?? ""
+        kind = (try? c.decode(String.self, forKey: .kind)) ?? "other"
+        text = (try? c.decode(String.self, forKey: .text)) ?? ""
+    }
+}
+
+/// A lesson laid out in a format. Never throws: anything unreadable comes back
+/// as an empty layout, which the app treats as "not laid out".
+struct TemplateContent: Codable {
+    let templateId: String?
+    let templateName: String?
+    let sections: [LaidOutSection]
+
+    init(from decoder: Decoder) throws {
+        let c = try? decoder.container(keyedBy: CodingKeys.self)
+        templateId = c.flatMap { try? $0.decodeIfPresent(String.self, forKey: .templateId) }
+        templateName = c.flatMap { try? $0.decodeIfPresent(String.self, forKey: .templateName) }
+        sections = c.flatMap { try? $0.decodeIfPresent([Lenient<LaidOutSection>].self, forKey: .sections) }?.compactMap(\.value) ?? []
+    }
+}
+
+/// A section of a format: the form's own title, and what Wivoza puts there.
+/// Mirrors `TemplateSection` in `web/src/lib/api.ts`.
+struct TemplateSection: Codable, Identifiable, Equatable {
+    var id: String
+    var title: String
+    var kind: String
+    var prompt: String?
+    /// On a weekly form: "week" (filled once) or "day" (once per day).
+    var scope: String?
+}
+
+struct LessonTemplate: Codable, Identifiable {
+    let id: String
+    let organizationId: String?
+    let userId: String?
+    let name: String
+    let cadence: String
+    let sections: [TemplateSection]
+    let sourceFileName: String?
+    let isDefault: Bool
+}
+
+struct LessonTemplates: Decodable {
+    let personal: [LessonTemplate]
+    let school: [LessonTemplate]
+    let schoolName: String?
+    let canManageSchool: Bool
+    let defaultId: String?
+}
+
+/// What Wivoza read from an uploaded form — proposed sections, saved nowhere
+/// until the teacher checks them.
+struct ReadTemplate: Decodable {
+    let name: String?
+    let cadence: String
+    let sections: [TemplateSection]
+    let note: String?
+    let sourceFileName: String?
+}
+
+struct LessonLayoutResult: Decodable {
+    let plan: LessonPlan
+    let appliedTemplateId: String?
 }

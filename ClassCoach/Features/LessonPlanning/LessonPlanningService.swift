@@ -220,3 +220,76 @@ enum LessonPlanningService {
         try await APIClient.shared.request("/api/lesson-plans/\(id)", method: "PATCH", body: SavedBody(saved: saved))
     }
 }
+
+/// Lesson plan formats — a teacher's own, and their school's. Mirrors the
+/// `/api/lesson-templates` functions and `layoutLessonPlan` in
+/// `web/src/lib/api.ts`.
+enum LessonFormatService {
+    static func list() async throws -> LessonTemplates {
+        try await APIClient.shared.request("/api/lesson-templates")
+    }
+
+    /// Has Wivoza read the sections of an uploaded form. Saves nothing: the
+    /// teacher checks what came back, then `create` saves it.
+    static func read(fileURL: URL) async throws -> ReadTemplate {
+        let data = try Data(contentsOf: fileURL)
+        return try await APIClient.shared.upload(
+            "/api/lesson-templates/read",
+            fileData: data,
+            fieldName: "file",
+            filename: fileURL.lastPathComponent,
+            mimeType: APIClient.mimeType(forExtension: fileURL.pathExtension)
+        )
+    }
+
+    private struct CreateBody: Encodable {
+        let scope: String
+        let name: String
+        let cadence: String
+        let sections: [TemplateSection]
+        let sourceFileName: String?
+    }
+
+    /// `scope` is "personal" for everyone; "school" only for a school's Wivoza
+    /// admins, which the server enforces.
+    static func create(scope: String, name: String, cadence: String, sections: [TemplateSection], sourceFileName: String?) async throws -> LessonTemplate {
+        try await APIClient.shared.request(
+            "/api/lesson-templates",
+            method: "POST",
+            body: CreateBody(scope: scope, name: name, cadence: cadence, sections: sections, sourceFileName: sourceFileName)
+        )
+    }
+
+    /// Only the fields given are changed — nil ones are left out of the body.
+    private struct UpdateBody: Encodable {
+        let name: String?
+        let cadence: String?
+        let sections: [TemplateSection]?
+        let isDefault: Bool?
+    }
+
+    static func update(id: String, name: String? = nil, cadence: String? = nil, sections: [TemplateSection]? = nil, isDefault: Bool? = nil) async throws -> LessonTemplate {
+        try await APIClient.shared.request(
+            "/api/lesson-templates/\(id)",
+            method: "PATCH",
+            body: UpdateBody(name: name, cadence: cadence, sections: sections, isDefault: isDefault)
+        )
+    }
+
+    static func delete(id: String) async throws {
+        try await APIClient.shared.send("/api/lesson-templates/\(id)", method: "DELETE")
+    }
+
+    private struct LayoutBody: Encodable { let choice: String? }
+
+    /// The lesson laid out in its format. Pass `choice` (a format id or
+    /// "wivoza") to change the format; leave it nil to get the current layout,
+    /// which costs nothing when nothing has changed.
+    static func layout(id: String, choice: String? = nil) async throws -> LessonLayoutResult {
+        try await APIClient.shared.request(
+            "/api/lesson-plans/\(id)/layout",
+            method: "POST",
+            body: LayoutBody(choice: choice)
+        )
+    }
+}

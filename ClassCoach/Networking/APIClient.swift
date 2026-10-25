@@ -83,6 +83,35 @@ final class APIClient {
         return try JSONDecoder().decode(Response.self, from: data)
     }
 
+    /// A request whose answer has no body worth reading — a DELETE that
+    /// answers 204, which `request` would fail to decode.
+    func send(_ path: String, method: String, body: Encodable? = nil) async throws {
+        var urlRequest = URLRequest(url: url(for: path))
+        urlRequest.httpMethod = method
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = await AuthManager.shared.token {
+            urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        if let body {
+            urlRequest.httpBody = try encodeJSONBody(body)
+        }
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: urlRequest)
+        } catch {
+            throw APIError.transport(error)
+        }
+
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(statusCode) else {
+            let message = (try? JSONDecoder().decode(ServerErrorBody.self, from: data))?.error
+                ?? "Request failed (\(statusCode))."
+            throw APIError.server(status: statusCode, message: message)
+        }
+    }
+
     /// Multipart file upload (e.g. the recorded audio for transcription) —
     /// same `field name / filename` pattern as `web/src/lib/api.ts`'s
     /// hand-rolled `FormData` uploads, since those bypass the JSON-only
