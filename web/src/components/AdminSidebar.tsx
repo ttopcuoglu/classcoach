@@ -115,7 +115,7 @@ function GroupHeading({ group }: { group: AdminGroup }) {
   return <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-cream/60">{ADMIN_GROUP_LABEL[group]}</p>
 }
 
-/// The admin pages, grouped. Settings sits at the foot and opens on its own
+/// The admin pages, grouped. Settings sits under People and opens on its own
 /// whenever one of its pages is the one on screen.
 export function AdminNav({ user, onPick }: { user: UserProfile | null; onPick?: () => void }) {
   const location = useLocation()
@@ -136,6 +136,30 @@ export function AdminNav({ user, onPick }: { user: UserProfile | null; onPick?: 
             {ADMIN_NAV.filter((i) => i.group === group).map((i) => (
               <AdminLink key={i.page} page={i.page} label={i.label} onPick={onPick} />
             ))}
+            {/* Settings sits with Manage, right under People. */}
+            {group === 'manage' && (
+              <div>
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  onClick={() => setSettingsOpen(!open)}
+                  className={`w-full ${adminNavLinkClasses(false)}`}
+                >
+                  <GearIcon className="h-[18px] w-[18px] shrink-0" />
+                  <span className="flex-1 text-left">Settings</span>
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true" className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m5 7.5 5 5 5-5" />
+                  </svg>
+                </button>
+                {open && (
+                  <div className="mt-1 flex flex-col gap-1 pl-4">
+                    {settingsItems.map((i) => (
+                      <AdminLink key={i.page} page={i.page} label={i.label} onPick={onPick} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       ))}
@@ -149,27 +173,6 @@ export function AdminNav({ user, onPick }: { user: UserProfile | null; onPick?: 
           </div>
         </div>
       )}
-      <div className="mt-auto border-t border-cream/10 pt-3">
-        <button
-          type="button"
-          aria-expanded={open}
-          onClick={() => setSettingsOpen(!open)}
-          className={adminNavLinkClasses(false)}
-        >
-          <GearIcon className="h-[18px] w-[18px] shrink-0" />
-          <span className="flex-1 text-left">Settings</span>
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true" className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="m5 7.5 5 5 5-5" />
-          </svg>
-        </button>
-        {open && (
-          <div className="mt-1 flex flex-col gap-1 pl-4">
-            {settingsItems.map((i) => (
-              <AdminLink key={i.page} page={i.page} label={i.label} onPick={onPick} />
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   )
 }
