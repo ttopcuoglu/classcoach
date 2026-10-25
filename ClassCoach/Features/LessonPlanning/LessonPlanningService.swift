@@ -3,8 +3,64 @@ import Foundation
 /// Request builders for Planning Coach — mirrors the matching functions
 /// in `web/src/lib/api.ts` against `/api/lesson-plans`.
 enum LessonPlanningService {
-    static func getLessonPlans(mode: String) async throws -> [LessonPlan] {
-        try await APIClient.shared.request("/api/lesson-plans?mode=\(mode)")
+    /// Weeks are left out unless asked for: older builds have no view for them.
+    static func getLessonPlans(mode: String, includeWeeks: Bool = false) async throws -> [LessonPlan] {
+        try await APIClient.shared.request("/api/lesson-plans?mode=\(mode)\(includeWeeks ? "&includeWeeks=true" : "")")
+    }
+
+    static func getLessonPlan(id: String) async throws -> LessonPlan {
+        try await APIClient.shared.request("/api/lesson-plans/\(id)")
+    }
+
+    struct WeekDayRequest: Encodable {
+        let label: String
+        let note: String?
+    }
+
+    private struct StartWeekBody: Encodable {
+        let objective: String
+        let unitName: String?
+        let essentialQuestion: String?
+        let standard: String?
+        let subject: String?
+        let gradeLevel: String?
+        let additionalContext: String?
+        let sourceMaterial: String?
+        let durationMinutes: Int
+        let days: [WeekDayRequest]
+    }
+
+    /// Plan a Week, step one: an objective for each day, saved as a week with
+    /// nothing filled in yet, for the teacher to check.
+    static func startWeek(
+        objective: String, unitName: String?, essentialQuestion: String?, standard: String?,
+        subject: String?, gradeLevel: String?, additionalContext: String?, sourceMaterial: String?,
+        durationMinutes: Int, days: [WeekDayRequest]
+    ) async throws -> LessonPlan {
+        try await APIClient.shared.request(
+            "/api/lesson-plans/week",
+            method: "POST",
+            body: StartWeekBody(
+                objective: objective, unitName: unitName, essentialQuestion: essentialQuestion, standard: standard,
+                subject: subject, gradeLevel: gradeLevel, additionalContext: additionalContext,
+                sourceMaterial: sourceMaterial, durationMinutes: durationMinutes, days: days
+            )
+        )
+    }
+
+    private struct FillWeekBody: Encodable {
+        let objectives: [String]
+        let choice: String?
+    }
+
+    /// Step two: the week filled in, with the objectives as the teacher left
+    /// them and the format to use (a weekly format id or "wivoza").
+    static func fillWeek(id: String, objectives: [String], choice: String?) async throws -> LessonPlan {
+        try await APIClient.shared.request(
+            "/api/lesson-plans/\(id)/week/fill",
+            method: "POST",
+            body: FillWeekBody(objectives: objectives, choice: choice)
+        )
     }
 
     private struct FeedbackBody: Encodable {
@@ -42,13 +98,17 @@ enum LessonPlanningService {
         let durationMinutes: Int
         /// "full" or "ideas".
         let kind: String
+        /// Opening one day of a week as a full lesson.
+        let weekPlanId: String?
+        let weekDay: Int?
     }
 
     static func generate(
         objective: String, unitName: String?, essentialQuestion: String?,
         standard: String?, subject: String?, gradeLevel: String?,
         additionalContext: String? = nil, sourceMaterial: String? = nil,
-        durationMinutes: Int = 45, kind: String = "full"
+        durationMinutes: Int = 45, kind: String = "full",
+        weekPlanId: String? = nil, weekDay: Int? = nil
     ) async throws -> LessonPlan {
         try await APIClient.shared.request(
             "/api/lesson-plans/generate",
@@ -57,7 +117,8 @@ enum LessonPlanningService {
                 objective: objective, unitName: unitName, essentialQuestion: essentialQuestion,
                 standard: standard, subject: subject, gradeLevel: gradeLevel,
                 additionalContext: additionalContext, sourceMaterial: sourceMaterial,
-                durationMinutes: durationMinutes, kind: kind
+                durationMinutes: durationMinutes, kind: kind,
+                weekPlanId: weekPlanId, weekDay: weekDay
             )
         )
     }

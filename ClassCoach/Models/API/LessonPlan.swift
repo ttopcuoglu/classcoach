@@ -72,6 +72,19 @@ struct LessonPlan: Codable, Identifiable {
     /// fail the whole lesson, and with it the lesson list.
     let templateContent: TemplateContent?
 
+    // MARK: Plan a Week
+
+    /// What the teacher added under "Anything else" — carried from a week to
+    /// the lessons opened from its days.
+    let additionalContext: String?
+    /// On a week (`planKind == "week"`): the days, their objectives, and the
+    /// week filled in. Decoded leniently — see `WeekPlan`.
+    let week: WeekPlan?
+    /// On a lesson opened from a day of a week: that week.
+    let weekPlanId: String?
+
+    var isWeek: Bool { planKind == "week" }
+
     /// A lesson a teacher would hand in on their own form: one Planning Coach
     /// built, or a plan they brought to Improve a Lesson.
     var isFormatable: Bool {
@@ -345,4 +358,68 @@ struct ReadTemplate: Decodable {
 struct LessonLayoutResult: Decodable {
     let plan: LessonPlan
     let appliedTemplateId: String?
+}
+
+// MARK: - Plan a Week
+
+/// One day of a week. Mirrors `WeekDay` in server/src/lib/lessonWeekModel.ts.
+struct WeekDay: Codable, Identifiable {
+    let label: String
+    let minutes: Int
+    /// What the teacher said was already fixed on this day: a quiz, a half day.
+    let note: String?
+    let objective: String
+    /// The full lesson opened from this day, once there is one.
+    let lessonPlanId: String?
+
+    var id: String { label }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        label = try c.decode(String.self, forKey: .label)
+        minutes = (try? c.decode(Int.self, forKey: .minutes)) ?? 0
+        note = try? c.decodeIfPresent(String.self, forKey: .note)
+        objective = (try? c.decode(String.self, forKey: .objective)) ?? ""
+        lessonPlanId = try? c.decodeIfPresent(String.self, forKey: .lessonPlanId)
+    }
+}
+
+struct WeekContentDay: Codable {
+    let label: String
+    let sections: [LaidOutSection]
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        label = try c.decode(String.self, forKey: .label)
+        sections = (try? c.decode([Lenient<LaidOutSection>].self, forKey: .sections))?.compactMap(\.value) ?? []
+    }
+}
+
+/// The week filled in: boxes filled once for the week, then each day's.
+struct WeekContent: Codable {
+    let templateId: String?
+    let templateName: String
+    let shared: [LaidOutSection]
+    let days: [WeekContentDay]
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        templateId = try? c.decodeIfPresent(String.self, forKey: .templateId)
+        templateName = (try? c.decode(String.self, forKey: .templateName)) ?? "Wivoza weekly plan"
+        shared = (try? c.decode([Lenient<LaidOutSection>].self, forKey: .shared))?.compactMap(\.value) ?? []
+        days = (try? c.decode([Lenient<WeekContentDay>].self, forKey: .days))?.compactMap(\.value) ?? []
+    }
+}
+
+/// A week plan. Never throws: anything unreadable comes back as an empty week,
+/// so one odd week can never fail the lesson list it sits in.
+struct WeekPlan: Codable {
+    let days: [WeekDay]
+    let content: WeekContent?
+
+    init(from decoder: Decoder) throws {
+        let c = try? decoder.container(keyedBy: CodingKeys.self)
+        days = c.flatMap { try? $0.decode([Lenient<WeekDay>].self, forKey: .days) }?.compactMap(\.value) ?? []
+        content = c.flatMap { try? $0.decodeIfPresent(WeekContent.self, forKey: .content) } ?? nil
+    }
 }

@@ -470,10 +470,20 @@ private struct BuildPanel: View {
     @StateObject private var format = LessonFormatModel()
     @State private var formatsOpen = false
 
+    /// Plan a Week: which days the class meets, and anything already fixed on one.
+    @State private var weekDays: [(name: String, on: Bool, note: String)] =
+        ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].map { ($0, true, "") }
+    @State private var showDayNotes = false
+    /// The day of a week being built as a full lesson, while it is.
+    @State private var openingDay: Int?
+    @State private var dayError: String?
+
     private var savedPlans: [LessonPlan] { allPlans.filter(\.saved) }
     private var isIdeas: Bool { kind == "ideas" }
+    private var isWeek: Bool { kind == "week" }
     private var canGenerate: Bool {
-        !topic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || materialText != nil
+        (!topic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || materialText != nil)
+            && (!isWeek || weekDays.contains(where: \.on))
     }
 
     /// Every format the shared document reader handles — scans go through OCR.
@@ -534,9 +544,13 @@ private struct BuildPanel: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Topic or learning goal").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
-                Text("What are you teaching? Enter a topic, learning goal, or paste material.")
+                Text(isWeek ? "What is the class learning this week?" : "Topic or learning goal")
+                    .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+                Text(isWeek
+                     ? "One goal for the whole week. Wivoza writes an objective for each day, and you check them before the week is filled in."
+                     : "What are you teaching? Enter a topic, learning goal, or paste material.")
                     .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 TextEditor(text: $topic)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 72)
@@ -545,7 +559,8 @@ private struct BuildPanel: View {
                     .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                     .disabled(generating)
                 if topic.isEmpty {
-                    Text("e.g. introducing cells").font(.caption).foregroundStyle(AppTheme.textSecondary)
+                    Text(isWeek ? "e.g. how cells move materials in and out" : "e.g. introducing cells")
+                        .font(.caption).foregroundStyle(AppTheme.textSecondary)
                 }
             }
 
@@ -565,6 +580,8 @@ private struct BuildPanel: View {
             pickerField("Subject", options: profileList(authManager.currentUser?.subjects), text: $subject, placeholder: "e.g. Science")
 
             durationField
+
+            if isWeek { weekDaysField }
 
             DisclosureGroup("More details — optional", isExpanded: $showMoreDetails) {
                 VStack(alignment: .leading, spacing: 10) {
@@ -595,15 +612,17 @@ private struct BuildPanel: View {
 
             ProgressRing(
                 active: generating,
-                estimatedSeconds: isIdeas ? 10 : 22,
-                label: isIdeas ? "Putting together ideas" : "Building your lesson",
-                hint: isIdeas ? "Usually about ten seconds." : "Usually about twenty seconds."
+                estimatedSeconds: isIdeas ? 10 : isWeek ? 8 : 22,
+                label: isIdeas ? "Putting together ideas" : isWeek ? "Planning your week" : "Building your lesson",
+                hint: isIdeas ? "Usually about ten seconds." : isWeek ? "An objective for each day, in a few seconds." : "Usually about twenty seconds."
             )
 
             Button {
                 Task { await generate() }
             } label: {
-                Text(generating ? (isIdeas ? "Generating…" : "Building…") : (isIdeas ? "Generate Ideas" : "Build My Lesson"))
+                Text(generating
+                     ? (isIdeas ? "Generating…" : isWeek ? "Planning…" : "Building…")
+                     : (isIdeas ? "Generate Ideas" : isWeek ? "Plan My Week" : "Build My Lesson"))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -658,7 +677,7 @@ private struct BuildPanel: View {
 
     private var durationField: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("How much time do you have?").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+            Text(isWeek ? "How long is each class?" : "How much time do you have?").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
             ChipRow(
                 items: [30, 45, 50, 60, 90].map { (label: "\($0) min", value: Optional("\($0)")) },
                 selection: "\(durationMinutes)"
@@ -670,6 +689,52 @@ private struct BuildPanel: View {
         }
     }
 
+    /// Plan a Week's days: which ones the class meets, and anything already
+    /// fixed on one — a quiz, a lab, a half day, an objective they have.
+    private var weekDaysField: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Which days do you teach this class?").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+            HStack(spacing: 6) {
+                ForEach(weekDays.indices, id: \.self) { i in
+                    Button {
+                        weekDays[i].on.toggle()
+                    } label: {
+                        Text(String(weekDays[i].name.prefix(3)))
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(weekDays[i].on ? AppTheme.cream : AppTheme.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(weekDays[i].on ? AppTheme.forest : AppTheme.card, in: Capsule())
+                            .overlay(Capsule().strokeBorder(AppTheme.hairline))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(generating)
+                    .accessibilityAddTraits(weekDays[i].on ? .isSelected : [])
+                }
+            }
+            DisclosureGroup("Anything already set on a day? — optional", isExpanded: $showDayNotes) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("A quiz, a lab, a half day, or an objective you already have. Wivoza plans the week around it.")
+                        .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ForEach(weekDays.indices.filter { weekDays[$0].on }, id: \.self) { i in
+                        HStack(spacing: 8) {
+                            Text(String(weekDays[i].name.prefix(3)))
+                                .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
+                                .frame(width: 36, alignment: .leading)
+                            TextField(weekDays[i].name == "Friday" ? "e.g. quiz" : "", text: $weekDays[i].note)
+                                .textFieldStyle(.roundedBorder)
+                                .disabled(generating)
+                        }
+                    }
+                }
+                .padding(.top, 6)
+            }
+            .font(.caption.weight(.semibold))
+            .tint(AppTheme.primary)
+        }
+    }
+
     /// Two genuinely different outputs, one chip row. Full Lesson is the
     /// default because it is what most teachers opening this screen want;
     /// Quick Ideas is for the plan they are already writing.
@@ -677,10 +742,12 @@ private struct BuildPanel: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("What do you want back?").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
             ChipRow(
-                items: [("Full Lesson", Optional("full")), ("Quick Ideas", Optional("ideas"))],
+                items: [("Full Lesson", Optional("full")), ("Quick Ideas", Optional("ideas")), ("Plan a Week", Optional("week"))],
                 selection: kind
             ) { kind = $0 ?? "full" }
-            Text(isIdeas ? "3-5 practical teaching ideas, briefly explained." : "A complete lesson you can teach and edit.")
+            Text(isIdeas
+                 ? "3-5 practical teaching ideas, briefly explained."
+                 : isWeek ? "An objective for each day, then the week filled in." : "A complete lesson you can teach and edit.")
                 .font(.caption).foregroundStyle(AppTheme.textSecondary)
         }
     }
@@ -711,7 +778,34 @@ private struct BuildPanel: View {
 
     @ViewBuilder
     private func resultView(_ plan: LessonPlan) -> some View {
+        if plan.isWeek {
+            WeekPlanView(
+                plan: plan,
+                onPlan: replace,
+                onNew: startOver,
+                onOpenDay: { index in Task { await openDay(plan, index) } },
+                openingDay: openingDay,
+                dayError: dayError,
+                onToggleSaved: { Task { await toggleSaved(plan) } }
+            )
+        } else {
+            lessonResult(plan)
+        }
+    }
+
+    @ViewBuilder
+    private func lessonResult(_ plan: LessonPlan) -> some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let weekPlanId = plan.weekPlanId {
+                Button {
+                    Task { await backToWeek(weekPlanId) }
+                } label: {
+                    Label("Back to the week", systemImage: "chevron.left")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.forest)
+                }
+                .buttonStyle(.plain)
+            }
             planHeadline(plan)
 
             if plan.isFormatable {
@@ -779,12 +873,65 @@ private struct BuildPanel: View {
                     .frame(maxWidth: .infinity, alignment: .center).padding()
                     .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
             } else {
-                ForEach(savedPlans) { LessonPlanRow(plan: $0) }
+                ForEach(savedPlans) { saved in
+                    // A week has no inline view: it opens as the week.
+                    LessonPlanRow(plan: saved, onOpen: saved.isWeek ? { open(saved) } : nil)
+                }
             }
         }
     }
 
     // MARK: Actions
+
+    private func open(_ target: LessonPlan) {
+        plan = target
+        error = nil
+        dayError = nil
+    }
+
+    /// A day of a week, opened as a full lesson: the one already built from
+    /// it, or a new one built with the week around it as context.
+    private func openDay(_ week: LessonPlan, _ index: Int) async {
+        guard let days = week.week?.days, index < days.count, openingDay == nil else { return }
+        let day = days[index]
+        openingDay = index
+        dayError = nil
+        do {
+            let lesson: LessonPlan
+            if let id = day.lessonPlanId {
+                if let known = allPlans.first(where: { $0.id == id }) {
+                    lesson = known
+                } else {
+                    lesson = try await LessonPlanningService.getLessonPlan(id: id)
+                }
+            } else {
+                lesson = try await LessonPlanningService.generate(
+                    objective: day.objective, unitName: week.unitName, essentialQuestion: week.essentialQuestion,
+                    standard: week.standard, subject: week.subject, gradeLevel: week.gradeLevel,
+                    additionalContext: week.additionalContext, durationMinutes: day.minutes, kind: "full",
+                    weekPlanId: week.id, weekDay: index
+                )
+                allPlans.insert(lesson, at: 0)
+                // The week now links to this lesson; keep the copy in the list current.
+                if let refreshed = try? await LessonPlanningService.getLessonPlan(id: week.id),
+                   let i = allPlans.firstIndex(where: { $0.id == refreshed.id }) {
+                    allPlans[i] = refreshed
+                }
+            }
+            plan = lesson
+        } catch {
+            dayError = error.localizedDescription
+        }
+        openingDay = nil
+    }
+
+    private func backToWeek(_ id: String) async {
+        if let known = allPlans.first(where: { $0.id == id && $0.week != nil }) {
+            plan = known
+        } else if let fetched = try? await LessonPlanningService.getLessonPlan(id: id) {
+            plan = fetched
+        }
+    }
 
     private func prefillFromProfile() {
         // Arriving from a Lesson Debrief: the room wins over the profile
@@ -805,7 +952,7 @@ private struct BuildPanel: View {
     }
 
     private func loadHistory() async {
-        do { allPlans = try await LessonPlanningService.getLessonPlans(mode: "generated") } catch {}
+        do { allPlans = try await LessonPlanningService.getLessonPlans(mode: "generated", includeWeeks: true) } catch {}
         historyLoading = false
     }
 
@@ -860,6 +1007,27 @@ private struct BuildPanel: View {
         generating = true
         error = nil
         do {
+            if isWeek {
+                let result = try await LessonPlanningService.startWeek(
+                    objective: topic.trimmingCharacters(in: .whitespacesAndNewlines),
+                    unitName: unitName.isEmpty ? nil : unitName,
+                    essentialQuestion: essentialQuestion.isEmpty ? nil : essentialQuestion,
+                    standard: standard.isEmpty ? nil : standard,
+                    subject: subject.isEmpty ? nil : subject,
+                    gradeLevel: gradeLevel.isEmpty ? nil : gradeLevel,
+                    additionalContext: additionalContext.isEmpty ? nil : additionalContext,
+                    sourceMaterial: materialText,
+                    durationMinutes: durationMinutes,
+                    days: weekDays.filter(\.on).map { day in
+                        let note = day.note.trimmingCharacters(in: .whitespacesAndNewlines)
+                        return LessonPlanningService.WeekDayRequest(label: day.name, note: note.isEmpty ? nil : note)
+                    }
+                )
+                plan = result
+                allPlans.insert(result, at: 0)
+                generating = false
+                return
+            }
             let result = try await LessonPlanningService.generate(
                 objective: topic.trimmingCharacters(in: .whitespacesAndNewlines),
                 unitName: unitName.isEmpty ? nil : unitName,
@@ -939,6 +1107,7 @@ private struct BuildPanel: View {
         plan = nil
         error = nil
         adaptError = nil
+        dayError = nil
         clearMaterial()
     }
 }
@@ -1307,10 +1476,13 @@ private func saveButton(_ saved: Bool, _ action: @escaping () -> Void) -> some V
 
 private struct LessonPlanRow: View {
     let plan: LessonPlan
+    /// When given, tapping the row opens the plan instead of expanding it.
+    var onOpen: (() -> Void)? = nil
     @State private var expanded = false
 
     private var kindLabel: String {
         if plan.mode != "generated" { return "Feedback" }
+        if plan.isWeek { return "Week" }
         if plan.isQuickIdeas { return "Teaching ideas" }
         return plan.isFullLesson ? "Lesson" : "Sample plan"
     }
@@ -1318,7 +1490,7 @@ private struct LessonPlanRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
-                withAnimation { expanded.toggle() }
+                if let onOpen { onOpen() } else { withAnimation { expanded.toggle() } }
             } label: {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -1328,7 +1500,7 @@ private struct LessonPlanRow: View {
                             .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
                     }
                     Spacer()
-                    Text(expanded ? "Hide" : "Show").font(.caption.weight(.medium)).foregroundStyle(AppTheme.textSecondary)
+                    Text(onOpen != nil ? "Open" : expanded ? "Hide" : "Show").font(.caption.weight(.medium)).foregroundStyle(AppTheme.textSecondary)
                 }
             }
             .buttonStyle(.plain)

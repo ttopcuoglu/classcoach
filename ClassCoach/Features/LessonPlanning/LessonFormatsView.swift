@@ -175,7 +175,7 @@ struct LessonFormatBar: View {
 
 // MARK: - The lesson in the format
 
-private func readableText(_ text: String) -> String {
+func readableText(_ text: String) -> String {
     text.split(separator: "\n", omittingEmptySubsequences: false)
         .map { line -> String in
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -188,7 +188,7 @@ private func readableText(_ text: String) -> String {
 }
 
 /// Puts text on the clipboard and says so for a moment.
-private struct CopyButton: View {
+struct CopyButton: View {
     let label: String
     let text: () -> String
     @State private var copied = false
@@ -241,18 +241,42 @@ struct TemplatedLessonView: View {
                 Spacer()
                 CopyButton(label: "Copy whole plan") { wholePlan }
             }
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(content.sections.enumerated()), id: \.offset) { index, section in
-                    if index > 0 { Divider().overlay(AppTheme.hairline) }
-                    sectionRow(index: index, section: section)
-                }
-            }
-            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(AppTheme.hairline))
+            LaidOutSectionList(
+                sections: content.sections,
+                emptyText: ownPlan
+                    ? "Your plan has nothing for this box. Fill it in yourself, or leave it."
+                    : "Nothing in this lesson goes here. Fill it in yourself, or leave it."
+            )
         }
     }
 
-    private func sectionRow(index: Int, section: LaidOutSection) -> some View {
+}
+
+/// A form's boxes, filled in, each copyable on its own. Used for a lesson in
+/// a format and for each day of a week.
+struct LaidOutSectionList: View {
+    let sections: [LaidOutSection]
+    /// What an empty box says, unless it is one the teacher fills in.
+    let emptyText: String
+    var framed = true
+
+    var body: some View {
+        let list = VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
+                if index > 0 { Divider().overlay(AppTheme.hairline) }
+                row(index: index, section: section)
+            }
+        }
+        if framed {
+            list
+                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(AppTheme.hairline))
+        } else {
+            list
+        }
+    }
+
+    private func row(index: Int, section: LaidOutSection) -> some View {
         let text = section.text.trimmingCharacters(in: .whitespacesAndNewlines)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 10) {
@@ -269,11 +293,7 @@ struct TemplatedLessonView: View {
                 if !text.isEmpty { CopyButton(label: "Copy") { text } }
             }
             if text.isEmpty {
-                Text(section.kind == "teacher_fills"
-                     ? "For you to fill in."
-                     : ownPlan
-                        ? "Your plan has nothing for this box. Fill it in yourself, or leave it."
-                        : "Nothing in this lesson goes here. Fill it in yourself, or leave it.")
+                Text(section.kind == "teacher_fills" ? "For you to fill in." : emptyText)
                     .font(.footnote.italic())
                     .foregroundStyle(AppTheme.textSecondary)
             } else {
