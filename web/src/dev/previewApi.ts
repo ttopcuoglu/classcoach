@@ -1639,6 +1639,28 @@ function previewTemplates_(path: string, method: string, body: Json): Json | nul
 const previewQuoteFlags: Json[] = []
 
 function answer(path: string, method: string, body: Json): Json | Json[] | null {
+  // Practice's "Something real", end to end: the situation is stored, then
+  // coached and classified on the first response.
+  if (path === '/api/scenarios/real' && method === 'POST') {
+    return {
+      id: 'preview-real', text: String(body.text ?? ''), focusArea: null, category: 'own_situation',
+      gradeBand: String(body.gradeBand ?? '6-8'), difficulty: 'intermediate', source: 'teacher',
+      createdAt: new Date().toISOString(),
+    }
+  }
+  if (path === '/api/attempts' && method === 'POST') {
+    const situation = 'A student keeps calling out answers before anyone else can think, and the quieter kids have stopped trying.'
+    const response = String(body.responseText ?? '')
+    return {
+      id: 'preview-real-attempt', scenarioId: String(body.scenarioId ?? 'preview-real'), responseText: response,
+      feedback: 'Naming the pattern privately rather than in front of the class protects the relationship, and that is the right instinct.\n\nTwo things to strengthen:\n- Give him a job for his speed: he writes his answer down and holds it until you call on him.\n- Change the structure, not just the student: a few seconds of silent think time before anyone answers makes room for the quieter kids without singling him out.',
+      modelResponse: '"I love how fast you get there. Today I need you to write it down and hold it — I\u2019m going to call on you for the second question, not the first."',
+      rating: 4, saved: false, createdAt: new Date().toISOString(),
+      scenario: { id: 'preview-real', text: situation, focusArea: 'classroom_management', category: 'disengagement', gradeBand: '6-8', difficulty: 'intermediate', source: 'teacher', createdAt: new Date().toISOString() },
+      conversation: [{ role: 'user', text: situation }, { role: 'assistant', text: 'seed' }],
+      triedAt: null, reflectionNote: null,
+    }
+  }
   if (path.startsWith('/api/school-focus')) return previewSchoolFocus(method, body)
   if (path.endsWith('/school-focus-idea/dismiss')) return lesson({ schoolFocusIdea: null })
   if (path.endsWith('/school-focus-idea/suggest')) {

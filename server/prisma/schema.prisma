@@ -90,6 +90,7 @@ model User {
   updatedAt             DateTime  @updatedAt
 
   attempts          ScenarioAttempt[]
+  ownScenarios      Scenario[]
   debriefs          Debrief[]
   parentMessages    ParentMessage[]
   usageLogs         UsageLog[]
@@ -249,10 +250,19 @@ model Scenario {
   // separate from courseLevel: a section is routinely more than one at once.
   classMakeup String[] @default([])
   difficulty String   @default("intermediate")
-  source     String // "generated" | "curated"
+  source     String // "generated" | "curated" | "teacher"
   createdAt  DateTime @default(now())
 
+  // Set only on a teacher's own situation (source "teacher", Practice's
+  // "Something real"): the one kind of Scenario row that is somebody's data
+  // rather than shared bank text, so it is never listed to anyone else and goes
+  // with the account. Null on every generated and curated row.
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   attempts ScenarioAttempt[]
+
+  @@index([userId])
 }
 
 model ScenarioAttempt {

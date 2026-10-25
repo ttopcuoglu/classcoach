@@ -10,6 +10,11 @@ export const CATEGORIES: { label: string; value?: string }[] = [
   ...FOCUS_AREAS.flatMap((a) => a.subCategories.map((c) => ({ label: c.label, value: c.value }))),
 ]
 
+/// What a teacher's own situation from Practice's "Something real" carries
+/// until the coach has read it and assigned a real category.
+export const OWN_SITUATION = 'own_situation'
+
 export function categoryLabel(value: string) {
+  if (value === OWN_SITUATION) return 'Your situation'
   return CATEGORIES.find((c) => c.value === value)?.label ?? value
 }

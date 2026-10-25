@@ -36,7 +36,10 @@ export default function Practice() {
   const area = findFocusArea(searchParams.get('area'))
   // No section chosen keeps the scenario engine: the coach picking for you only
   // makes sense where it can pick, and a role-play needs to know who you're facing.
-  const isConversation = area?.engine === 'conversation'
+  // "Something real" is its own way in: the teacher writes the situation, so
+  // there is no section to pick first — the coach works that out from the words.
+  const real = searchParams.get('start') === 'real'
+  const isConversation = !real && area?.engine === 'conversation'
   const [room, setRoom] = useState<TeachingContext>(DEFAULT_TEACHING_CONTEXT)
 
   useEffect(() => {
@@ -54,6 +57,13 @@ export default function Practice() {
       .catch(() => {})
   }, [])
 
+  function pickStart(nextReal: boolean) {
+    const params = new URLSearchParams(searchParams)
+    if (nextReal) params.set('start', 'real')
+    else params.delete('start')
+    setSearchParams(params)
+  }
+
   function pickArea(next: string | null) {
     const params = new URLSearchParams(searchParams)
     if (next) params.set('area', next)
@@ -69,8 +79,8 @@ export default function Practice() {
           Practice<span className="text-gold">.</span>
         </h1>
         <p className="text-ink-soft">
-          Rehearse the moments that are hard to get right — a classroom situation or a hard conversation,
-          written for you — and get coaching on the words you used, before you face one for real.
+          Rehearse the moments that are hard to get right — one written for you, or one you&rsquo;re facing
+          right now — and get coaching on the words you used before it happens for real.
         </p>
         <Link
           to="/guide/ask-practice"
@@ -80,6 +90,26 @@ export default function Practice() {
         </Link>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        {[
+          { label: 'Make one up for me', value: false },
+          { label: 'Something I’m facing', value: true },
+        ].map(({ label, value }) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => pickStart(value)}
+            aria-pressed={real === value}
+            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+              real === value ? 'bg-forest text-cream' : 'text-ink-soft hover:text-ink'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {!real && (
       <div className="flex flex-col gap-2">
         <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
           What's this about?
@@ -117,11 +147,15 @@ export default function Practice() {
           </Link>
         )}
       </div>
+      )}
 
       {isConversation ? (
         <PracticeConversation />
+      ) : real ? (
+        // Keyed so switching ways in starts the form clean.
+        <TryItOut key="real" real room={room} onRoomChange={setRoom} />
       ) : (
-        <TryItOut focusArea={area?.value} room={room} onRoomChange={setRoom} />
+        <TryItOut key="made-up" focusArea={area?.value} room={room} onRoomChange={setRoom} />
       )}
     </div>
   )

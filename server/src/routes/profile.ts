@@ -254,6 +254,8 @@ profileRouter.post('/coach-memory/restore', async (req, res) => {
 profileRouter.post('/reset', async (req, res) => {
   const userId = req.user!.userId
   await prisma.scenarioAttempt.deleteMany({ where: { userId } })
+  // Their own situations from Practice's "Something real" — theirs, not bank.
+  await prisma.scenario.deleteMany({ where: { userId } })
   await prisma.debrief.deleteMany({ where: { userId } })
   await prisma.parentMessage.deleteMany({ where: { userId } })
   await prisma.audioSession.deleteMany({ where: { userId } })

@@ -10,6 +10,11 @@ export { GRADE_BANDS, pickGradeBand } from './teachingContext.ts'
 // already stored in Scenario.category / Debrief.category needed rewriting.
 export const SCENARIO_CATEGORIES = ALL_SUB_CATEGORIES
 
+/// The category a teacher's own situation carries until the coach has read it
+/// and assigned a real one (see attempts.ts). Deliberately not in any area's
+/// list, so the adaptive weighting and growth views simply skip it.
+export const OWN_SITUATION = 'own_situation'
+
 export const DIFFICULTY_LEVELS = ['beginner', 'intermediate', 'advanced'] as const
 
 /// Validate a category, optionally constrained to one focus area — a grading

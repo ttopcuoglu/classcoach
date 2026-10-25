@@ -6,7 +6,7 @@ import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForSubCategory } from '.
 import { scenarioAreaBlock, teachingContextBlock } from '../lib/focusAreaPrompt.ts'
 import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { prisma } from '../lib/prisma.ts'
-import { pickDifficulty } from '../lib/scenarioCategories.ts'
+import { OWN_SITUATION, pickDifficulty } from '../lib/scenarioCategories.ts'
 import {
   gradeBandLabel,
   isCourseLevelFor,
@@ -38,6 +38,8 @@ scenariosRouter.get('/', async (req, res) => {
   const { focusArea, category, gradeBand } = req.query
   const scenarios = await prisma.scenario.findMany({
     where: {
+      // The bank only. A teacher's own situation is theirs, never a listing.
+      userId: null,
       ...(typeof focusArea === 'string' ? { focusArea } : {}),
       ...(typeof category === 'string' ? { category } : {}),
       ...(typeof gradeBand === 'string' ? { gradeBand } : {}),
@@ -164,8 +166,43 @@ scenariosRouter.post('/generate', async (req, res) => {
   }
 })
 
+// Practice's "Something real": the teacher writes the situation and nothing
+// else. No section, sub-category or difficulty is asked for — having described
+// the moment in their own words, being asked to classify it was the busywork
+// that sank the first version of this. The coach classifies it instead, as a
+// tag on the feedback it is already writing (see attempts.ts), and until then
+// the row carries OWN_SITUATION.
+//
+// Stored as a Scenario so Try again, the follow-up chat, saving, the
+// reflection timeline, sharing and export all work unchanged — but owned, so
+// it is never listed to anyone else and is deleted with the account.
+scenariosRouter.post('/real', async (req, res) => {
+  const { text, gradeBand } = req.body ?? {}
+  const trimmed = typeof text === 'string' ? text.trim() : ''
+  if (trimmed.length < 15) {
+    res.status(400).json({ error: 'Say a little more about what is happening.' })
+    return
+  }
+  if (trimmed.length > 3000) {
+    res.status(400).json({ error: 'That is longer than a situation needs — keep it under 3,000 characters.' })
+    return
+  }
+  const scenario = await prisma.scenario.create({
+    data: {
+      text: trimmed,
+      category: OWN_SITUATION,
+      gradeBand: pickGradeBand(gradeBand),
+      source: 'teacher',
+      userId: req.user!.userId,
+    },
+  })
+  res.status(201).json(scenario)
+})
+
 scenariosRouter.get('/:id', async (req, res) => {
-  const scenario = await prisma.scenario.findUnique({ where: { id: req.params.id } })
+  const scenario = await prisma.scenario.findFirst({
+    where: { id: req.params.id, OR: [{ userId: null }, { userId: req.user!.userId }] },
+  })
   if (!scenario) {
     res.status(404).json({ error: 'Scenario not found' })
     return

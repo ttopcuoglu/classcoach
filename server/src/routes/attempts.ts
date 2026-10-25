@@ -5,9 +5,10 @@ import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, t
 import { buildExperienceContextBlock } from '../lib/experience.ts'
 import { extractTag, stripStructuralTags } from '../lib/extractTag.ts'
 import { findFocusArea, focusAreaForSubCategory, type FocusArea } from '../lib/focusAreas.ts'
-import { coachIdentity, ratingStandard, teachingContextBlock } from '../lib/focusAreaPrompt.ts'
+import { classificationBlock, coachIdentity, ratingStandard, teachingContextBlock } from '../lib/focusAreaPrompt.ts'
 import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { prisma } from '../lib/prisma.ts'
+import { OWN_SITUATION, categoryInArea } from '../lib/scenarioCategories.ts'
 import { generateShareToken } from '../lib/shareToken.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
@@ -18,12 +19,12 @@ export const attemptsRouter = Router()
 // an explanation, and answering an angry parent email, and the model response
 // has to come out in the right channel — words said out loud in a classroom, or
 // a sentence that can go in an email.
-function feedbackSystemPrompt(area: FocusArea | null): string {
-  return `${coachIdentity(area)} You are reviewing how a teacher says they'd handle a practice scenario. Coach, don't grade.
+function feedbackSystemPrompt(area: FocusArea | null, own: boolean, classify: boolean): string {
+  return `${coachIdentity(area)} ${own ? OWN_SITUATION_FRAME : "You are reviewing how a teacher says they'd handle a practice scenario. Coach, don't grade."}
 
 Write in plain text only — no markdown (no **bold**, no # headings). Use a blank line between paragraphs and a leading "-" for list items.
 
-Respond with exactly these three sections and nothing outside them:
+Respond with exactly these ${classify ? 'five' : 'three'} sections and nothing outside them:
 
 <feedback>
 Constructive feedback on their approach, what worked well, and 1-3 alternative or additional strategies grounded in ${ratingStandard(area)}. Keep it skimmable, encouraging, and practical — never academic or jargon-heavy.
@@ -31,14 +32,20 @@ Constructive feedback on their approach, what worked well, and 1-3 alternative o
 <model_response>
 A model example of what the teacher could say, write, or do, in their own words. Match the channel the scenario actually has: spoken words for a moment in front of students, a written reply for an email, an opening line for a conference or a conversation with a colleague, an explanation or question sequence for a teaching problem, a decision with its reasoning for a grading call.
 </model_response>
-<rating>
+${classify ? `${classificationBlock(null)}\n` : ''}<rating>
 A single integer 1-5 rating your honest private assessment of how well this response follows ${ratingStandard(area)}. This is never shown to the teacher — it's used only to track their growth over time — so rate honestly rather than generously. Output only the digit, nothing else.
 </rating>
 ${CORE_COACHING_RULES}`
 }
 
-function attemptChatSystemPrompt(area: FocusArea | null): string {
-  return `${coachIdentity(area)} You are continuing a conversation about a practice scenario you already gave feedback on. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to try a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in the scenario and their response; never invent details that weren't given to you.
+// Practice's "Something real": the situation is the teacher's own, written by
+// them, so the coach works only from what it was told and says when it is
+// assuming — a generated scenario has no gaps worth naming, a real one does.
+const OWN_SITUATION_FRAME =
+  "You are helping a teacher rehearse a real situation they are facing, described in their own words, by reviewing how they say they would handle it. Coach, don't grade. Work only from what they told you — never invent details about the people involved — and where something that matters is missing, say briefly what you are assuming."
+
+function attemptChatSystemPrompt(area: FocusArea | null, own: boolean): string {
+  return `${coachIdentity(area)} You are continuing a conversation about ${own ? 'a real situation the teacher is facing, and how they plan to handle it,' : 'a practice scenario'} you already gave feedback on.${own ? ' If they try their words again, respond to the new version directly — what got stronger, and what to sharpen.' : ''} Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to try a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in the scenario and their response; never invent details that weren't given to you.
 ${CORE_COACHING_RULES}`
 }
 
@@ -68,7 +75,10 @@ attemptsRouter.post('/', async (req, res) => {
     res.status(400).json({ error: 'scenarioId and responseText are required strings' })
     return
   }
-  const scenario = await prisma.scenario.findUnique({ where: { id: scenarioId } })
+  // The bank, or this teacher's own situation — never someone else's.
+  const scenario = await prisma.scenario.findFirst({
+    where: { id: scenarioId, OR: [{ userId: null }, { userId: req.user!.userId }] },
+  })
   if (!scenario) {
     res.status(404).json({ error: 'Scenario not found' })
     return
@@ -82,7 +92,11 @@ attemptsRouter.post('/', async (req, res) => {
 
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { experienceLevel: true } })
-    const context = `Scenario: ${scenario.text}\n\nTeacher's response: ${responseText}`
+    const own = scenario.source === 'teacher'
+    // A teacher's own situation is classified once, on its first coaching,
+    // as tags on the reply already being written rather than a separate call.
+    const classify = own && scenario.category === OWN_SITUATION
+    const context = `${own ? "The situation, in the teacher's own words" : 'Scenario'}: ${scenario.text}\n\nTeacher's response: ${responseText}`
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       // The per-area prompts and the scenarios they produce are both longer
@@ -95,7 +109,7 @@ attemptsRouter.post('/', async (req, res) => {
       // zero text blocks, which stored a blank attempt and showed a teacher
       // empty coaching. Same trap already documented in lessonPlans.ts.
       thinking: { type: 'disabled' },
-      system: `${feedbackSystemPrompt(areaForScenario(scenario))}${teachingContextBlock(scenario)}${buildExperienceContextBlock(user?.experienceLevel)}`,
+      system: `${feedbackSystemPrompt(areaForScenario(scenario), own, classify)}${teachingContextBlock(scenario)}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: [{ role: 'user', content: context }],
     })
 
@@ -123,6 +137,17 @@ attemptsRouter.post('/', async (req, res) => {
 
     const seedReply = [feedback, modelResponse ? `Model response: ${modelResponse}` : null].filter(Boolean).join('\n\n')
     const conversation = appendTurn([], context, seedReply)
+
+    if (classify) {
+      const area = findFocusArea(extractTag(text, 'focus_area'))
+      const categoryTag = extractTag(text, 'category')
+      // A malformed or "none" category keeps the placeholder; the area alone
+      // still gives the follow-up chat the right coaching voice.
+      const category = area && categoryInArea(categoryTag, area.value) ? categoryTag! : OWN_SITUATION
+      if (area) {
+        await prisma.scenario.update({ where: { id: scenario.id }, data: { focusArea: area.value, category } })
+      }
+    }
 
     const attempt = await prisma.scenarioAttempt.create({
       data: { userId: req.user!.userId, scenarioId, responseText, feedback, modelResponse, rating, conversation },
@@ -175,7 +200,7 @@ attemptsRouter.post('/:id/chat', async (req, res) => {
       // Same reason as the feedback call above — at 300 tokens a single
       // thinking block would swallow the entire reply.
       thinking: { type: 'disabled' },
-      system: `${attemptChatSystemPrompt(areaForScenario(attempt.scenario))}${teachingContextBlock(attempt.scenario)}${buildExperienceContextBlock(user?.experienceLevel)}`,
+      system: `${attemptChatSystemPrompt(areaForScenario(attempt.scenario), attempt.scenario.source === 'teacher')}${teachingContextBlock(attempt.scenario)}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: toClaudeMessages(existing, trimmed),
     })
     const reply = response.content

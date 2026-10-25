@@ -1583,6 +1583,13 @@ export function generateScenario(opts: {
   return request('/api/scenarios/generate', { method: 'POST', body: JSON.stringify(opts) })
 }
 
+/// Practice's "Something real": the teacher's own situation, stored privately.
+/// It arrives as category `own_situation`; the coach assigns a real one on the
+/// first coaching.
+export function createRealScenario(opts: { text: string; gradeBand?: string }): Promise<Scenario> {
+  return request('/api/scenarios/real', { method: 'POST', body: JSON.stringify(opts) })
+}
+
 export function getAttempts(params?: { saved?: boolean }): Promise<ScenarioAttempt[]> {
   const query = params?.saved ? '?saved=true' : ''
   return request(`/api/attempts${query}`)

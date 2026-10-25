@@ -9,12 +9,13 @@ import { ArrowUpIcon, MicIcon, StarIcon } from '../components/icons'
 import { ProgressRing, WorkingRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { useSpeechToText } from '../hooks/useSpeechToText'
-import { categoryLabel } from '../lib/categories'
+import { OWN_SITUATION, categoryLabel } from '../lib/categories'
 import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForCategory, subCategoriesFor } from '../lib/focusAreas'
 import { hintsFor } from '../lib/practiceHints'
 import { PanelHeader } from '../components/PanelHeader'
 import TeachingContextFields, { type TeachingContext } from '../components/TeachingContextFields'
 import {
+  createRealScenario,
   generateScenario,
   getAttempts,
   markAttemptTried,
@@ -47,11 +48,16 @@ export default function TryItOut({
   focusArea,
   room,
   onRoomChange,
+  real = false,
 }: {
   focusArea?: string
   /// Owned by the shell so switching to Ask keeps the room a teacher set.
   room: TeachingContext
   onRoomChange: (next: TeachingContext) => void
+  /// "Something real": the teacher writes the situation instead of being
+  /// handed one. Everything after the first coaching — Try again, the chat,
+  /// saving, the timeline — is the same attempt view.
+  real?: boolean
 }) {
   const [category, setCategory] = useState<string | undefined>(undefined)
   const [difficulty, setDifficulty] = useState<string | undefined>(undefined)
@@ -71,6 +77,10 @@ export default function TryItOut({
 
   const [attempt, setAttempt] = useState<ScenarioAttempt | null>(null)
   const [responseText, setResponseText] = useState('')
+  const [situationText, setSituationText] = useState('')
+  // The stored situation, so a retry after a failed coaching call doesn't save
+  // the same words twice. Dropped as soon as the words change.
+  const [realScenario, setRealScenario] = useState<{ id: string; text: string } | null>(null)
   // Null until a teacher asks. Cycles rather than showing the whole list, so a
   // hint stays a nudge rather than becoming a menu to choose from.
   const [hintIndex, setHintIndex] = useState<number | null>(null)
@@ -239,6 +249,41 @@ export default function TryItOut({
     }
   }
 
+  async function handleSubmitReal() {
+    const situation = situationText.trim()
+    const response = responseText.trim()
+    if (!situation || !response || submitting) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      let scenarioId = realScenario?.text === situation ? realScenario.id : null
+      if (!scenarioId) {
+        const created = await createRealScenario({ text: situation, gradeBand: room.gradeBand })
+        scenarioId = created.id
+        setRealScenario({ id: created.id, text: situation })
+      }
+      const result = await submitAttempt(scenarioId, response)
+      setAttempt(result)
+      setAllAttempts((prev) => [result, ...prev])
+    } catch (err) {
+      setError((err as Error).message || 'Could not get coaching feedback. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  /// Back to an empty "Something real" form, for the next situation.
+  function handleStartOver() {
+    setAttempt(null)
+    setSituationText('')
+    setResponseText('')
+    setRealScenario(null)
+    setHintIndex(null)
+    setChatDraft('')
+    setChatError(null)
+    setError(null)
+  }
+
   function handleTryAgain() {
     if (!attempt) return
     setAttempt((prev) =>
@@ -326,6 +371,9 @@ export default function TryItOut({
   }
 
   const hasFeedback = attempt && (attempt.feedback || attempt.modelResponse)
+  // The teacher's own situation, not a generated one: there is no other
+  // scenario to swap in, only a fresh situation of their own.
+  const isOwn = attempt?.scenario.source === 'teacher'
   // Re-picked whenever the section or the room changes — a K-2 rehearsal and a
   // 9-12 rehearsal should not open with the same three scenarios.
   const subCategories = subCategoriesFor(focusArea)
@@ -394,6 +442,73 @@ export default function TryItOut({
                 className="px-2 py-2.5 text-sm font-semibold text-ink-soft hover:text-ink"
               >
                 Back to practice
+              </button>
+            </div>
+          </div>
+        ) : !attempt && real ? (
+          <div className="flex flex-col gap-4">
+            <PanelHeader eyebrow="Practice" title="Practice something real">
+              Describe a moment you&rsquo;re facing and how you&rsquo;d handle it. Your coach responds to your
+              words, and you can keep working on them together.
+            </PanelHeader>
+            {submitting && (
+              <div className="flex justify-center py-1 text-forest">
+                <ProgressRing progress={workingProgress} label="Reading your situation" hint="Usually under ten seconds." />
+              </div>
+            )}
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-ink">What&rsquo;s happening?</span>
+              <textarea
+                value={situationText}
+                onChange={(e) => setSituationText(e.target.value)}
+                disabled={submitting}
+                rows={4}
+                maxLength={3000}
+                placeholder="e.g. A student in my third period calls out every answer before anyone else can think, and the quieter kids have stopped trying."
+                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+              />
+              <span className="text-xs text-ink-soft">
+                No need to sort it into a type — your coach works that out. Leave out names.
+              </span>
+            </label>
+
+            <TeachingContextFields value={room} onChange={onRoomChange} disabled={submitting} />
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-ink">How would you handle it?</span>
+              <textarea
+                value={responseText}
+                onChange={(e) => setResponseText(e.target.value)}
+                disabled={submitting}
+                rows={4}
+                placeholder="What you'd say, word for word, and what you'd do."
+                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
+              />
+            </label>
+            {speechSupported && (
+              <button
+                type="button"
+                onClick={toggleListening}
+                disabled={submitting}
+                className={`flex w-fit items-center gap-2 rounded-full border-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
+                  listening
+                    ? 'border-terracotta bg-peach-tint text-terracotta-600'
+                    : 'border-mint-tint bg-mint-tint/60 text-forest hover:border-terracotta/40 hover:bg-mint-tint'
+                }`}
+              >
+                <MicIcon className="h-5 w-5" />
+                {listening ? 'Listening... tap to stop' : 'Speak your response'}
+              </button>
+            )}
+
+            <div>
+              <button
+                type="button"
+                onClick={handleSubmitReal}
+                disabled={submitting || situationText.trim().length < 15 || !responseText.trim()}
+                className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+              >
+                {submitting ? 'Getting coaching...' : 'Get coaching'}
               </button>
             </div>
           </div>
@@ -505,13 +620,20 @@ export default function TryItOut({
                 </p>
               )}
               <span className="rounded-full bg-cream/10 px-3 py-1 text-xs font-semibold text-cream">
-                {[
-                  categoryLabel(attempt.scenario.category),
-                  `Grades ${attempt.scenario.gradeBand}`,
-                  attempt.scenario.course ?? attempt.scenario.subject,
-                  attempt.scenario.courseLevel,
-                  difficultyLabel(attempt.scenario.difficulty),
-                ]
+                {(isOwn
+                  ? [
+                      'Your situation',
+                      attempt.scenario.category !== OWN_SITUATION ? categoryLabel(attempt.scenario.category) : null,
+                      `Grades ${attempt.scenario.gradeBand}`,
+                    ]
+                  : [
+                      categoryLabel(attempt.scenario.category),
+                      `Grades ${attempt.scenario.gradeBand}`,
+                      attempt.scenario.course ?? attempt.scenario.subject,
+                      attempt.scenario.courseLevel,
+                      difficultyLabel(attempt.scenario.difficulty),
+                    ]
+                )
                   .filter(Boolean)
                   .join(' · ')}
               </span>
@@ -586,11 +708,11 @@ export default function TryItOut({
                   {!sessionState && (
                     <button
                       type="button"
-                      onClick={() => handleNewScenario()}
+                      onClick={isOwn ? handleStartOver : () => handleNewScenario()}
                       disabled={generating}
                       className="text-sm font-medium text-ink-soft hover:text-ink"
                     >
-                      Try a different scenario
+                      {isOwn ? 'Something else' : 'Try a different scenario'}
                     </button>
                   )}
                   <button
@@ -674,7 +796,7 @@ export default function TryItOut({
                     )}
                     <button
                       type="button"
-                      onClick={sessionState ? handleSessionAdvance : () => handleNewScenario()}
+                      onClick={sessionState ? handleSessionAdvance : isOwn ? handleStartOver : () => handleNewScenario()}
                       disabled={generating}
                       className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
                     >
@@ -684,7 +806,9 @@ export default function TryItOut({
                           ? sessionState.index < sessionState.total
                             ? `Next (${sessionState.index + 1} of ${sessionState.total})`
                             : 'Finish Session'
-                          : 'New Scenario'}
+                          : isOwn
+                            ? 'Something else'
+                            : 'New Scenario'}
                     </button>
                   </div>
                 </div>

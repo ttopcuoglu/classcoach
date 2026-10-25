@@ -17,7 +17,7 @@ import { ADMIN_PRIORITY_SELECT } from '../lib/schoolPriorities.ts'
 import { draftGuidance, MAX_DRAFT_INPUT_CHARS } from '../lib/schoolPriorityDraft.ts'
 import { checkGuidance, GUIDANCE_FIELDS, MAX_ACTIVE_PRIORITIES, type Guidance } from '../lib/schoolPriorityRules.ts'
 import { staffQuestionMix } from '../lib/questionMix.ts'
-import { SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
+import { OWN_SITUATION, SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
 import { stripe } from '../lib/stripe.ts'
 
 export const adminRouter = Router()
@@ -484,6 +484,9 @@ async function computeOverview(req: Request, res: Response) {
   // never rendered as "unavailable" on the client.
   const categoryTally = createTally(SCENARIO_CATEGORIES)
   for (const a of attempts) {
+    // A teacher's own situation the coach has not classified yet has no
+    // category to count — it is not a seventh one.
+    if (a.scenario.category === OWN_SITUATION) continue
     categoryTally.record(a.scenario.category, a.userId)
   }
   for (const d of debriefs) {
