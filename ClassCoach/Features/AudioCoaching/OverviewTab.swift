@@ -649,6 +649,8 @@ struct OverviewTab: View {
                     }
                     .padding(.top, 8)
                 }
+                SchoolFocusIdeaRow(session: session, onUpdate: onUpdate)
+                    .padding(.top, 10)
                 Divider().overlay(Color(hex: 0xE8C9B4)).padding(.vertical, 8)
                 if !choosingForPlan {
                     Text("Would you like to plan your next class with this in mind?")
@@ -681,6 +683,144 @@ struct OverviewTab: View {
     }
 }
 
+
+/// One idea for next time connected to a school focus the teacher chose —
+/// mirrors `SchoolFocusDebriefIdea` in web AudioCoaching.tsx. Asked for, never
+/// generated with the report, and only for focuses the teacher turned on.
+private struct SchoolFocusIdeaRow: View {
+    let session: AudioSessionWithSegments
+    let onUpdate: (AudioSessionWithSegments) -> Void
+
+    /// Fetched once per app run: a school's focuses rarely change mid-session.
+    @MainActor private static var cached: [SchoolFocusChoice]?
+
+    @State private var focuses: [SchoolFocusChoice] = []
+    @State private var busy: String?
+    @State private var error: String?
+    @State private var hidden = false
+
+    private var idea: AudioSchoolFocusIdea? {
+        guard let idea = session.session.schoolFocusIdea, idea.dismissed != true else { return nil }
+        return idea
+    }
+
+    var body: some View {
+        Group {
+            if hidden {
+                EmptyView()
+            } else if let idea, let text = idea.text, let quote = idea.quote {
+                ideaBox(idea, text: text, quote: quote)
+            } else if let idea {
+                (Text("\(idea.name): ").fontWeight(.semibold).foregroundColor(AppTheme.forest)
+                    + Text(idea.none ?? "this recording didn't give a clear moment to build on."))
+                    .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(AppTheme.gold, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+            } else if !focuses.isEmpty {
+                askBox
+            }
+        }
+        .task { await loadFocuses() }
+    }
+
+    private func ideaBox(_ idea: AudioSchoolFocusIdea, text: String, quote: AudioSchoolFocusIdea.Quote) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("One option for next time").font(.heading(.subheadline)).foregroundStyle(AppTheme.forest)
+            Text("Connected to your selected school focus · \(idea.name)")
+                .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
+                .padding(.horizontal, 10).padding(.vertical, 3)
+                .background(AppTheme.goldTint, in: Capsule())
+                .fixedSize(horizontal: false, vertical: true)
+            (Text("At \(Self.clock(quote.atSec)) you said: ").foregroundColor(AppTheme.textSecondary)
+                + Text("\u{201C}\(quote.text)\u{201D}").italic().foregroundColor(AppTheme.textPrimary))
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(text).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Not for this lesson") { notForThisLesson() }
+                .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+                .padding(.top, 2)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.goldTint.opacity(0.4), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(AppTheme.gold, lineWidth: 1.5))
+    }
+
+    private var askBox: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(focuses) { f in
+                VStack(alignment: .leading, spacing: 6) {
+                    (Text(f.name).fontWeight(.semibold).foregroundColor(AppTheme.forest)
+                        + Text(" · your selected school focus").foregroundColor(AppTheme.textPrimary))
+                        .font(.subheadline)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        ask(f.id)
+                    } label: {
+                        Text(busy == f.id ? "Looking…" : "Find an idea in this lesson")
+                            .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                            .padding(.horizontal, 14).padding(.vertical, 7)
+                            .background(Color.white, in: Capsule())
+                            .overlay(Capsule().strokeBorder(AppTheme.hairline))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(busy != nil)
+                    .opacity(busy != nil && busy != f.id ? 0.6 : 1)
+                }
+            }
+            Text("Looks only at what you said, and may find nothing — that's a fine answer.")
+                .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let error {
+                Text(error).font(.caption).foregroundStyle(AppTheme.terracotta600)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(AppTheme.gold, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+    }
+
+    private func loadFocuses() async {
+        if let cached = Self.cached {
+            focuses = cached.filter { $0.state == "on" }
+            return
+        }
+        // No school, or the list can't be read: nothing to ask about, so nothing shows.
+        guard let all = try? await AudioCoachingService.fetchSchoolFocuses() else { return }
+        Self.cached = all
+        focuses = all.filter { $0.state == "on" }
+    }
+
+    private func ask(_ priorityId: String) {
+        busy = priorityId
+        error = nil
+        Task {
+            do {
+                onUpdate(try await AudioCoachingService.requestSchoolFocusIdea(sessionId: session.id, priorityId: priorityId))
+            } catch let APIError.server(_, message) {
+                error = message
+            } catch {
+                self.error = "Could not look for an idea. Please try again."
+            }
+            busy = nil
+        }
+    }
+
+    private func notForThisLesson() {
+        hidden = true
+        Task {
+            do { try await AudioCoachingService.dismissSchoolFocusIdea(sessionId: session.id) } catch { hidden = false }
+        }
+    }
+
+    private static func clock(_ sec: Double) -> String {
+        let s = max(0, Int(sec))
+        return "\(s / 60):" + String(format: "%02d", s % 60)
+    }
+}
 
 extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }

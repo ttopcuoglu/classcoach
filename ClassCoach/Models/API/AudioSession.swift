@@ -435,6 +435,22 @@ struct AudioStudentTalkFocus: Decodable {
     let examples: [AudioStudentTurnFocus]
 }
 
+/// Mirrors `web/src/lib/api.ts`'s `DebriefSchoolFocusIdea`: one idea for next
+/// time, connected to a school focus the teacher chose, asked for on request.
+/// Either `text` (with the teacher's own words in `quote`) or `none`.
+struct AudioSchoolFocusIdea: Decodable {
+    struct Quote: Decodable {
+        let atSec: Double
+        let text: String
+    }
+    let priorityId: String
+    let name: String
+    let quote: Quote?
+    let text: String?
+    let none: String?
+    let dismissed: Bool?
+}
+
 struct AudioHardLook: Decodable {
     let generatedAt: String
     let critiques: [AudioHardLookCritique]
@@ -696,6 +712,9 @@ struct AudioSession: Decodable, Identifiable {
     let rubricLens: AudioRubricLens?
     /// Null unless the teacher has asked for it — never generated with the report.
     let hardLook: AudioHardLook?
+    /// Null unless the teacher asked for an idea connected to a school focus
+    /// they chose. Never shown in an export.
+    let schoolFocusIdea: AudioSchoolFocusIdea?
     /// Absent on every report analyzed before this existed; re-analyzing
     /// fills it. Nil is never "no escalation" — see AudioEscalation's states.
     let escalation: AudioEscalation?
@@ -728,7 +747,7 @@ struct AudioSession: Decodable, Identifiable {
              durationSec, transcribeStartedAt, failureReason,
              teacherTalkPct, studentTalkPct, questionCount, higherOrderPct, avgWaitTimeSec,
              cfuCount, metricsDetail, highlights, phases, questionLog, reflectConversation, lessonContent,
-             contentNotes, teachingMoves, lessonFocus, metricsLogs, cfuLog, feedbackLog, toneLog, redirectionLog, rubricLens, hardLook, escalation, studentTalkFocus, momentToRevisit, nextSteps, classSummary, checksNarrative, climateNarrative, contentNarrative, talkNarrative, questionsNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
+             contentNotes, teachingMoves, lessonFocus, metricsLogs, cfuLog, feedbackLog, toneLog, redirectionLog, rubricLens, hardLook, schoolFocusIdea, escalation, studentTalkFocus, momentToRevisit, nextSteps, classSummary, checksNarrative, climateNarrative, contentNarrative, talkNarrative, questionsNarrative, strengths, growthAreas, nextStep, followUpDate, createdAt, updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -785,6 +804,7 @@ struct AudioSession: Decodable, Identifiable {
         // try? so an unexpected shape hides the lens instead of dropping the whole session.
         rubricLens = try? container.decodeIfPresent(AudioRubricLens.self, forKey: .rubricLens)
         hardLook = try? container.decodeIfPresent(AudioHardLook.self, forKey: .hardLook)
+        schoolFocusIdea = try? container.decodeIfPresent(AudioSchoolFocusIdea.self, forKey: .schoolFocusIdea)
         escalation = try? container.decodeIfPresent(AudioEscalation.self, forKey: .escalation)
         studentTalkFocus = try? container.decodeIfPresent(AudioStudentTalkFocus.self, forKey: .studentTalkFocus)
         momentToRevisit = try? container.decodeIfPresent(AudioMomentToRevisit.self, forKey: .momentToRevisit)

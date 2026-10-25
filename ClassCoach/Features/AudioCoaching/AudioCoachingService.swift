@@ -233,6 +233,44 @@ enum AudioCoachingService {
         try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/rubric-lens", method: "POST")
     }
 
+    /// The school focuses the teacher's school shared, with the teacher's own
+    /// answer for each. Only the ones they turned on can be asked about.
+    static func fetchSchoolFocuses() async throws -> [SchoolFocusChoice] {
+        let response: SchoolFocusList = try await APIClient.shared.request("/api/school-focus")
+        return response.items
+    }
+
+    static func requestSchoolFocusIdea(sessionId: String, priorityId: String?) async throws -> AudioSessionWithSegments {
+        try await APIClient.shared.request(
+            "/api/audio-sessions/\(sessionId)/school-focus-idea",
+            method: "POST",
+            body: SchoolFocusIdeaBody(priorityId: priorityId)
+        )
+    }
+
+    /// Answers 204 with no body, so it goes through postForData.
+    static func dismissSchoolFocusIdea(sessionId: String) async throws {
+        _ = try await APIClient.shared.postForData(
+            "/api/audio-sessions/\(sessionId)/school-focus-idea/dismiss",
+            body: SchoolFocusIdeaBody(priorityId: nil)
+        )
+    }
+
+    private struct SchoolFocusIdeaBody: Encodable {
+        let priorityId: String?
+    }
+
+    private struct SchoolFocusList: Decodable {
+        let items: [SchoolFocusChoice]
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            // One odd row hides that focus, not the whole list.
+            let rows = (try? c.decode([FailableDecodable<SchoolFocusChoice>].self, forKey: .items)) ?? []
+            items = rows.compactMap(\.value)
+        }
+        enum CodingKeys: String, CodingKey { case items }
+    }
+
     static func generateHardLook(sessionId: String) async throws -> AudioSessionWithSegments {
         try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/hard-look", method: "POST")
     }
@@ -268,5 +306,19 @@ enum AudioCoachingService {
     /// kept, so this never fires twice for a lesson.
     static func generateMomentToRevisit(sessionId: String) async throws -> AudioSessionWithSegments {
         try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/moment-to-revisit", method: "POST")
+    }
+}
+
+struct SchoolFocusChoice: Decodable, Identifiable {
+    let id: String
+    let name: String
+    /// "on", "paused", "off", "later", or nil before the teacher has answered.
+    let state: String?
+}
+
+private struct FailableDecodable<T: Decodable>: Decodable {
+    let value: T?
+    init(from decoder: Decoder) throws {
+        value = try? T(from: decoder)
     }
 }
