@@ -91,7 +91,9 @@ const PREVIEW_FOCUS = {
 }
 
 /// The teacher's own answer in this preview, kept for the page's lifetime.
-let previewFocusState: string | null = null
+// `?focus=on` starts with the teacher already having turned it on.
+let previewDebriefIdea: Json | null = null
+let previewFocusState: string | null = new URLSearchParams(window.location.search).get('focus') === 'on' ? 'on' : null
 
 function previewSchoolFocus(method: string, body: Json): Json {
   // Like the real route: a teacher with no school has no school focus.
@@ -1892,8 +1894,21 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
       },
     }
   }
+  // Lesson Debrief's on-request school-focus idea: an idea, or `?focusidea=none`.
+  if (path === '/api/audio-sessions/preview-report/school-focus-idea' && method === 'POST') {
+    const none = new URLSearchParams(window.location.search).get('focusidea') === 'none'
+    previewDebriefIdea = {
+      priorityId: 'preview-priority',
+      name: String(PREVIEW_FOCUS.name),
+      generatedAt: new Date().toISOString(),
+      quote: none ? null : { atSec: 426, text: 'Great point. Who else — what did your pair put down?' },
+      text: none ? null : 'One option next time: before moving to the next pair, try asking the class "Does anyone agree or disagree with that claim, and why?" so pairs respond to each other\'s thinking.',
+      none: none ? 'Most of what was captured was you explaining the steps, so there was no clear moment for this.' : null,
+    }
+    return { ...(previewReport() as Record<string, unknown>), schoolFocusIdea: previewDebriefIdea }
+  }
   const reportMatch = path.match(/^\/api\/audio-sessions\/(preview-report)$/)
-  if (reportMatch) return previewReport()
+  if (reportMatch) return { ...(previewReport() as Record<string, unknown>), schoolFocusIdea: previewDebriefIdea }
   // Any OTHER session id fetched on its own. Without this the request fell
   // through to the list handler below and answered with an ARRAY, so opening
   // any row but the first handed the report page a session with no segments

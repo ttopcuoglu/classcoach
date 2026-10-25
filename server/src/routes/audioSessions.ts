@@ -40,6 +40,15 @@ import {
   RUBRIC_FRAMEWORKS,
   type RubricLensResult,
 } from '../lib/rubricLens.ts'
+import { activeFocusFor } from '../lib/schoolPriorities.ts'
+import {
+  buildDebriefFocusPrompt,
+  debriefFocusUserMessage,
+  MIN_TEACHER_LINES,
+  parseDebriefFocus,
+  teacherLines,
+  type DebriefSchoolFocusIdea,
+} from '../lib/debriefSchoolFocus.ts'
 import {
   buildHardLookEvidence,
   buildHardLookSystemPrompt,
@@ -1408,6 +1417,92 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
     logModelFailure('[audio-sessions] rubric lens failed:', failure, error)
     res.status(failure.status).json({ error: failure.message })
   }
+})
+
+// An idea for next time connected to a school focus the teacher chose — on
+// request from Try next time, never part of the analysis. Kept once made, like
+// Rubric Lens; only from the teacher's own words (lib/debriefSchoolFocus.ts).
+audioSessionsRouter.post('/:id/school-focus-idea', async (req, res) => {
+  const userId = req.user!.userId
+  const session = await prisma.audioSession.findFirst({ where: { id: String(req.params.id), userId }, include: { segments: true } })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  if (session.status !== 'analyzed') {
+    res.status(400).json({ error: 'This report is not ready yet.' })
+    return
+  }
+  const stored = session.schoolFocusIdea as DebriefSchoolFocusIdea | null
+  const withSegments = () => prisma.audioSession.findFirst({ where: { id: session.id }, include: { segments: { orderBy: { startSec: 'asc' } } } })
+  if (stored && !stored.dismissed) {
+    res.json(await withSegments())
+    return
+  }
+
+  // Only a focus the teacher has on right now: the choice is theirs, and a
+  // paused or changed focus is not one they are using.
+  const focuses = await activeFocusFor(userId)
+  const wanted = typeof req.body?.priorityId === 'string' ? req.body.priorityId : null
+  const focus = focuses.find((f) => f.id === wanted) ?? (wanted ? null : focuses[0])
+  if (!focus) {
+    res.status(409).json({ error: 'Turn this school focus on in Profile to get ideas connected to it.' })
+    return
+  }
+
+  const lines = teacherLines(session.segments)
+  let idea: DebriefSchoolFocusIdea
+  if (lines.length < MIN_TEACHER_LINES) {
+    idea = {
+      priorityId: focus.id,
+      name: focus.name,
+      generatedAt: new Date().toISOString(),
+      quote: null,
+      text: null,
+      none: 'Too little of your own talk was captured in this recording to find a moment for this.',
+    }
+  } else {
+    const denied = await checkAndLogUsage(userId, 'school_focus_debrief')
+    if (denied) {
+      res.status(429).json({ error: denied })
+      return
+    }
+    try {
+      const response = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 800,
+        thinking: { type: 'disabled' },
+        system: buildDebriefFocusPrompt(focus),
+        messages: [{ role: 'user', content: debriefFocusUserMessage(lines) }],
+      })
+      const text = response.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('\n')
+      flagIfUnsafe(text, 'audioSessions.schoolFocusIdea')
+      idea = parseDebriefFocus(text, lines, focus)
+    } catch (error) {
+      const failure = classifyModelError(error, 'Could not look for an idea')
+      logModelFailure('[audio-sessions] school focus idea failed:', failure, error)
+      res.status(failure.status).json({ error: failure.message })
+      return
+    }
+  }
+  await prisma.audioSession.update({ where: { id: session.id }, data: { schoolFocusIdea: idea as unknown as Prisma.InputJsonValue } })
+  res.json(await withSegments())
+})
+
+audioSessionsRouter.post('/:id/school-focus-idea/dismiss', async (req, res) => {
+  const session = await prisma.audioSession.findFirst({ where: { id: String(req.params.id), userId: req.user!.userId }, select: { id: true, schoolFocusIdea: true } })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  const stored = session.schoolFocusIdea as DebriefSchoolFocusIdea | null
+  if (stored) {
+    await prisma.audioSession.update({ where: { id: session.id }, data: { schoolFocusIdea: { ...stored, dismissed: true } as unknown as Prisma.InputJsonValue } })
+  }
+  res.status(204).end()
 })
 
 // The Hard Look holds itself to a stricter bar than Rubric Lens, which

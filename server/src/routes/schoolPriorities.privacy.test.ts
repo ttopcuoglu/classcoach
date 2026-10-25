@@ -105,6 +105,18 @@ test('the idea never reaches a printout, a copy, a Word document or a Canvas pag
   }
 })
 
+test("Lesson Debrief's idea never reaches the export, the PDF, or the Coach's digest", () => {
+  const exportPage = readFileSync(join(SERVER_SRC, '..', '..', 'web', 'src', 'pages', 'AudioCoachingExport.tsx'), 'utf8')
+  assert.ok(!exportPage.includes('schoolFocusIdea'), 'the printable report must not read schoolFocusIdea')
+  const digest = readFileSync(join(SERVER_SRC, 'lib', 'coachDigest.ts'), 'utf8')
+  assert.ok(!digest.includes('schoolFocusIdea'), "the Coach's digest must not read schoolFocusIdea")
+  // On the report page it is on screen only: its box is hidden when printing.
+  const page = readFileSync(join(SERVER_SRC, '..', '..', 'web', 'src', 'pages', 'AudioCoaching.tsx'), 'utf8')
+  const box = page.slice(page.indexOf('function SchoolFocusDebriefIdea'), page.indexOf('function SchoolFocusDebriefIdea') + 6000)
+  assert.ok(page.includes('function SchoolFocusDebriefIdea'), 'the box exists')
+  assert.match(box, /print:hidden/, 'the Lesson Debrief school-focus box must be hidden when printing')
+})
+
 // ---------------------------------------------------------------------------
 // Against a throwaway database.
 // ---------------------------------------------------------------------------
@@ -175,6 +187,24 @@ before(async () => {
   const choice = await prisma.teacherPriorityChoice.create({
     data: { id: 'CHOICE-ROW-MARKER', userId: teacher.id, priorityId: priority.id, state: 'on', version: 1 },
   })
+  // An analyzed lesson carrying a Lesson Debrief idea for that focus: what
+  // the admin routes read about recordings must never include it.
+  await prisma.audioSession.create({
+    data: {
+      userId: teacher.id,
+      status: 'analyzed',
+      consentConfirmed: true,
+      durationSec: 2400,
+      schoolFocusIdea: {
+        priorityId: priority.id,
+        name: 'Academic Discussions',
+        generatedAt: new Date().toISOString(),
+        quote: { atSec: 70, text: 'DEBRIEF-QUOTE-MARKER' },
+        text: 'DEBRIEF-IDEA-MARKER',
+        none: null,
+      },
+    },
+  })
 
   const app = express()
   app.use(express.json())
@@ -218,6 +248,7 @@ async function call(path: string, as: { id: string; role: string }, init: Reques
 
 function assertNoChoiceIn(text: string, where: string) {
   assert.ok(!text.includes('CHOICE-ROW-MARKER'), `${where} leaked a choice row`)
+  assert.ok(!/DEBRIEF-(IDEA|QUOTE)-MARKER|schoolFocusIdea/.test(text), `${where} leaked a Lesson Debrief school-focus idea`)
   assert.ok(!/"(choices|priorityChoices|teacherPriorityChoice)"/.test(text), `${where} returned choice data`)
   assert.ok(!/"state"\s*:\s*"(on|paused|off|later)"/.test(text), `${where} returned a teacher's state`)
 }

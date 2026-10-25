@@ -23,6 +23,10 @@ import {
   deleteAudioSession,
   generateClassSummary,
   generateHardLook,
+  getSchoolFocus,
+  requestSchoolFocusDebriefIdea,
+  dismissSchoolFocusDebriefIdea,
+  type SchoolFocusItem,
   generateMomentToRevisit,
   generateNextSteps,
   writeFocusLine,
@@ -2435,6 +2439,105 @@ const ITEM_SECTION: Record<string, InsightsSection> = {
 /// "Keep doing" is something to keep, not a change to aim at.
 const FOCUSABLE = (id: string) => id !== 'content-worked'
 
+/// The school focuses this teacher has on, read once per page.
+let schoolFocusOnce: Promise<SchoolFocusItem[]> | null = null
+
+/// One idea for next time connected to a school focus the teacher chose
+/// (docs/coaching-priorities.md), asked for here and only from the teacher's
+/// own words. On screen only: hidden when printing, and never in the export,
+/// the Coach's digest or anything an admin sees.
+function SchoolFocusDebriefIdea({ session, onUpdate }: { session: AudioSessionWithSegments; onUpdate: (s: AudioSessionWithSegments) => void }) {
+  const [focuses, setFocuses] = useState<SchoolFocusItem[]>([])
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [hidden, setHidden] = useState(false)
+
+  useEffect(() => {
+    schoolFocusOnce ??= getSchoolFocus()
+      .then(({ items }) => items.filter((f) => f.state === 'on'))
+      .catch(() => [])
+    let live = true
+    void schoolFocusOnce.then((items) => live && setFocuses(items))
+    return () => {
+      live = false
+    }
+  }, [])
+
+  const idea = session.schoolFocusIdea && !session.schoolFocusIdea.dismissed ? session.schoolFocusIdea : null
+  if (hidden || (!idea && focuses.length === 0)) return null
+
+  async function ask(priorityId: string) {
+    setBusy(priorityId)
+    setError(null)
+    try {
+      onUpdate(await requestSchoolFocusDebriefIdea(session.id, priorityId))
+    } catch (e) {
+      setError((e as Error).message || 'Could not look for an idea. Please try again.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function notForThisLesson() {
+    setHidden(true)
+    try {
+      await dismissSchoolFocusDebriefIdea(session.id)
+    } catch {
+      setHidden(false)
+    }
+  }
+
+  if (idea?.text && idea.quote) {
+    return (
+      <section aria-label="An idea connected to your school focus" className="rounded-2xl border-[1.5px] border-gold bg-gold-tint/40 p-4 print:hidden">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <p className="font-heading text-sm font-bold text-forest">One option for next time</p>
+          <span className="rounded-full bg-gold-tint px-2.5 py-0.5 text-xs font-semibold text-ink">
+            Connected to your selected school focus · {idea.name}
+          </span>
+        </div>
+        <p className="mt-2 text-sm text-ink-soft">
+          At {formatTime(idea.quote.atSec)} you said: <span className="italic text-ink">&ldquo;{idea.quote.text}&rdquo;</span>
+        </p>
+        <p className="mt-1.5 text-sm text-ink">{idea.text}</p>
+        <button type="button" onClick={notForThisLesson} className="mt-2 text-xs font-semibold text-ink-soft hover:text-ink hover:underline">
+          Not for this lesson
+        </button>
+      </section>
+    )
+  }
+
+  if (idea) {
+    return (
+      <p className="rounded-2xl border border-dashed border-gold px-4 py-3 text-sm text-ink print:hidden">
+        <span className="font-semibold text-forest">{idea.name}:</span> {idea.none ?? "this recording didn't give a clear moment to build on."}
+      </p>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-gold px-4 py-3 print:hidden">
+      {focuses.map((f) => (
+        <div key={f.id} className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <p className="min-w-0 flex-1 text-sm text-ink">
+            <span className="font-semibold text-forest">{f.name}</span> · your selected school focus
+          </p>
+          <button
+            type="button"
+            onClick={() => void ask(f.id)}
+            disabled={busy != null}
+            className="rounded-full border border-hairline bg-white px-3.5 py-1.5 text-xs font-semibold text-forest hover:bg-cream disabled:opacity-60"
+          >
+            {busy === f.id ? 'Looking…' : 'Find an idea in this lesson'}
+          </button>
+        </div>
+      ))}
+      <p className="text-xs text-ink-soft">Looks only at what you said, and may find nothing — that's a fine answer.</p>
+      {error && <p className="text-xs text-terracotta-600">{error}</p>}
+    </div>
+  )
+}
+
 /// Try next time: what the report suggests, from every section, in one list —
 /// and the hand-off to Planning Coach with the ones the teacher chooses.
 function TryNextTimeList({
@@ -2442,11 +2545,13 @@ function TryNextTimeList({
   focusText,
   focusId,
   onMakeFocus,
+  onUpdate,
 }: {
   session: AudioSessionWithSegments
   focusText?: string | null
   focusId?: string | null
   onMakeFocus: (id: string) => void
+  onUpdate: (s: AudioSessionWithSegments) => void
 }) {
   const navigate = useNavigate()
   // The one focus has its own card above; it goes to planning first.
@@ -2516,6 +2621,7 @@ function TryNextTimeList({
           </li>
         ))}
       </ul>
+      <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} />
       <div className="border-t border-[#E8C9B4] pt-4 print:hidden">
         {!choosing ? (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -2885,7 +2991,7 @@ function SummaryTab({
         </div>
       )}
 
-      <TryNextTimeList session={session} focusText={focus?.text} focusId={focus?.id} onMakeFocus={(id) => void chooseFocus(id)} />
+      <TryNextTimeList session={session} focusText={focus?.text} focusId={focus?.id} onMakeFocus={(id) => void chooseFocus(id)} onUpdate={onUpdate} />
 
       {hardLookDoor}
 

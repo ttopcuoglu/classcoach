@@ -1098,6 +1098,8 @@ export type AudioSession = {
   contentNotes: AudioContentNotes | null
   rubricLens: AudioRubricLens | null
   hardLook: AudioHardLook | null
+  /** Lesson Debrief's on-request idea connected to a school focus the teacher chose. On screen only. */
+  schoolFocusIdea?: DebriefSchoolFocusIdea | null
   studentTalkFocus: AudioStudentTalkFocus | null
   // Absent on every report analyzed before this existed; re-analyzing fills
   // it. Null is never "no escalation" — see AudioEscalation's states.
@@ -2854,6 +2856,30 @@ export function generateContentNotes(id: string): Promise<AudioSession> {
 
 export function generateRubricLens(id: string): Promise<AudioSessionWithSegments> {
   return request(`/api/audio-sessions/${id}/rubric-lens`, { method: 'POST' })
+}
+
+export type DebriefSchoolFocusIdea = {
+  priorityId: string
+  name: string
+  generatedAt: string
+  quote: { atSec: number; text: string } | null
+  text: string | null
+  none: string | null
+  dismissed?: boolean
+}
+
+/// One idea for next time connected to a school focus the teacher has on —
+/// asked for from Try next time, kept once made.
+export function requestSchoolFocusDebriefIdea(id: string, priorityId?: string): Promise<AudioSessionWithSegments> {
+  return request(`/api/audio-sessions/${id}/school-focus-idea`, { method: 'POST', body: JSON.stringify(priorityId ? { priorityId } : {}) })
+}
+
+export async function dismissSchoolFocusDebriefIdea(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/audio-sessions/${id}/school-focus-idea/dismiss`, { method: 'POST', credentials: 'include' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw apiError(body?.error ?? messageForStatus(res.status), res.status)
+  }
 }
 
 export function generateHardLook(id: string): Promise<AudioSessionWithSegments> {

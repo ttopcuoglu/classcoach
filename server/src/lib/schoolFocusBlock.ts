@@ -25,7 +25,9 @@ export const SCHOOL_FOCUS_CHECK_TAG = 'school_focus_check'
 /// Short: a phrase, not a lesson plan of its own.
 export const MAX_SCHOOL_FOCUS_IDEA_CHARS = 600
 
-function quoted(f: FocusForPrompt): string {
+/// The admin's guidance as quoted material — also used by Lesson Debrief's
+/// on-request idea (debriefSchoolFocus.ts).
+export function quoted(f: FocusForPrompt): string {
   return [
     `Name: ${f.name}`,
     `Purpose: ${f.purpose}`,
