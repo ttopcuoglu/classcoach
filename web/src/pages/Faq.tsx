@@ -17,6 +17,10 @@ const CATEGORIES: Category[] = [
         a: 'No. Admins — at the school level or platform-wide — only ever see aggregate trends across their staff, like how many teachers are using Wivoza, or how often clear directions or wait time come up across recorded lessons. No number is tied to a teacher, and they never see anyone\'s recordings, transcripts, reports, answers, or ratings. Every admin view says this plainly on screen.',
       },
       {
+        q: 'My school shared a focus. Does my admin know whether I turned it on?',
+        a: 'No. A school can share up to two coaching priorities, like academic discussion. Whether Wivoza brings one into your coaching is your choice alone: it is off until you turn it on, you can pause or turn it off any time in Profile & Settings, and your admin never sees who turned it on, paused it, or said no. When it is on, Wivoza only offers an idea when it fits what you are working on, and labels it "Connected to your selected school focus".',
+      },
+      {
         q: 'Is Wivoza used to evaluate me?',
         a: 'No. Wivoza is a private self-coaching companion, not an evaluation tool. Coach never assigns a grade, score, or rating you can see, and it\'s explicitly built to avoid language that functions like one.',
       },

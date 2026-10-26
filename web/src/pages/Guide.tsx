@@ -654,14 +654,19 @@ export default function Guide() {
           <h2 className="mt-4 font-heading text-2xl font-extrabold text-forest sm:text-3xl">Admin dashboard</h2>
           <p className="mt-3 max-w-2xl text-lg text-ink-soft">
             Visible only to school and district admins — built around aggregate trends, never an individual teacher's recordings, reports, or ratings.
+            Admins switch between <strong className="font-semibold text-forest">My Coaching</strong> (their own coaching tools) and{' '}
+            <strong className="font-semibold text-forest">School Admin</strong> at the top of the sidebar.
           </p>
           <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm">
             <SpecList
               items={[
-                { label: 'Dashboard', body: 'the at-a-glance read for the dates you choose: how many teachers have an account, set it up, used it, and came back; the three things worth a look this week; weekly participation; and which tools teachers have tried. Filter by grade band or subject, and download a pilot report (PDF) or the data (CSV).' },
-                { label: 'Coaching insights', body: 'what recorded lessons show across the staff, in the same four sections teachers see in their own Lesson Insights — shared strengths, shared growth areas, and the mix of questions asked — plus the classroom situations teachers practice, the conversations they prepare for, and the focus areas they chose for themselves. Lessons where less than half the recording came through as clear speech are left out, and the page says how many.' },
+                { label: 'Dashboard', body: 'opens with your school\'s focus — its coaching priorities and any tracked growth area — and links to explore further, then the at-a-glance read for the dates you choose: how many teachers have an account, set it up, used it, and came back; the three things worth a look this week; weekly participation; and which tools teachers have tried. Filter by grade band or subject, and download a pilot report (PDF) or the data (CSV).' },
+                { label: 'Usage & Engagement', body: 'how consistently your staff use Wivoza over time: who set it up, who keeps coming back, and how practice is going across the school.' },
+                { label: 'Coaching Insights', body: 'what recorded lessons show across the staff, in the same four sections teachers see in their own Lesson Insights — shared strengths, shared growth areas, and the mix of questions asked — plus the classroom situations teachers practice, the conversations they prepare for, and the focus areas they chose for themselves. Lessons where less than half the recording came through as clear speech are left out, and the page says how many.' },
                 { label: 'Professional Learning', body: 'pick a growth area to work on as a school. Wivoza notes how often it shows up in lessons now, then whether it shows up in fewer lessons as your PD takes hold.' },
+                { label: 'Coaching Priorities', body: 'share up to two focus areas your school is working on, like academic discussion, in your own words — "Help me write this" drafts the guidance for you to edit. Each teacher decides privately whether Wivoza offers ideas for it in Planning Coach and Talk It Through. Ideas are always labelled and only come up when they fit. You never see who turned a priority on, paused it or said no.' },
                 { label: 'People', body: 'the member list, with each teacher\'s status (active, inactive, not started, or suspended) and Suspend or Remove from school. Platform admins also manage school and district accounts and their join codes.' },
+                { label: 'Settings', body: 'Lesson Plan Format, your school\'s own lesson plan form, which lessons teachers build come out in; and LMS Connections, so teachers open Wivoza from their Canvas courses already signed in.' },
                 { label: 'Joining a school', body: 'a teacher enters a short code during onboarding or later from Profile & Settings; whoever\'s email is listed as that school\'s admin becomes its admin automatically.' },
               ]}
             />

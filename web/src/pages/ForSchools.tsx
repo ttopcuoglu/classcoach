@@ -27,7 +27,7 @@ const OFFER = [
     badge: 'bg-gold text-forest',
     card: 'bg-gold-tint/50',
     title: 'Leaders see the big picture',
-    body: 'An admin dashboard shows adoption, participation, and the strengths and growth areas emerging across your staff, with professional-learning focus areas you can track over time.',
+    body: 'An admin dashboard shows adoption, participation, and the strengths and growth areas emerging across your staff. Track professional-learning focus areas over time, and share a coaching priority teachers can choose to bring into their coaching.',
   },
   {
     icon: CheckCircleIcon,
@@ -41,6 +41,7 @@ const OFFER = [
 const PRIVACY_POINTS = [
   'Admins only ever see aggregate trends — never one teacher’s recordings, transcripts, answers, or ratings.',
   'Group comparisons stay hidden until enough teachers contribute that no one can be singled out.',
+  'A coaching priority is each teacher’s own choice. Admins never see who turned it on, paused it, or said no.',
   'Audio is discarded right after transcription. Only text and metrics are kept.',
   'Coach refers to people by role — “a student,” “the class” — not by name.',
 ]
@@ -501,6 +502,14 @@ export default function ForSchools() {
                 whether it shows up in fewer lessons.
               </figcaption>
             </figure>
+            <div className="rounded-3xl border border-hairline bg-cream-card p-5 shadow-sm">
+              <p className="text-sm text-ink-soft">
+                <span className="font-semibold text-forest">Coaching Priorities.</span> Share up to two focus areas your
+                school is working on, like academic discussion, in your own words. Each teacher decides privately
+                whether Wivoza offers ideas for it when they plan a lesson or talk a problem through. Every idea is
+                labelled, and you never see who turned it on.
+              </p>
+            </div>
             <p className="flex items-start gap-2.5 rounded-2xl bg-mint-tint/50 p-5 text-sm text-forest">
               <LockIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
               Teachers keep using Wivoza because you can&rsquo;t see their recordings or coaching. That trust is what
