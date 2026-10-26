@@ -991,7 +991,7 @@ audioSessionsRouter.post('/:id/reflect-chat', async (req, res) => {
 
   const userTurnCount = existing.filter((m) => m.role === 'user').length
   if (!isStart && userTurnCount >= REFLECT_TURN_CAP) {
-    res.status(409).json({ error: "You've reached today's reflection limit for this session." })
+    res.status(409).json({ error: "This report's conversation is full — Talk It Through can carry on from here." })
     return
   }
 
@@ -1113,7 +1113,7 @@ audioSessionsRouter.post('/:id/reflect-chat/stream', async (req, res) => {
 
   const userTurnCount = existing.filter((m) => m.role === 'user').length
   if (!isStart && userTurnCount >= REFLECT_TURN_CAP) {
-    res.status(409).json({ error: "You've reached today's reflection limit for this session." })
+    res.status(409).json({ error: "This report's conversation is full — Talk It Through can carry on from here." })
     return
   }
 

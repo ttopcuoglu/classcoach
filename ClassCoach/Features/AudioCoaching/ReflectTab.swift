@@ -172,7 +172,7 @@ struct ReflectTab: View {
                 if locked {
                     Text("This report is locked — the conversation is read-only.").font(.caption).foregroundStyle(AppTheme.textSecondary)
                 } else if turnCapHit {
-                    Text("You've reached today's reflection limit for this session.").font(.caption).foregroundStyle(AppTheme.textSecondary)
+                    Text("This report's conversation is full — Talk It Through can carry on from here.").font(.caption).foregroundStyle(AppTheme.textSecondary)
                 } else if voiceMode {
                     voiceControls
                 } else {

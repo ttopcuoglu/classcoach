@@ -4248,7 +4248,7 @@ function ReflectTab({
                 {locked ? (
                   <p className="text-xs text-ink-soft">This report is locked — the conversation is read-only.</p>
                 ) : turnCapHit ? (
-                  <p className="text-xs text-ink-soft">You've reached today's reflection limit for this session.</p>
+                  <p className="text-xs text-ink-soft">This report's conversation is full — Talk It Through can carry on from here.</p>
                 ) : null}
               </div>
             ) : (
@@ -4294,7 +4294,7 @@ function ReflectTab({
                   <p className="mt-2 text-xs text-ink-soft">This report is locked — the conversation is read-only.</p>
                 ) : turnCapHit ? (
                   <p className="mt-2 text-xs text-ink-soft">
-                    You've reached today's reflection limit for this session.
+                    This report's conversation is full — Talk It Through can carry on from here.
                   </p>
                 ) : null}
               </div>
