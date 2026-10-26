@@ -51,7 +51,11 @@ const MOMENTS = [
 
 const STEPS = [
   {
-    title: 'Pick the section that matches your moment',
+    title: 'Make one up, or bring your own',
+    body: 'Two ways in at the top. Make one up for me hands you an invented moment, set up by the choices below. Something I’m facing takes one from your own week: say what’s happening, your grade band, and how you’d handle it. Nothing to sort into a type — your coach works that out from your words.',
+  },
+  {
+    title: 'For a made-up one, pick the section that matches your moment',
     body: 'Four chips across the top: Teaching and Learning, Classroom Management, Conversation, Professionalism. The section is the only thing you have to decide — it quietly sets up the right kind of rehearsal underneath. Left on “Not sure yet,” your coach picks for you, weighted toward whatever you have practiced least.',
   },
   {
@@ -72,10 +76,10 @@ const STEPS = [
   },
 ]
 
-// The section chip decides which of these opens; a teacher never picks an engine
-// by name. Kept side by side here because the difference in what comes back is
-// worth knowing before you start.
-const LANES = [
+// The way in and the section chip decide which of these opens; a teacher never
+// picks an engine by name. Kept side by side here because the difference in
+// what comes back is worth knowing before you start.
+const LANES: { icon: typeof ScenarioIcon; name: string; when: string; detail: string; wide?: boolean }[] = [
   {
     icon: ScenarioIcon,
     name: 'A classroom moment',
@@ -89,6 +93,14 @@ const LANES = [
     when: 'Conversation — a parent, student, colleague, or administrator.',
     detail:
       'Say who you’re facing, the kind of challenge, and how hard they push — supportive, concerned, resistant, or highly escalated. Wivoza writes the situation, then you respond by typing or speaking. Back comes a six-part read — clarity, empathy, use of evidence, professional boundaries, collaboration, and resolution — each marked strong, developing, or needs work, plus what you did well, your one top priority, a stronger phrase to borrow, and a full model response.',
+  },
+  {
+    icon: TargetIcon,
+    name: 'Something you’re facing',
+    when: 'Something I’m facing — a real moment from your own week, in your own words.',
+    detail:
+      'Describe what’s happening and pick your grade band; leave out names. Then say how you’d handle it, and back comes coaching on your words and a model to compare against. Or leave that box blank — not knowing what to say yet is exactly when this helps — and your coach walks you through it instead: what’s most likely going on, two to four moves in the order you’d make them, and words you could actually say. Either way the chat underneath is where you try your own version and get coached on it.',
+    wide: true,
   },
 ]
 
@@ -175,7 +187,7 @@ export default function GuideAskPractice() {
         title="Practice"
         paragraphs={[
           'One rehearsal space for the thing you’re quietly dreading — whether it’s a room that has stopped listening or a conversation on tomorrow’s calendar.',
-          'Practice hands you a realistic moment and lets you respond badly, as many times as you need, where it costs nothing. Asking a real question is Talk It Through’s job now, out loud or typed. Both are free, always, with no limit.',
+          'Practice hands you a realistic moment — or takes one you’re actually facing — and lets you respond badly, as many times as you need, where it costs nothing. Asking a real question is Talk It Through’s job now, out loud or typed. Both are free, always, with no limit.',
         ]}
       />
 
@@ -255,12 +267,15 @@ export default function GuideAskPractice() {
         <GuideSection
           id="how-it-works"
           eyebrow="How it works"
-          title="Two lanes, one tab"
+          title="Three ways in, one tab"
           lede="You can move between them at any point — and the app will do it for you when it makes sense."
         >
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {LANES.map((lane) => (
-              <div key={lane.name} className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
+              <div
+                key={lane.name}
+                className={`rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm ${lane.wide ? 'sm:col-span-2' : ''}`}
+              >
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-mint-tint text-forest">
                   <lane.icon className="h-5 w-5" />
                 </span>
@@ -288,10 +303,11 @@ export default function GuideAskPractice() {
           <p className="mt-6 flex items-start gap-3 rounded-xl bg-gold-tint/40 p-4 text-sm leading-relaxed text-forest">
             <SparkleIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
             <span>
-              The bridge is worth knowing about: a meeting you planned in{' '}
-              <strong className="font-semibold">Communication Coach</strong> has a{' '}
-              <strong className="font-semibold">Practice This Meeting</strong> button that carries the real
-              situation straight into a rehearsal here. Plan, then reps — without retyping a thing.
+              Then say it out loud. Under the coaching on something you’re facing,{' '}
+              <strong className="font-semibold">Discuss with Wivoza Coach</strong> opens Talk It Through already
+              knowing the situation, what you said, and what it suggested. Coach asks you to say it the way you
+              would to the person, coaches each version you try, and will play the other person if you ask —
+              closer to the real moment than anything typed.
             </span>
           </p>
 
@@ -378,7 +394,9 @@ export default function GuideAskPractice() {
               Every filter on a classroom rehearsal is optional. Skipping all of them and hitting{' '}
               <strong className="font-semibold">New Scenario</strong> is a perfectly good way to start — you
               can always narrow it down once you know what you want to work on. Conversation asks for a little
-              more up front, because who you’re facing is the whole scenario.
+              more up front, because who you’re facing is the whole scenario. And on something you’re facing,
+              the only thing you need is what’s happening — if you don’t know what you’d say, leave it blank and
+              press <strong className="font-semibold">Get coaching</strong>.
             </p>
 
             <div className="mt-7 border-t border-hairline pt-6">

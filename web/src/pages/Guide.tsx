@@ -239,8 +239,11 @@ const ASK_PRACTICE: Feature = {
   nav: 'Grow → Practice',
   title: 'Practice',
   guideTo: '/guide/ask-practice',
-  intro: 'A rehearsal space: take a realistic classroom moment, respond to it badly as many times as you need, and get coaching on the words you actually used.',
+  intro: 'A rehearsal space: take a realistic classroom moment, or bring one you are actually facing, respond to it badly as many times as you need, and get coaching on the words you actually used.',
   specs: [
+    { label: 'Two ways in', body: '"Make one up for me" hands you a generated moment; "Something I\'m facing" takes a real one in your own words — no category to pick, the coach works it out.' },
+    { label: 'Something I\'m facing', body: 'describe what is happening and your grade band, then say how you would handle it — optional. Left blank, the coach walks you through it: what is likely going on, moves in order, and words you could say.' },
+    { label: 'Saying it out loud', body: '"Discuss with Wivoza Coach" under the coaching opens Talk It Through already knowing the situation, so you can try your words by voice and be coached on each version.' },
     { label: 'Filters', body: 'category, grade band, and difficulty — any or all of them optional. Left unset, Wivoza picks, weighted toward what you have practiced least.' },
     { label: 'Getting a scenario', body: '"New Scenario" one at a time, or a "Quick Session" of three back to back; respond by typing or speaking.' },
     { label: 'Feedback', body: 'written coaching plus a model response, and a private growth rating that powers a "you\'re improving in this category" callout over time.' },
