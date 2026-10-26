@@ -1021,6 +1021,10 @@ struct QuestionsSection: View {
                     .fixedSize(horizontal: false, vertical: true)
                 qcTimeline(questions, selfAnswered, checks)
                 qcPills(questions, selfAnswered.count, checks.count, current: current, count: count)
+                if let caveat = qcMixCaveat {
+                    Text(caveat).font(.caption).foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 qcList(current, questions, selfAnswered, checks)
                 if let average = tawt.average { tawtCard(tawt, average: average) }
             }
@@ -1118,6 +1122,29 @@ struct QuestionsSection: View {
                 }
             }
         }
+    }
+
+    /// Below this the report is reading a minority of the room. The same bar
+    /// the server uses before it will say a thing was absent, and the web's
+    /// LOW_CAPTURE_PCT.
+    private static let lowCapturePct = 50
+
+    /// An empty level is hidden rather than shown as a zero, which is right \u{2014}
+    /// but hiding still makes a claim, because what is left reads as the whole
+    /// shape of a teacher's questioning. Two cases have to say otherwise.
+    private var qcMixCaveat: String? {
+        let levelsRead = !(session.teachingMoves?.questionKinds ?? []).isEmpty
+        if !levelsRead {
+            return "The levels were not read for this lesson, so these come from a coarser split that can only tell recall from the rest \u{2014} Apply and Higher-order could not appear either way."
+        }
+        let detail = session.metricsDetail ?? [:]
+        let captured = (detail["teacherTalkSec"] ?? 0) + (detail["studentTalkSec"] ?? 0)
+        guard let duration = session.durationSec, duration > 0, captured > 0 else {
+            return "How much of this room came through as speech is unknown, so this is the shape of the questions that were heard. A level missing here was not necessarily a level you did not ask."
+        }
+        let pct = Int((captured / duration * 100).rounded())
+        guard pct < Self.lowCapturePct else { return nil }
+        return "About \(pct)% of this room came through as speech, so this is the shape of the questions that were heard. A level missing here was not necessarily a level you did not ask."
     }
 
     private func qcChecksDesc(_ checks: [AudioCfuEntry]) -> String {
