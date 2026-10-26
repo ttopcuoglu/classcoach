@@ -54,6 +54,9 @@
 		A5510008A5510008A5510008 /* AssignmentWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5510007A5510007A5510007 /* AssignmentWorkspaceView.swift */; };
 		F33384E63369E0CF83AAB58C /* LessonPlanningService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511FF45676C58C84D82F00DC /* LessonPlanningService.swift */; };
 		8AB3A345308A918EC6156D65 /* LessonFormatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 792460A70FC4B119218454DB /* LessonFormatsView.swift */; };
+		FB4B65B3D206EC4E44C8AFC5 /* LessonWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10A1684020B769F62A3E7B3E /* LessonWorkspaceView.swift */; };
+		216A081434854DC7830EFDBE /* LessonTextLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42514D60DCC6E83A6DB3C90D /* LessonTextLayout.swift */; };
+		3D9A839F06AB53E675424F83 /* LessonCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C51511EDA035E10E96BDB34 /* LessonCopy.swift */; };
 		E0A36E296D46EA487DC25777 /* WeekPlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB16269C41941AC9E6592C8A /* WeekPlanView.swift */; };
 		A91E3AB0DF695B5C0D7750CA /* LessonPlanningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2D7D552A2E51BEFFD552507 /* LessonPlanningView.swift */; };
 		D9E63FB04C7165EAC2039F56 /* PresentationReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAF74AC15D8276FBD314A067 /* PresentationReviewView.swift */; };
@@ -136,6 +139,9 @@
 		A5510007A5510007A5510007 /* AssignmentWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssignmentWorkspaceView.swift; sourceTree = "<group>"; };
 		511FF45676C58C84D82F00DC /* LessonPlanningService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonPlanningService.swift; sourceTree = "<group>"; };
 		792460A70FC4B119218454DB /* LessonFormatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonFormatsView.swift; sourceTree = "<group>"; };
+		10A1684020B769F62A3E7B3E /* LessonWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonWorkspaceView.swift; sourceTree = "<group>"; };
+		42514D60DCC6E83A6DB3C90D /* LessonTextLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonTextLayout.swift; sourceTree = "<group>"; };
+		7C51511EDA035E10E96BDB34 /* LessonCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonCopy.swift; sourceTree = "<group>"; };
 		DB16269C41941AC9E6592C8A /* WeekPlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekPlanView.swift; sourceTree = "<group>"; };
 		A2D7D552A2E51BEFFD552507 /* LessonPlanningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonPlanningView.swift; sourceTree = "<group>"; };
 		EAF74AC15D8276FBD314A067 /* PresentationReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresentationReviewView.swift; sourceTree = "<group>"; };
@@ -305,6 +311,9 @@
 				EAF74AC15D8276FBD314A067 /* PresentationReviewView.swift */,
 				511FF45676C58C84D82F00DC /* LessonPlanningService.swift */,
 				792460A70FC4B119218454DB /* LessonFormatsView.swift */,
+				10A1684020B769F62A3E7B3E /* LessonWorkspaceView.swift */,
+				42514D60DCC6E83A6DB3C90D /* LessonTextLayout.swift */,
+				7C51511EDA035E10E96BDB34 /* LessonCopy.swift */,
 				DB16269C41941AC9E6592C8A /* WeekPlanView.swift */,
 			);
 			path = LessonPlanning;
@@ -544,6 +553,9 @@
 				51CA7207F7F1A99FCADEEB99 /* LessonPlan.swift in Sources */,
 				F33384E63369E0CF83AAB58C /* LessonPlanningService.swift in Sources */,
 				8AB3A345308A918EC6156D65 /* LessonFormatsView.swift in Sources */,
+				FB4B65B3D206EC4E44C8AFC5 /* LessonWorkspaceView.swift in Sources */,
+				216A081434854DC7830EFDBE /* LessonTextLayout.swift in Sources */,
+				3D9A839F06AB53E675424F83 /* LessonCopy.swift in Sources */,
 				E0A36E296D46EA487DC25777 /* WeekPlanView.swift in Sources */,
 				A5510002A5510002A5510002 /* AssignmentCoach.swift in Sources */,
 				A5510004A5510004A5510004 /* AssignmentCoachService.swift in Sources */,

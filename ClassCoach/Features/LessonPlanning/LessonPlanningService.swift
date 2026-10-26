@@ -182,6 +182,56 @@ enum LessonPlanningService {
         try await APIClient.shared.request("/api/lesson-plans/\(id)/revert", method: "POST")
     }
 
+    /// One step back: the version the last applied adaptation replaced. The
+    /// Undo after Apply Changes; `revert` is still the way to the original.
+    static func undoAdaptation(id: String) async throws -> LessonPlan {
+        try await APIClient.shared.request("/api/lesson-plans/\(id)/undo-adaptation", method: "POST")
+    }
+
+    private struct ShareResponse: Decodable { let shareToken: String }
+
+    /// A read-only link to the lesson. The same token every time once made.
+    static func shareLink(id: String) async throws -> URL {
+        let result: ShareResponse = try await APIClient.shared.request("/api/lesson-plans/\(id)/share", method: "POST")
+        guard let url = URL(string: "https://www.wivoza.com/shared/lesson-plan/\(result.shareToken)") else {
+            throw URLError(.badURL)
+        }
+        return url
+    }
+
+    /// Delivery coaching on a lesson — the same call Review Slides makes, and
+    /// what Create Slides is built from.
+    static func deliveryFeedback(id: String) async throws -> LessonPlan {
+        try await presentationFeedback(id: id)
+    }
+
+    /// The lesson as a deck to project, with the delivery coaching in the
+    /// speaker notes. The server refuses until there is delivery coaching.
+    static func lessonDeck(id: String) async throws -> URL {
+        let deck: GeneratedDeck = try await APIClient.shared.request("/api/lesson-plans/\(id)/lesson-deck", method: "POST")
+        let data = try await APIClient.shared.postForData(
+            "/api/assignment-coach/export-file",
+            body: SlidesFileBody(format: "pptx", model: deck.model)
+        )
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("wivoza-lesson-slides.pptx")
+        try data.write(to: url, options: .atomic)
+        return url
+    }
+
+    private struct DocumentFileBody: Encodable { let format: String; let model: LessonExportDoc }
+
+    /// The lesson as a Word or PDF file, laid out here from the same sections
+    /// the screen shows — no Claude call, the server only renders it.
+    static func lessonDocument(_ doc: LessonExportDoc, format: String, fileName: String) async throws -> URL {
+        let data = try await APIClient.shared.postForData(
+            "/api/assignment-coach/export-file",
+            body: DocumentFileBody(format: format, model: doc)
+        )
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(fileName).\(format)")
+        try data.write(to: url, options: .atomic)
+        return url
+    }
+
     private struct MessageBody: Encodable { let message: String }
     private struct SavedBody: Encodable { let saved: Bool }
 

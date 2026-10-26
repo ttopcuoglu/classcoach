@@ -22,6 +22,7 @@ struct PlanningPrefill {
 struct LessonPlanningView: View {
     @State private var tab: String
     private let prefill: PlanningPrefill?
+    @StateObject private var workspace = LessonWorkspaceModel()
 
     /// Lets a caller open straight onto a chip, the way the web's
     /// `/lesson-planning?tab=assignment` does — Home links to the assignment
@@ -53,378 +54,30 @@ struct LessonPlanningView: View {
                 // nesting a ScrollView inside the one below.
                 PresentationReviewContent()
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        if tab == "generate" {
-                            PanelHeader(
-                                eyebrow: "Planning Coach",
-                                title: "Build a lesson",
-                                subtitle: "Start with a topic, or the material you already have. Everything else is optional."
-                            )
-                            BuildPanel(prefill: prefill)
-                        } else {
-                            PanelHeader(
-                                eyebrow: "Planning Coach",
-                                title: "Improve a lesson",
-                                subtitle: "Paste or upload a plan you already have — finished, partial, or rough notes. Your learning goal and the parts that work stay as they are."
-                            )
-                            FeedbackPanel()
+                ScrollViewReader { scroll in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Color.clear.frame(height: 0).id("top")
+                            if tab == "generate" {
+                                BuildPanel(prefill: prefill, workspace: workspace, scroll: scroll)
+                            } else {
+                                FeedbackPanel(workspace: workspace, scroll: scroll)
+                            }
                         }
+                        .padding()
                     }
-                    .padding()
+                }
+                // Applying a revision closes its preview; the Undo for it
+                // floats over wherever the teacher is on the page.
+                .overlay(alignment: .bottom) {
+                    LessonUndoToast(model: workspace)
+                        .animation(.easeInOut(duration: 0.25), value: workspace.justApplied)
                 }
             }
         }
         .background(AppTheme.background)
         .navigationTitle("Planning Coach")
-    }
-}
-
-// MARK: - Shared pieces
-
-private func labeledBlock(_ title: String, _ text: String, _ tint: Color) -> some View {
-    VStack(alignment: .leading, spacing: 4) {
-        Text(title).font(.caption2.weight(.bold)).foregroundStyle(tint)
-        Text(text).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-    }
-    .padding(10)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background((tint == AppTheme.textSecondary ? AppTheme.gold : tint).opacity(0.16), in: RoundedRectangle(cornerRadius: 16))
-}
-
-/// A section a teacher opens only when they want it. Checks, misconceptions
-/// and the exit ticket's answer key are all genuinely useful and all genuinely
-/// long — printed open, they bury the lesson they belong to.
-private struct Expandable<Content: View>: View {
-    let summary: String
-    @ViewBuilder var content: Content
-    @State private var open = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                withAnimation { open.toggle() }
-            } label: {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: open ? "chevron.down" : "chevron.right")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .padding(.top, 2)
-                    Text(summary)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AppTheme.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .buttonStyle(.plain)
-
-            if open { content }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
-    }
-}
-
-private func detailRow(_ title: String, _ body: String) -> some View {
-    VStack(alignment: .leading, spacing: 2) {
-        Text(title.uppercased()).font(.caption2.weight(.bold)).tracking(0.8).foregroundStyle(AppTheme.textSecondary)
-        Text(body).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-}
-
-private func planHeadline(_ plan: LessonPlan) -> some View {
-    let kind: String = {
-        if plan.mode != "generated" { return "Feedback" }
-        if plan.isQuickIdeas { return "Teaching ideas" }
-        return plan.isFullLesson ? "Lesson" : "Sample plan"
-    }()
-    let chips = [plan.subject, plan.gradeLevel, plan.approach, plan.minutesLabel].compactMap { $0 }
-
-    return VStack(alignment: .leading, spacing: 4) {
-        Text(([kind] + chips).joined(separator: " · ").uppercased())
-            .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.primary)
-        if let objective = plan.objective {
-            Text(objective).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-        }
-        if let standard = plan.standard {
-            Text("Standard: \(standard)").font(.caption).foregroundStyle(AppTheme.textSecondary)
-        }
-    }
-}
-
-/// The full lesson, section by section.
-@ViewBuilder
-private func lessonSections(_ plan: LessonPlan) -> some View {
-    VStack(alignment: .leading, spacing: 10) {
-        if plan.objective != nil || plan.successCriteria != nil {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("WHAT STUDENTS WILL BE ABLE TO DO")
-                    .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.primary)
-                if let objective = plan.objective { detailRow("Objective", objective) }
-                if let criteria = plan.successCriteria { detailRow("Students can show it when they", criteria) }
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.mintTint.opacity(0.5), in: RoundedRectangle(cornerRadius: 16))
-        }
-
-        if let materials = plan.materials { labeledBlock("MATERIALS", materials, AppTheme.textSecondary) }
-
-        if !(plan.sequence ?? []).isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("THE LESSON").font(.caption2.weight(.bold)).foregroundStyle(AppTheme.primary)
-                Text("What happens, in order, with what you say and what students do")
-                    .font(.caption).foregroundStyle(AppTheme.textSecondary)
-                ForEach(Array((plan.sequence ?? []).enumerated()), id: \.offset) { index, step in
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text("\(index + 1). \(step.title)")
-                                .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.primary)
-                            Spacer(minLength: 8)
-                            if let minutes = step.minutes {
-                                Text("\(minutes) min")
-                                    .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.terracotta600)
-                                    .padding(.horizontal, 8).padding(.vertical, 3)
-                                    .background(AppTheme.goldTint, in: Capsule())
-                            }
-                        }
-                        if let teacher = step.teacher { detailRow("You", teacher) }
-                        if let students = step.students { detailRow("Students", students) }
-                    }
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
-                }
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 16))
-        }
-
-        if !(plan.checks ?? []).isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("CHECKS FOR UNDERSTANDING").font(.caption2.weight(.bold)).foregroundStyle(AppTheme.primary)
-                Text("Where to find out whether they're getting it — not whether they're busy")
-                    .font(.caption).foregroundStyle(AppTheme.textSecondary)
-                ForEach(plan.checks ?? []) { check in
-                    Expandable(summary: [check.when, check.check].compactMap { $0 }.joined(separator: " — ")) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            detailRow("The check", check.check)
-                            if let lookFor = check.lookFor { detailRow("What to look for", lookFor) }
-                        }
-                    }
-                }
-            }
-        }
-
-        if !(plan.misconceptions ?? []).isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("LIKELY MISCONCEPTIONS").font(.caption2.weight(.bold)).foregroundStyle(AppTheme.primary)
-                ForEach(plan.misconceptions ?? []) { item in
-                    Expandable(summary: item.belief) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            if let surface = item.surface { detailRow("How to surface it", surface) }
-                            if let response = item.response { detailRow("How to address it", response) }
-                        }
-                    }
-                }
-                Text("These are common for this content at this grade. They are not a claim about your students — you'll find out which ones are in the room when you ask.")
-                    .font(.caption).foregroundStyle(AppTheme.textSecondary)
-            }
-        }
-
-        if let ticket = plan.exitTicket {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("EXIT TICKET").font(.caption2.weight(.bold)).foregroundStyle(AppTheme.primary)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("FOR STUDENTS").font(.caption2.weight(.bold)).foregroundStyle(AppTheme.terracotta600)
-                    Text(ticket.task).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
-
-                if !ticket.detail.isEmpty {
-                    Expandable(summary: "What to look for in the answers") {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(ticket.detail, id: \.title) { detailRow($0.title, $0.body) }
-                        }
-                    }
-                }
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.goldTint.opacity(0.4), in: RoundedRectangle(cornerRadius: 16))
-        }
-    }
-}
-
-/// The old five-slot sample plans, still in teachers' histories and still read.
-@ViewBuilder
-private func legacySections(_ plan: LessonPlan) -> some View {
-    if let doNow = plan.doNow { labeledBlock("DO NOW", doNow, AppTheme.textSecondary) }
-    if let agenda = plan.agenda { labeledBlock("AGENDA", agenda, AppTheme.textSecondary) }
-    if let closure = plan.closure { labeledBlock("CLOSURE", closure, AppTheme.textSecondary) }
-    if let hots = plan.hots { labeledBlock("HIGHER-ORDER THINKING", hots, AppTheme.accent) }
-    if let homework = plan.homework { labeledBlock("HOMEWORK", homework, AppTheme.textSecondary) }
-}
-
-@ViewBuilder
-private func quickIdeaSections(_ plan: LessonPlan) -> some View {
-    ForEach(Array((plan.quickIdeas ?? []).enumerated()), id: \.offset) { index, idea in
-        VStack(alignment: .leading, spacing: 4) {
-            Text("\(index + 1). \(idea.title)")
-                .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.primary)
-            Text(idea.how).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(AppTheme.hairline))
-    }
-}
-
-// MARK: - Adaptations
-
-/// The four adaptations, offered on a lesson that already exists. Each drafts
-/// a revision the teacher reads before anything replaces what they have —
-/// nothing here edits the lesson on its own.
-private struct AdaptationTools: View {
-    let plan: LessonPlan
-    let busy: LessonAdaptation?
-    let onAdapt: (LessonAdaptation, Int?) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Adapt it").font(.subheadline.weight(.bold)).foregroundStyle(AppTheme.primary)
-            Text("Each one rewrites the lesson and shows you the result first — your current version stays until you apply it.")
-                .font(.caption).foregroundStyle(AppTheme.textSecondary)
-
-            ForEach([LessonAdaptation.simplify, .challenge, .participation]) { action in
-                Button {
-                    onAdapt(action, nil)
-                } label: {
-                    adaptLabel(action.label, busy == action, action.hint)
-                }
-                .buttonStyle(.plain)
-                .disabled(busy != nil)
-            }
-
-            // Adjust Time is a menu rather than a button: it needs a length,
-            // and "shorten to 30" only makes sense when there is something to
-            // shorten.
-            Menu {
-                if let minutes = plan.currentMinutes, minutes > 30 {
-                    Button("Shorten to 30 minutes") { onAdapt(.time, 30) }
-                }
-                ForEach([20, 40, 50, 60, 90], id: \.self) { minutes in
-                    Button("Rebuild for \(minutes) minutes") { onAdapt(.time, minutes) }
-                }
-            } label: {
-                adaptLabel(LessonAdaptation.time.label, busy == .time, LessonAdaptation.time.hint)
-            }
-            .disabled(busy != nil)
-
-            ProgressRing(active: busy != nil, estimatedSeconds: 18, label: "Revising the lesson")
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
-    }
-
-    private func adaptLabel(_ title: String, _ working: Bool, _ hint: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(working ? "\(title)…" : title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(AppTheme.primary)
-            Text(hint).font(.caption).foregroundStyle(AppTheme.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 14))
-        .opacity(working ? 0.6 : 1)
-    }
-}
-
-/// The drafted revision, read before it replaces anything.
-private struct PendingAdaptationCard: View {
-    let pending: PendingAdaptation
-    let applying: Bool
-    let onApply: () -> Void
-    let onDiscard: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("\(pending.label.uppercased()) — SUGGESTED REVISION")
-                .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.primary)
-            Text("Read it, then use it or discard it. Nothing changes until you do.")
-                .font(.caption).foregroundStyle(AppTheme.textSecondary)
-
-            if let summary = pending.summary { detailRow("What changed", summary) }
-
-            Expandable(summary: "See the revised lesson") {
-                VStack(alignment: .leading, spacing: 8) {
-                    if let planText = pending.sections.planText {
-                        Text(planText).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                    } else {
-                        if let objective = pending.sections.objective { detailRow("Objective", objective) }
-                        if let criteria = pending.sections.successCriteria { detailRow("Success criteria", criteria) }
-                        ForEach(Array((pending.sections.sequence ?? []).enumerated()), id: \.offset) { index, step in
-                            detailRow(
-                                "\(index + 1). \(step.title)" + (step.minutes.map { " · \($0) min" } ?? ""),
-                                [step.teacher.map { "You: \($0)" }, step.students.map { "Students: \($0)" }]
-                                    .compactMap { $0 }.joined(separator: "\n")
-                            )
-                        }
-                        if let ticket = pending.sections.exitTicket { detailRow("Exit ticket", ticket.task) }
-                    }
-                }
-            }
-
-            HStack {
-                Button(applying ? "Applying…" : "Use this version", action: onApply)
-                    .font(.caption.weight(.semibold)).foregroundStyle(.white)
-                    .padding(.horizontal, 14).padding(.vertical, 7)
-                    .background(AppTheme.terracotta, in: Capsule())
-                    .disabled(applying)
-
-                Button("Discard", action: onDiscard)
-                    .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
-                    .disabled(applying)
-            }
-
-            ProgressRing(active: applying, estimatedSeconds: 6, label: "Applying the revision")
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.mintTint.opacity(0.55), in: RoundedRectangle(cornerRadius: 18))
-    }
-}
-
-private struct RevertNote: View {
-    let count: Int
-    let reverting: Bool
-    let onRevert: () -> Void
-
-    var body: some View {
-        if count > 0 {
-            HStack(spacing: 4) {
-                Text(count == 1 ? "One adaptation applied." : "\(count) adaptations applied.")
-                Button(reverting ? "going back…" : "Go back to your original") { onRevert() }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(AppTheme.terracotta600)
-                    .disabled(reverting)
-            }
-            .font(.caption)
-            .foregroundStyle(AppTheme.textSecondary)
-        }
+        .onChange(of: tab) { workspace.reset() }
     }
 }
 
@@ -433,6 +86,8 @@ private struct RevertNote: View {
 private struct BuildPanel: View {
     @EnvironmentObject private var authManager: AuthManager
     var prefill: PlanningPrefill? = nil
+    @ObservedObject var workspace: LessonWorkspaceModel
+    var scroll: ScrollViewProxy?
     /// The lesson a Debrief's suggestions were carried over from, once landed.
     @State private var fromDebrief: String?
 
@@ -462,11 +117,6 @@ private struct BuildPanel: View {
     @State private var allPlans: [LessonPlan] = []
     @State private var historyLoading = true
 
-    @State private var adaptBusy: LessonAdaptation?
-    @State private var applying = false
-    @State private var reverting = false
-    @State private var adaptError: String?
-
     @StateObject private var format = LessonFormatModel()
     @State private var formatsOpen = false
 
@@ -478,7 +128,6 @@ private struct BuildPanel: View {
     @State private var openingDay: Int?
     @State private var dayError: String?
 
-    private var savedPlans: [LessonPlan] { allPlans.filter(\.saved) }
     private var isIdeas: Bool { kind == "ideas" }
     private var isWeek: Bool { kind == "week" }
     private var canGenerate: Bool {
@@ -533,6 +182,13 @@ private struct BuildPanel: View {
 
     private var form: some View {
         VStack(alignment: .leading, spacing: 12) {
+            PanelHeader(
+                eyebrow: "Planning Coach",
+                title: isWeek ? "Plan a week" : "Build a lesson",
+                subtitle: isWeek
+                    ? "Start with what the class is learning this week. You check the daily objectives before anything else is written."
+                    : "Start with a topic, or the material you already have. Everything else is optional."
+            )
             if let fromDebrief {
                 Text("Carried over from your Lesson Debrief (\(fromDebrief)): what you chose to build in is under More details, and you can edit it there. Add the topic for the next lesson, then build it.")
                     .font(.caption)
@@ -793,92 +449,32 @@ private struct BuildPanel: View {
         }
     }
 
-    @ViewBuilder
     private func lessonResult(_ plan: LessonPlan) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let weekPlanId = plan.weekPlanId {
-                Button {
-                    Task { await backToWeek(weekPlanId) }
-                } label: {
-                    Label("Back to the week", systemImage: "chevron.left")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(AppTheme.forest)
-                }
-                .buttonStyle(.plain)
-            }
-            planHeadline(plan)
-
-            if plan.isFormatable {
-                formatControls(plan, model: format, onManage: { formatsOpen = true }, apply: replace)
-            }
-
-            if let content = format.content(for: plan) {
-                TemplatedLessonView(content: content, ownPlan: false)
-                // Nothing Wivoza wrote is lost to a form with fewer boxes.
-                Expandable(summary: "The full lesson, as Wivoza wrote it") {
-                    lessonSections(plan)
-                }
-            } else if plan.isFullLesson {
-                lessonSections(plan)
-            } else if plan.isQuickIdeas {
-                quickIdeaSections(plan)
-            } else {
-                legacySections(plan)
-            }
-
-            Text(plan.isQuickIdeas
-                 ? "Ideas to pull into the plan you are writing — take the ones that fit your class."
-                 : "A draft to edit, not a script. You know your class; change whatever needs changing.")
-                .font(.caption).foregroundStyle(AppTheme.textSecondary)
-
-            if plan.isFullLesson {
-                AdaptationTools(plan: plan, busy: adaptBusy) { action, minutes in
-                    Task { await adapt(plan, action, minutes) }
-                }
-                RevertNote(count: plan.versionHistory?.count ?? 0, reverting: reverting) {
-                    Task { await revert(plan) }
-                }
-                if let adaptError {
-                    Text(adaptError).font(.caption).foregroundStyle(AppTheme.terracotta600)
-                }
-                if let pending = plan.pendingAdaptation {
-                    PendingAdaptationCard(
-                        pending: pending,
-                        applying: applying,
-                        onApply: { Task { await applyAdaptation(plan) } },
-                        onDiscard: { Task { await discardAdaptation(plan) } }
-                    )
-                }
-            }
-
-            HStack {
-                saveButton(plan.saved) { Task { await toggleSaved(plan) } }
-                Spacer()
-                Button(plan.isQuickIdeas ? "New Ideas" : "New Lesson") { startOver() }
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
-                    .padding(.horizontal, 18).padding(.vertical, 9)
-                    .background(AppTheme.terracotta, in: Capsule())
-            }
-        }
+        // Three shapes can come back here: a Planning Coach lesson, a list of
+        // teaching ideas, and — reopened from history — one of the old
+        // five-slot sample plans. The workspace draws all three.
+        LessonWorkspaceView(
+            plan: plan,
+            model: workspace,
+            format: format,
+            apply: replace,
+            onToggleSaved: { Task { await toggleSaved(plan) } },
+            onNew: startOver,
+            onManageFormats: { formatsOpen = true },
+            onBackToWeek: plan.weekPlanId.map { id in { Task { await backToWeek(id) } } },
+            scroll: scroll
+        )
     }
 
     private var historySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("SAVED LESSONS").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
-            if historyLoading {
-                Text("Loading...").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-            } else if savedPlans.isEmpty {
-                Text("Lessons you save will show up here.")
-                    .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .center).padding()
-                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
-            } else {
-                ForEach(savedPlans) { saved in
-                    // A week has no inline view: it opens as the week.
-                    LessonPlanRow(plan: saved, onOpen: saved.isWeek ? { open(saved) } : nil)
-                }
-            }
-        }
+        LessonPastList(
+            title: "Your lessons",
+            plans: allPlans,
+            activeId: plan?.id,
+            loading: historyLoading,
+            emptyText: "Lessons and ideas you build will show up here.",
+            onOpen: open
+        )
     }
 
     // MARK: Actions
@@ -887,6 +483,8 @@ private struct BuildPanel: View {
         plan = target
         error = nil
         dayError = nil
+        workspace.reset()
+        withAnimation { scroll?.scrollTo("top", anchor: .top) }
     }
 
     /// A day of a week, opened as a full lesson: the one already built from
@@ -1048,48 +646,6 @@ private struct BuildPanel: View {
         generating = false
     }
 
-    private func adapt(_ target: LessonPlan, _ action: LessonAdaptation, _ minutes: Int?) async {
-        guard adaptBusy == nil else { return }
-        adaptBusy = action
-        adaptError = nil
-        do {
-            replace(try await LessonPlanningService.adapt(id: target.id, action: action, targetMinutes: minutes))
-        } catch {
-            adaptError = error.localizedDescription
-        }
-        adaptBusy = nil
-    }
-
-    private func applyAdaptation(_ target: LessonPlan) async {
-        applying = true
-        adaptError = nil
-        do {
-            replace(try await LessonPlanningService.applyAdaptation(id: target.id))
-        } catch {
-            adaptError = error.localizedDescription
-        }
-        applying = false
-    }
-
-    private func discardAdaptation(_ target: LessonPlan) async {
-        do {
-            replace(try await LessonPlanningService.discardAdaptation(id: target.id))
-        } catch {
-            adaptError = error.localizedDescription
-        }
-    }
-
-    private func revert(_ target: LessonPlan) async {
-        reverting = true
-        adaptError = nil
-        do {
-            replace(try await LessonPlanningService.revert(id: target.id))
-        } catch {
-            adaptError = error.localizedDescription
-        }
-        reverting = false
-    }
-
     private func replace(_ updated: LessonPlan) {
         plan = updated
         if let index = allPlans.firstIndex(where: { $0.id == updated.id }) { allPlans[index] = updated }
@@ -1106,7 +662,7 @@ private struct BuildPanel: View {
     private func startOver() {
         plan = nil
         error = nil
-        adaptError = nil
+        workspace.reset()
         dayError = nil
         clearMaterial()
     }
@@ -1115,6 +671,8 @@ private struct BuildPanel: View {
 // MARK: - Improve a Lesson
 
 private struct FeedbackPanel: View {
+    @ObservedObject var workspace: LessonWorkspaceModel
+    var scroll: ScrollViewProxy?
     @State private var planText = ""
     @State private var plan: LessonPlan?
     @State private var submitting = false
@@ -1132,15 +690,8 @@ private struct FeedbackPanel: View {
     @State private var extracting = false
     @State private var fileName: String?
 
-    @State private var adaptBusy: LessonAdaptation?
-    @State private var applying = false
-    @State private var reverting = false
-    @State private var adaptError: String?
-
     @StateObject private var format = LessonFormatModel()
     @State private var formatsOpen = false
-
-    private var savedPlans: [LessonPlan] { allPlans.filter(\.saved) }
 
     private var importTypes: [UTType] {
         var types: [UTType] = [.pdf, .plainText, .png, .jpeg]
@@ -1161,19 +712,14 @@ private struct FeedbackPanel: View {
                 Text(error).font(.footnote).foregroundStyle(AppTheme.terracotta600).frame(maxWidth: .infinity, alignment: .center)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("SAVED FEEDBACK").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
-                if historyLoading {
-                    Text("Loading...").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                } else if savedPlans.isEmpty {
-                    Text("Plans you save will show up here.")
-                        .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .center).padding()
-                        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
-                } else {
-                    ForEach(savedPlans) { LessonPlanRow(plan: $0) }
-                }
-            }
+            LessonPastList(
+                title: "Plans you've improved",
+                plans: allPlans,
+                activeId: plan?.id,
+                loading: historyLoading,
+                emptyText: "Plans you bring for coaching will show up here.",
+                onOpen: open
+            )
         }
         .task { await loadHistory() }
         .task(id: plan.map(LessonFormatModel.signature)) {
@@ -1189,6 +735,11 @@ private struct FeedbackPanel: View {
 
     private var form: some View {
         VStack(alignment: .leading, spacing: 10) {
+            PanelHeader(
+                eyebrow: "Planning Coach",
+                title: "Improve a lesson",
+                subtitle: "Paste or upload a plan you already have — finished, partial, or rough notes. Your learning goal and the parts that work stay as they are."
+            )
             Text("Your lesson plan").font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.textPrimary)
             Text("A full plan, a half-written one, or the notes you were going to teach from.")
                 .font(.caption).foregroundStyle(AppTheme.textSecondary)
@@ -1232,75 +783,52 @@ private struct FeedbackPanel: View {
         }
     }
 
-    @ViewBuilder
+    /// The same workspace a built lesson opens in: Coach's feedback and the
+    /// plan as copyable sections, the tools after them, and the follow-up chat
+    /// under the plan it is about.
     private func resultView(_ plan: LessonPlan) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if plan.isFormatable {
-                formatControls(plan, model: format, onManage: { formatsOpen = true }, apply: replace)
-            }
-            // Coach's read stays above the plan whichever way the plan is shown:
-            // it is about the plan, not part of it.
-            if let feedback = plan.feedback {
-                labeledBlock("COACHING", feedback, AppTheme.accent)
-            }
-            if let content = format.content(for: plan) {
-                TemplatedLessonView(content: content, ownPlan: true)
-            } else {
-                labeledBlock("YOUR PLAN", plan.planText ?? "", AppTheme.textSecondary)
-            }
-
-            AdaptationTools(plan: plan, busy: adaptBusy) { action, minutes in
-                Task { await adapt(plan, action, minutes) }
-            }
-            RevertNote(count: plan.versionHistory?.count ?? 0, reverting: reverting) {
-                Task { await revert(plan) }
-            }
-            if let adaptError {
-                Text(adaptError).font(.caption).foregroundStyle(AppTheme.terracotta600)
-            }
-            if let pending = plan.pendingAdaptation {
-                PendingAdaptationCard(
-                    pending: pending,
-                    applying: applying,
-                    onApply: { Task { await applyAdaptation(plan) } },
-                    onDiscard: { Task { await discardAdaptation(plan) } }
-                )
-            }
-
-            followUpChat(plan)
-
-            if let revision = plan.suggestedRevision, !revisionDismissed {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("SUGGESTED REVISION").font(.caption2.weight(.bold)).foregroundStyle(AppTheme.primary)
-                    Text(revision).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                    HStack {
-                        Button(applyingRevision ? "Applying..." : "Use this version") {
-                            Task { await applyRevision(plan) }
-                        }
-                        .font(.caption.weight(.semibold)).foregroundStyle(.white)
-                        .padding(.horizontal, 14).padding(.vertical, 7)
-                        .background(AppTheme.terracotta, in: Capsule())
-                        .disabled(applyingRevision)
-
-                        Button("Dismiss") { revisionDismissed = true }
-                            .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
-                    }
-
-                    ProgressRing(active: applyingRevision, estimatedSeconds: 12, label: "Applying the revision")
+        LessonWorkspaceView(
+            plan: plan,
+            model: workspace,
+            format: format,
+            apply: replace,
+            onToggleSaved: { Task { await toggleSaved(plan) } },
+            onNew: startOver,
+            onManageFormats: { formatsOpen = true },
+            scroll: scroll
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                followUpChat(plan)
+                if let revision = plan.suggestedRevision, !revisionDismissed {
+                    suggestedRevision(plan, revision)
                 }
-                .padding(10)
-                .background(AppTheme.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
-            }
-
-            HStack {
-                saveButton(plan.saved) { Task { await toggleSaved(plan) } }
-                Spacer()
-                Button("New Plan") { startOver() }
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
-                    .padding(.horizontal, 18).padding(.vertical, 9)
-                    .background(AppTheme.terracotta, in: Capsule())
             }
         }
+    }
+
+    private func suggestedRevision(_ plan: LessonPlan, _ revision: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("SUGGESTED REVISION").font(.caption2.weight(.bold)).foregroundStyle(AppTheme.primary)
+            Text(revision).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button(applyingRevision ? "Applying..." : "Use this version") {
+                    Task { await applyRevision(plan) }
+                }
+                .font(.caption.weight(.semibold)).foregroundStyle(.white)
+                .padding(.horizontal, 14).padding(.vertical, 7)
+                .background(AppTheme.terracotta, in: Capsule())
+                .disabled(applyingRevision)
+
+                Button("Dismiss") { revisionDismissed = true }
+                    .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+            }
+
+            ProgressRing(active: applyingRevision, estimatedSeconds: 12, label: "Applying the revision")
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
     }
 
     private func followUpChat(_ target: LessonPlan) -> some View {
@@ -1317,6 +845,16 @@ private struct FeedbackPanel: View {
     private func loadHistory() async {
         do { allPlans = try await LessonPlanningService.getLessonPlans(mode: "feedback") } catch {}
         historyLoading = false
+    }
+
+    private func open(_ target: LessonPlan) {
+        plan = target
+        error = nil
+        chatDraft = ""
+        chatError = nil
+        revisionDismissed = false
+        workspace.reset()
+        withAnimation { scroll?.scrollTo("top", anchor: .top) }
     }
 
     private func readFile(_ url: URL) async {
@@ -1375,48 +913,6 @@ private struct FeedbackPanel: View {
         applyingRevision = false
     }
 
-    private func adapt(_ target: LessonPlan, _ action: LessonAdaptation, _ minutes: Int?) async {
-        guard adaptBusy == nil else { return }
-        adaptBusy = action
-        adaptError = nil
-        do {
-            replace(try await LessonPlanningService.adapt(id: target.id, action: action, targetMinutes: minutes))
-        } catch {
-            adaptError = error.localizedDescription
-        }
-        adaptBusy = nil
-    }
-
-    private func applyAdaptation(_ target: LessonPlan) async {
-        applying = true
-        adaptError = nil
-        do {
-            replace(try await LessonPlanningService.applyAdaptation(id: target.id))
-        } catch {
-            adaptError = error.localizedDescription
-        }
-        applying = false
-    }
-
-    private func discardAdaptation(_ target: LessonPlan) async {
-        do {
-            replace(try await LessonPlanningService.discardAdaptation(id: target.id))
-        } catch {
-            adaptError = error.localizedDescription
-        }
-    }
-
-    private func revert(_ target: LessonPlan) async {
-        reverting = true
-        adaptError = nil
-        do {
-            replace(try await LessonPlanningService.revert(id: target.id))
-        } catch {
-            adaptError = error.localizedDescription
-        }
-        reverting = false
-    }
-
     private func replace(_ updated: LessonPlan) {
         plan = updated
         if let index = allPlans.firstIndex(where: { $0.id == updated.id }) { allPlans[index] = updated }
@@ -1435,94 +931,10 @@ private struct FeedbackPanel: View {
         plan = nil
         fileName = nil
         error = nil
-        adaptError = nil
+        workspace.reset()
         chatDraft = ""
         chatError = nil
         revisionDismissed = false
-    }
-}
-
-/// The format line above a lesson, and what it shows while the lesson is
-/// being put into a format.
-@MainActor @ViewBuilder
-private func formatControls(
-    _ plan: LessonPlan,
-    model: LessonFormatModel,
-    onManage: @escaping () -> Void,
-    apply: @escaping (LessonPlan) -> Void
-) -> some View {
-    LessonFormatBar(
-        model: model,
-        onChoose: { choice in Task { await model.choose(choice, for: plan, apply: apply) } },
-        onManage: onManage
-    )
-    ProgressRing(active: model.loading, estimatedSeconds: 10, label: "Putting it in your format")
-    if let error = model.error {
-        HStack(spacing: 6) {
-            Text(error).font(.caption).foregroundStyle(AppTheme.terracotta600)
-            Button("Try again") { Task { await model.retry(plan, apply: apply) } }
-                .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.forest)
-        }
-    }
-}
-
-private func saveButton(_ saved: Bool, _ action: @escaping () -> Void) -> some View {
-    Button(action: action) {
-        Label(saved ? "Saved" : "Save for later", systemImage: saved ? "star.fill" : "star")
-            .font(.subheadline.weight(.medium))
-    }
-    .foregroundStyle(saved ? AppTheme.accent : AppTheme.textSecondary)
-}
-
-private struct LessonPlanRow: View {
-    let plan: LessonPlan
-    /// When given, tapping the row opens the plan instead of expanding it.
-    var onOpen: (() -> Void)? = nil
-    @State private var expanded = false
-
-    private var kindLabel: String {
-        if plan.mode != "generated" { return "Feedback" }
-        if plan.isWeek { return "Week" }
-        if plan.isQuickIdeas { return "Teaching ideas" }
-        return plan.isFullLesson ? "Lesson" : "Sample plan"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                if let onOpen { onOpen() } else { withAnimation { expanded.toggle() } }
-            } label: {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(kindLabel)
-                            .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.primary)
-                        Text(plan.objective ?? String((plan.planText ?? "").prefix(80)))
-                            .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                    }
-                    Spacer()
-                    Text(onOpen != nil ? "Open" : expanded ? "Hide" : "Show").font(.caption.weight(.medium)).foregroundStyle(AppTheme.textSecondary)
-                }
-            }
-            .buttonStyle(.plain)
-
-            if expanded {
-                VStack(alignment: .leading, spacing: 6) {
-                    if plan.isFullLesson {
-                        lessonSections(plan)
-                    } else if plan.isQuickIdeas {
-                        quickIdeaSections(plan)
-                    } else if plan.mode == "generated" {
-                        legacySections(plan)
-                    } else {
-                        if let v = plan.planText { labeledBlock("PLAN", v, AppTheme.textSecondary) }
-                        if let v = plan.feedback { labeledBlock("COACHING", v, AppTheme.accent) }
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
     }
 }
 
