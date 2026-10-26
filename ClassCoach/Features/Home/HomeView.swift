@@ -4,6 +4,9 @@ struct HomeView: View {
     @EnvironmentObject private var authManager: AuthManager
     /// Coach's due check-in, if any — refreshed whenever Home comes back into view.
     @State private var checkIn: CoachFollowUp?
+    /// When each recorded lesson was taught — drives "Your lessons this month".
+    /// Nil until the first load, so the card doesn't flash "start the month".
+    @State private var lessonDates: [Date]?
 
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
@@ -45,6 +48,11 @@ struct HomeView: View {
 
                     if let checkIn {
                         checkInCard(checkIn)
+                            .padding(.horizontal)
+                    }
+
+                    if let lessonDates {
+                        LessonMonthCard(month: LessonMonth(dates: lessonDates, now: Date()))
                             .padding(.horizontal)
                     }
 
@@ -109,7 +117,10 @@ struct HomeView: View {
             }
             .background(AppTheme.background)
             .navigationTitle("Wivoza")
-            .onAppear { Task { await loadCheckIn() } }
+            .onAppear {
+                Task { await loadCheckIn() }
+                Task { await loadLessonDates() }
+            }
         }
     }
 
@@ -163,6 +174,14 @@ struct HomeView: View {
         }
     }
 
+    /// Lessons that were recorded — not ones started and never sent, or failed.
+    private func loadLessonDates() async {
+        guard let sessions = try? await AudioCoachingService.getSessions() else { return }
+        lessonDates = sessions
+            .filter { $0.status != "setup" && $0.status != "failed" }
+            .compactMap { LessonMonth.parseDate($0.sessionDate) }
+    }
+
     /// The card goes either way; a failed request just brings it back.
     private func act(on followUp: CoachFollowUp, _ action: String) async {
         checkIn = nil
@@ -171,6 +190,127 @@ struct HomeView: View {
         } catch {
             checkIn = followUp
         }
+    }
+}
+
+/// Home's "Your lessons this month" — mirrors `web/src/lib/lessonMonth.ts`:
+/// which days this month had a lesson recorded, and how many weeks in a row
+/// (ending this week, or last week if none yet this week) had at least one.
+/// A habit, never a judgment of the teaching.
+struct LessonMonth {
+    let monthLabel: String
+    /// Day of the week the 1st falls on, Monday = 0, so the grid lines up.
+    let firstWeekday: Int
+    let daysInMonth: Int
+    let recordedDays: Set<Int>
+    let count: Int
+    let today: Int
+    let weekStreak: Int
+
+    init(dates: [Date], now: Date, calendar base: Calendar = .current) {
+        var calendar = base
+        calendar.firstWeekday = 2
+        let month = calendar.dateComponents([.year, .month], from: now)
+        let inMonth = dates.filter { calendar.dateComponents([.year, .month], from: $0) == month }
+        func mondayOf(_ d: Date) -> Date? { calendar.dateInterval(of: .weekOfYear, for: d)?.start }
+        let weeks = Set(dates.compactMap(mondayOf))
+        // Walk back a calendar week at a time, so daylight saving can't
+        // throw the comparison off by an hour.
+        var cursor = mondayOf(now)
+        if let c = cursor, !weeks.contains(c) { cursor = calendar.date(byAdding: .weekOfYear, value: -1, to: c) }
+        var streak = 0
+        while let c = cursor, weeks.contains(c) {
+            streak += 1
+            cursor = calendar.date(byAdding: .weekOfYear, value: -1, to: c)
+        }
+        let first = calendar.date(from: month) ?? now
+        monthLabel = now.formatted(.dateTime.month(.wide)).uppercased()
+        firstWeekday = (calendar.component(.weekday, from: first) + 5) % 7
+        daysInMonth = calendar.range(of: .day, in: .month, for: now)?.count ?? 30
+        recordedDays = Set(inMonth.map { calendar.component(.day, from: $0) })
+        count = inMonth.count
+        today = calendar.component(.day, from: now)
+        weekStreak = streak
+    }
+
+    var streakLine: String {
+        weekStreak >= 2 ? "\(weekStreak) weeks in a row with a recording."
+            : count > 0 ? "Record one more this week to start a streak."
+            : "Record a lesson to start the month."
+    }
+
+    static func parseDate(_ iso: String) -> Date? {
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return withFraction.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
+    }
+}
+
+/// The recording habit: lessons this month, the days they fell on, and weeks
+/// in a row with one. Nothing here judges the teaching. Matches the web
+/// Home's month card.
+struct LessonMonthCard: View {
+    let month: LessonMonth
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(month.monthLabel)
+                .font(.caption2.weight(.bold)).tracking(1.4)
+                .foregroundStyle(AppTheme.forest)
+            Text("Your lessons this month")
+                .font(.heading(.headline))
+                .foregroundStyle(AppTheme.forest)
+                .padding(.top, 4)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("\(month.count)")
+                    .font(.heading(.largeTitle).weight(.heavy))
+                    .foregroundStyle(AppTheme.forest)
+                Text("lesson\(month.count == 1 ? "" : "s") recorded")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+            .padding(.top, 10)
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
+                // One range, so the leading blanks (day <= 0) and the days
+                // never share an id in the grid.
+                ForEach((1 - month.firstWeekday)...month.daysInMonth, id: \.self) { day in
+                    if day <= 0 {
+                        Color.clear.frame(height: 14)
+                    } else {
+                    let recorded = month.recordedDays.contains(day)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(recorded ? Color(hex: 0x4F9A72) : day > month.today ? AppTheme.hairline.opacity(0.4) : AppTheme.hairline)
+                        .frame(height: 14)
+                        .overlay {
+                            if day == month.today {
+                                RoundedRectangle(cornerRadius: 5)
+                                    .strokeBorder(AppTheme.forest, lineWidth: 2)
+                                    .padding(-3)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.top, 12)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(month.count) lessons recorded this month")
+
+            Text(month.streakLine)
+                .font(.subheadline)
+                .foregroundStyle(AppTheme.textPrimary)
+                .padding(.top, 12)
+
+            NavigationLink { AudioCoachingView() } label: {
+                Text("Record a lesson →")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppTheme.terracotta600)
+            }
+            .padding(.top, 14)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.mintTint.opacity(0.5), in: RoundedRectangle(cornerRadius: 24))
     }
 }
 

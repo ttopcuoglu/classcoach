@@ -42,6 +42,7 @@ struct MyGrowthTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            LessonFocusLink(sessions: sessions, focusMetric: $focusMetric)
             FocusSelectorView(focusMetric: $focusMetric)
 
             if loading {
@@ -68,6 +69,94 @@ struct MyGrowthTab: View {
     private func load() async {
         do { sessions = try await AudioCoachingService.getSessions() } catch {}
         loading = false
+    }
+}
+
+/// The one focus a teacher chose on their latest lesson's Summary, brought to
+/// My Growth with the trends for that part of the lesson one tap away —
+/// mirrors `LessonFocusLink` in AudioCoaching.tsx. It only offers: the
+/// account-wide My Growth focus changes only when the teacher taps, since the
+/// Coach reads it too.
+private struct LessonFocusLink: View {
+    let sessions: [AudioSession]
+    @Binding var focusMetric: FocusMetric?
+
+    private struct Resolved {
+        let date: Date?
+        let item: NextTimeItem
+        let section: InsightsSection?
+        let streak: Int
+        /// Only Talk & Participation and Questioning & Checking have trends.
+        let metrics: [FocusMetric]
+    }
+
+    private var resolved: Resolved? {
+        let dated = sessions.map { (session: $0, date: LessonMonth.parseDate($0.sessionDate)) }
+        let newestFirst = dated.sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
+        guard let start = newestFirst.firstIndex(where: { $0.session.lessonFocus?.next?.itemId != nil }),
+              let itemId = newestFirst[start].session.lessonFocus?.next?.itemId else { return nil }
+        let chosen = newestFirst[start]
+        guard let item = NextTimeItem.items(for: AudioSessionWithSegments(session: chosen.session, segments: []))
+            .first(where: { $0.id == itemId }) else { return nil }
+        let section = item.insightsSection
+        // How many lessons in a row, newest first, chose a focus in this same part.
+        var streak = 0
+        for entry in newestFirst[start...] {
+            guard let id = entry.session.lessonFocus?.next?.itemId,
+                  NextTimeItem(id: id, from: "", text: "").insightsSection == section else { break }
+            streak += 1
+        }
+        let metrics = section.flatMap { s in FocusMetrics.groups.first { $0.category == s.title }?.metrics } ?? []
+        return Resolved(date: chosen.date, item: item, section: section, streak: streak, metrics: metrics)
+    }
+
+    var body: some View {
+        if let r = resolved {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Your one focus, from your lesson on \(r.date?.formatted(.dateTime.month(.abbreviated).day()) ?? "")".uppercased())
+                    .font(.caption.weight(.bold)).tracking(0.6)
+                    .foregroundStyle(Color(hex: 0x8E3F22))
+                Text(r.item.text)
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if r.streak >= 2, let section = r.section {
+                    Text("\(section.title) has been your focus for your last \(r.streak) lessons.")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                if !r.metrics.isEmpty {
+                    FlowLayout(spacing: 8) {
+                        Text("Follow it here:")
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .padding(.vertical, 5)
+                        ForEach(r.metrics, id: \.self) { metric in
+                            let on = focusMetric == metric
+                            Button { focusMetric = metric } label: {
+                                Text(FocusMetrics.label(metric))
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(on ? AppTheme.cream : AppTheme.textSecondary)
+                                    .padding(.horizontal, 12).padding(.vertical, 5)
+                                    .background(on ? AppTheme.terracotta : AppTheme.card, in: Capsule())
+                                    .overlay(Capsule().strokeBorder(on ? AppTheme.terracotta : AppTheme.hairline))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(on ? .isSelected : [])
+                        }
+                    }
+                    .padding(.top, 6)
+                } else if let section = r.section {
+                    Text("My Growth doesn\u{2019}t chart \(section.title) yet. Each lesson\u{2019}s own \(section.title) page is where to follow it.")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .padding(.top, 2)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.peachTint.opacity(0.5), in: RoundedRectangle(cornerRadius: 16))
+        }
     }
 }
 

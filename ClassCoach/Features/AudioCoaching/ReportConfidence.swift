@@ -426,11 +426,18 @@ enum AudioInsights {
                 return "Your talk time is down \(Int(abs(teacherDelta).rounded())) points since your first tracked session, and students' is up \(Int(studentDelta.rounded())) — more room for student voice."
             }
         }
-        let withQuestions = sessions.filter { ($0.questionCount ?? 0) >= ReportConfidence.minNForPercent && $0.higherOrderPct != nil }
-        if withQuestions.count >= 3 {
-            let delta = withQuestions.last!.higherOrderPct! - withQuestions.first!.higherOrderPct!
+        // The beyond-recall share, sorted the way each lesson's own page sorts it.
+        let mixes: [[QuestionMix]] = sessions
+            .map { FocusMetrics.questionMix($0) ?? [] }
+            .filter { $0.count >= ReportConfidence.minNForPercent }
+        let beyondShares: [Double] = mixes.map { qs in
+            let beyond = qs.filter { $0 != .recall }.count
+            return Double(beyond) / Double(qs.count) * 100
+        }
+        if beyondShares.count >= 3 {
+            let delta = beyondShares.last! - beyondShares.first!
             if delta >= 10 {
-                return "Your higher-order questions are up \(Int(delta.rounded())) points since your first tracked session — nice trend."
+                return "The share of your questions that went beyond recall is up \(Int(delta.rounded())) points since your first tracked session."
             }
         }
         return nil

@@ -30,7 +30,7 @@ enum FocusMetrics {
         case .longestMonologue: return "Longest unbroken stretch"
         case .waitTime2: return "Pause after an answer"
         case .followUpQuestionCount: return "Follow-up questions"
-        case .higherOrderPct: return "Higher-order questions"
+        case .higherOrderPct: return "Questions beyond recall"
         case .cfuCount: return "Checks for understanding"
         // Retired from the picker, kept so an account that chose one renders.
         case .avgWaitTime: return "Avg. wait time"
@@ -54,7 +54,7 @@ enum FocusMetrics {
         case .longestMonologue: return "Longest unbroken stretch (min)"
         case .waitTime2: return "Pause after an answer (s)"
         case .followUpQuestionCount: return "Follow-up questions (/10min)"
-        case .higherOrderPct: return "Higher-order questions"
+        case .higherOrderPct: return "Questions beyond recall"
         case .cfuCount: return "Checks for understanding (/10min)"
         case .avgWaitTime: return "Avg. wait time (s)"
         case .redirectionCount: return "Redirection language (/10min)"
@@ -78,6 +78,13 @@ enum FocusMetrics {
     private static func perTenMin(_ count: Double?, durationSec: Double?) -> Double? {
         guard let count, let durationSec, durationSec > 0 else { return nil }
         return ((count / (durationSec / 600)) * 10).rounded() / 10
+    }
+
+    /// Each counted question's kind, the way Questioning & Checking sorts
+    /// them — nil when the lesson has no question log at all.
+    static func questionMix(_ session: AudioSession) -> [QuestionMix]? {
+        guard session.questionLog != nil else { return nil }
+        return QuestionMix.classify(AudioSessionWithSegments(session: session, segments: [])).map(\.mix)
     }
 
     /// One named series, or two where a single number would mislead.
@@ -109,10 +116,14 @@ enum FocusMetrics {
             // Count AND total rather than a share: a share reads 100% when one
             // question was asked and it happened to be a good one, and 0% when
             // forty-three recall questions were asked and nothing else. The gap
-            // between the two lines is the recall questions.
+            // between the two lines is the recall questions. Sorted by
+            // QuestionMix.classify, so each point is the "X of Y questions went
+            // beyond recall" that lesson's own page shows. The stored focus
+            // value stays higherOrderPct, so saved focuses are untouched.
+            let mixes = sessions.map(questionMix)
             return [
-                ("Higher-order", sessions.map { $0.metricsDetail?["higherOrderQuestionCount"] }),
-                ("All questions", sessions.map { $0.questionCount.map(Double.init) }),
+                ("Beyond recall", mixes.map { $0.map { Double($0.filter { $0 != .recall }.count) } }),
+                ("All questions", mixes.map { $0.map { Double($0.count) } }),
             ]
         case .cfuCount:
             return [("Checks", sessions.map {
