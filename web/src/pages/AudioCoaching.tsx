@@ -6130,7 +6130,15 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
   // A question that was also a deliberate pause to take stock. It is ONE
   // moment carrying two labels, so it keeps its question dot on the timeline
   // and is never drawn twice — it simply also counts here.
-  const taggedChecks = questions.filter((q) => q.check)
+  //
+  // Minus any the stored check list already holds. The read that writes
+  // cfuLog no longer puts questions in it, but every lesson analyzed before
+  // that does, and on one of them the same sentence sits in both at the same
+  // second. Counting both would show a teacher the duplicate this change
+  // exists to remove.
+  const taggedChecks = questions.filter(
+    (q) => q.check && !checks.some((c) => Math.abs(c.timestampSec - q.timestampSec) <= 4),
+  )
   const checkCount = checks.length + taggedChecks.length
 
   // Every mark's id says what it is: questions from 0, checks from 1000,
