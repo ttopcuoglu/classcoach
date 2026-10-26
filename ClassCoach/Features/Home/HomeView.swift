@@ -51,11 +51,6 @@ struct HomeView: View {
                             .padding(.horizontal)
                     }
 
-                    if let lessonDates {
-                        LessonMonthCard(month: LessonMonth(dates: lessonDates, now: Date()))
-                            .padding(.horizontal)
-                    }
-
                     NavigationLink { AudioCoachingView() } label: {
                         FeatureCard(
                             eyebrow: "Lesson Reflection",
@@ -107,6 +102,13 @@ struct HomeView: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.horizontal)
+
+                    // After the tools, as on the web: a recording habit to glance
+                    // at, not the first thing between a teacher and Record.
+                    if let lessonDates {
+                        LessonMonthCard(month: LessonMonth(dates: lessonDates, now: Date()))
+                            .padding(.horizontal)
+                    }
 
                     // No card for reviewing an assignment: it is one of Planning
                     // Coach's four chips, so a card here would be a second
