@@ -77,10 +77,10 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'What do I get from a Lesson Debrief?',
-        a: 'A private report with six tabs. Summary is the 60-second read: one thing to try next lesson, what the lesson covered, how the lesson moved, its numbers (your share of the talk and the students’, sound and quiet, pace, questions, Teacher-Anchored Wait Time and checks for understanding), and one thing to keep doing. Insights has the detail in those four sections — Talk & Participation, Questioning & Checking, Clarity & Content, and Climate & Routines — always shown in your own words, with the time you said them. Content Specialist offers a subject specialist\'s ideas for teaching the topic. Rubric lens, Reflect, and My Growth cover the rest.',
+        a: 'A private report with six tabs. Summary is the 60-second read: one thing to try next lesson, what the lesson covered, how the lesson moved, its numbers (your share of the talk and the students’, sound and quiet, pace, questions, Teacher Pause Time and checks for understanding), and one thing to keep doing. Insights has the detail in those four sections — Talk & Participation, Questioning & Checking, Clarity & Content, and Climate & Routines — always shown in your own words, with the time you said them. Content Specialist offers a subject specialist\'s ideas for teaching the topic. Rubric lens, Reflect, and My Growth cover the rest.',
       },
       {
-        q: 'What is Teacher-Anchored Wait Time (TAWT)?',
+        q: 'What is Teacher Pause Time?',
         a: 'After each question that asks students to explain or reason, how long you left it with the class before you spoke again, with any student answer included. The report lists each of those questions with its time, and whether a student answered, no one did, or you kept talking. It measures your side of the pause, which the microphone hears reliably even when students are faint. When no one answered, three seconds or more of silence gives most students time to think.',
       },
       {

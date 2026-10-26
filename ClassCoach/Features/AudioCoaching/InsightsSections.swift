@@ -1206,12 +1206,12 @@ struct QuestionsSection: View {
         .background(AppTheme.cream, in: RoundedRectangle(cornerRadius: 18))
     }
 
-    /// Teacher-Anchored Wait Time: how long you left a question that asked
+    /// Teacher Pause Time: how long you left a question that asked
     /// students to explain or reason with the class, until you spoke again —
     /// the same number as the Summary tile, with each question behind it.
     private func tawtCard(_ tawt: ThinkingPause.Detail, average: Double) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Teacher-Anchored Wait Time (TAWT)").font(.heading(.headline)).foregroundStyle(AppTheme.forest)
+            Text("Teacher Pause Time").font(.heading(.headline)).foregroundStyle(AppTheme.forest)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(String(format: "%.1f", average)).font(.heading(.largeTitle)).foregroundStyle(AppTheme.forest)
                 Text("s").font(.body.weight(.bold)).foregroundStyle(AppTheme.forest)

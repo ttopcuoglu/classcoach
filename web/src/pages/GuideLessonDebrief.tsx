@@ -92,7 +92,7 @@ const TABS = [
 
 const STORY = [
   'Mr. Boateng is proud of third-period science. It’s discussion-based, students argue about evidence, and the room is never quiet. He records it expecting the report to confirm what he already believes.',
-  'It doesn’t, exactly. Talk & Participation shows he was speaking for 74% of the period. His Teacher-Anchored Wait Time — how long he leaves a thinking question with the class before he speaks again — is 1.2 seconds.',
+  'It doesn’t, exactly. Talk & Participation shows he was speaking for 74% of the period. His Teacher Pause Time — how long he leaves a thinking question with the class before he speaks again — is 1.2 seconds.',
   'His first reaction is to argue with it — a lot of that talk was him restating student ideas so the class could hear them. Which is true, and it’s also the finding.',
   'In the Reflect tab he says exactly that out loud. Coach asks what would happen if he waited instead of restating. He doesn’t love the answer: probably silence, and he’d fill it.',
   'His next step is small enough to actually do: after each open question, count to five in his head before saying anything. He writes it in his notes and sets a follow-up date for two weeks out.',
@@ -171,7 +171,7 @@ function SampleReport() {
           { label: 'Quiet', value: '4', unit: '%', tint: 'bg-mint-tint' },
           { label: 'Pace', value: '148', unit: 'wpm', tint: 'bg-peach-tint' },
           { label: 'Questions', value: '22', unit: '', tint: 'bg-mint-tint' },
-          { label: 'TAWT', value: '2.4', unit: 's', tint: 'bg-mint-tint' },
+          { label: 'Teacher pause', value: '2.4', unit: 's', tint: 'bg-mint-tint' },
           { label: 'Checks', value: '3', unit: '', tint: 'bg-gold-tint' },
         ].map((t) => (
           <div key={t.label} className={`rounded-xl px-3 py-2.5 ${t.tint}`}>

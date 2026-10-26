@@ -2778,9 +2778,13 @@ function SummaryTab({
     // Words a minute of the teacher's own speaking time, as Talk & Participation shows it.
     { label: 'Pace', metric: speechRateMetric(wpm != null ? Math.round(wpm) : null), unit: 'wpm', accent: ACCENTS.rose },
     { label: 'Questions', metric: getCountMetric({ count: session.questionCount, recordedSec: session.durationSec ?? 0 }), accent: ACCENTS.mint },
-    // Teacher-Anchored Wait Time, the same number Questioning & Checking shows.
+    // Teacher Pause Time, the same number Questioning & Checking shows. Not
+    // "wait time": Rowe's wait time ends when a STUDENT responds, and this
+    // ends when the teacher speaks again, with any answer included. The
+    // student-anchored measure is questionLog[].waitTimeSec, which is what
+    // "wait time" means everywhere else here.
     {
-      label: 'TAWT',
+      label: 'Teacher pause',
       metric:
         tawt.average != null
           ? { state: 'measured', display: tawt.average.toFixed(1) }
@@ -2976,7 +2980,7 @@ function SummaryTab({
           )}
           <div><dt className="inline font-semibold text-ink">Pace · </dt><dd className="inline">your words a minute, short pauses included. Everyday conversation usually runs about {CONVERSATIONAL_WPM_RANGE}.</dd></div>
           <div><dt className="inline font-semibold text-ink">Questions · </dt><dd className="inline">the questions you asked, as the transcript caught them.</dd></div>
-          <div><dt className="inline font-semibold text-ink">TAWT (Teacher-Anchored Wait Time) · </dt><dd className="inline">after a question that asked students to explain or reason, how long until you spoke again, averaged. Three seconds or more gives most students time to think.</dd></div>
+          <div><dt className="inline font-semibold text-ink">Teacher Pause Time · </dt><dd className="inline">after a question that asked students to explain or reason, how long until you spoke again, averaged, with any student answer included. It is your side of the pause — not a measure of how long students thought, which a microphone at the front of the room cannot see. Three seconds or more gives most students time to think.</dd></div>
           <div><dt className="inline font-semibold text-ink">Checks · </dt><dd className="inline">the times you checked for understanding, as the transcript caught them. It counts the checks, not whether students understood.</dd></div>
         </dl>
       </DetailsOpenOnPaper>
@@ -6075,7 +6079,7 @@ const sameMoment = (a: { timestampSec: number; quote: string }, b: { timestampSe
   return Math.abs(a.timestampSec - b.timestampSec) <= 8 && na.length > 0 && nb.length > 0 && (na.startsWith(nb.slice(0, 20)) || nb.startsWith(na.slice(0, 20)))
 }
 
-/// Teacher-Anchored Wait Time, worked out once for the Summary tile and the
+/// Teacher Pause Time, worked out once for the Summary tile and the
 /// Questioning & Checking card so the two never disagree: the questions left
 /// with students (a question you answered yourself is not one), the thinking
 /// ones among them (above recall), each one's pause until you spoke
@@ -6358,12 +6362,12 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
 
       {printAll ? pills.filter((pl) => pl.n > 0).map((pl) => <div key={pl.key}>{listBlock(pl.key)}</div>) : listBlock(pick)}
 
-      {/* Teacher-Anchored Wait Time: how long you left a question that asked
+      {/* Teacher Pause Time: how long you left a question that asked
           students to explain or reason with the class, until you spoke again. */}
       {thinkingPause != null && (
         <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card px-4 py-4">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <p className="font-heading text-lg font-bold text-forest">Teacher-Anchored Wait Time (TAWT)</p>
+            <p className="font-heading text-lg font-bold text-forest">Teacher Pause Time</p>
             <span className="font-heading text-3xl font-extrabold leading-none text-forest">
               {thinkingPause.toFixed(1)}
               <small className="ml-1 font-sans text-base font-bold">s</small>

@@ -147,7 +147,7 @@ enum QuestionMix: String, CaseIterable {
     }
 }
 
-/// Teacher-Anchored Wait Time — mirrors `pausesAfter`/`averagePause` in
+/// Teacher Pause Time — mirrors `pausesAfter`/`averagePause` in
 /// web/src/lib/thinkingPause.ts and `tawtOf` in AudioCoaching.tsx: after each
 /// question that asked students to explain or reason (not one the teacher
 /// answered themselves), the time from the end of the teacher's turn to the
@@ -520,7 +520,7 @@ struct OverviewTab: View {
         out.append(Tile(label: "Pace", value: detail["teacherWordsPerMinute"].map { "\(Int($0.rounded()))" }, unit: "wpm", tint: Color(hex: 0xF4DFE4)))
         out.append(Tile(label: "Questions", value: session.questionCount.map { "\($0)" }, unit: "", tint: Color(hex: 0xDCE7DF)))
         let tawt = ThinkingPause.tawt(session)
-        out.append(Tile(label: "TAWT", value: tawt.map { String(format: "%.1f", $0.average) }, unit: "s", tint: Color(hex: 0xE6EBD2),
+        out.append(Tile(label: "Teacher pause", value: tawt.map { String(format: "%.1f", $0.average) }, unit: "s", tint: Color(hex: 0xE6EBD2),
                         hint: tawt == nil ? "No pause after a thinking question could be timed." : nil,
                         note: tawt.map { "from \($0.count) question\($0.count == 1 ? "" : "s")" }))
         // The checks Questioning & Checking lists, left-out non-checks and all;
@@ -563,7 +563,7 @@ struct OverviewTab: View {
                     }
                     readingLine("Pace", "your words a minute, short pauses included. Everyday conversation usually runs about \(AudioInsights.conversationalWpmRange).")
                     readingLine("Questions", "the questions you asked, as the transcript caught them.")
-                    readingLine("TAWT (Teacher-Anchored Wait Time)", "after a question that asked students to explain or reason, how long until you spoke again, averaged. Three seconds or more gives most students time to think.")
+                    readingLine("Teacher Pause Time", "after a question that asked students to explain or reason, how long until you spoke again, averaged, with any student answer included. It is your side of the pause \u{2014} not a measure of how long students thought, which a microphone at the front of the room cannot see. Three seconds or more gives most students time to think.")
                     readingLine("Checks", "the times you checked for understanding, as the transcript caught them. It counts the checks, not whether students understood.")
                 }
                 .padding(.top, 6)

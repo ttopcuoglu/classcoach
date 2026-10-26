@@ -539,7 +539,8 @@ struct AudioTeachingMoves: Decodable {
     let connections: [Quoted]?
     let routines: Routines?
     let stretch: Stretch?
-    /// Questions the teacher answered themselves — left out of TAWT, as on the web.
+    /// Questions the teacher answered themselves — left out of Teacher Pause
+    /// Time, as on the web.
     let selfAnswered: [Quoted]?
     /// Questions about logistics, not the learning ("where is it?"). Counted
     /// nowhere as questions; absent on lessons read before it existed.

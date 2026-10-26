@@ -276,7 +276,7 @@ const SAMPLE_TILES = [
   { label: 'You spoke', value: '34.3', unit: '%', card: 'bg-peach-tint', ink: 'text-terracotta-600' },
   { label: 'Students spoke', value: '13.5', unit: '%', card: 'bg-gold-tint', ink: 'text-terracotta-600' },
   { label: 'Questions', value: '7', unit: '', card: 'bg-mint-tint', ink: 'text-forest' },
-  { label: 'TAWT', value: '7.4', unit: 's', note: 'from 4 questions', card: 'bg-mint-tint', ink: 'text-forest' },
+  { label: 'Teacher pause', value: '7.4', unit: 's', note: 'from 4 questions', card: 'bg-mint-tint', ink: 'text-forest' },
 ]
 
 // Two screenshots of the real report (the Summary, and Talk & Participation's
@@ -791,9 +791,9 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               </div>
             ))}
             <div className="col-span-2 rounded-xl border-l-4 border-gold bg-gold-tint/60 px-3 py-2.5 sm:col-span-4 lg:col-span-2">
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-terracotta-600">What TAWT measures</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-terracotta-600">What Teacher Pause Time measures</p>
               <p className="mt-0.5 text-sm leading-snug text-ink">
-                Teacher-Anchored Wait Time: after a question that asked students to explain or reason, how long until you spoke again, any answer included. When no one answered, three seconds or more of silence gives most students time to think.
+                Teacher Pause Time: after a question that asked students to explain or reason, how long until you spoke again, any answer included. When no one answered, three seconds or more of silence gives most students time to think.
               </p>
             </div>
           </div>
