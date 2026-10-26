@@ -388,6 +388,35 @@ struct TryItOutContent: View {
 
             followUpChat(attempt)
 
+            // The same move as Lesson Debrief's Discuss: hand Coach this page and
+            // say it out loud in Talk It Through, where the voice lives. Their
+            // own situation only — a generated one has nobody real to say it to.
+            if attempt.scenario.source == "teacher" {
+                NavigationLink {
+                    TalkToMeView(practice: attempt)
+                } label: {
+                    HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Say it out loud with Coach")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(AppTheme.forest)
+                            Text("Coach knows this situation. Try your words by voice and get coached on them as you go.")
+                                .font(.caption)
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .multilineTextAlignment(.leading)
+                        }
+                        Spacer(minLength: 8)
+                        Text("Discuss →")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppTheme.terracotta600)
+                    }
+                    .padding(14)
+                    .background(AppTheme.background, in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
+                }
+                .buttonStyle(.plain)
+            }
+
             HStack {
                 Button {
                     Task { await toggleSaved(attempt) }

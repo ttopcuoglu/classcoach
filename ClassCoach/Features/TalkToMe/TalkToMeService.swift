@@ -35,6 +35,9 @@ enum TalkToMeService {
         /// server reads a missing message as "greet them first".
         var message: String?
         var followUpId: String?
+        /// Practice's "Discuss with Wivoza Coach": first turn only, since the
+        /// server keeps it on the conversation from then on.
+        var practiceAttemptId: String?
     }
 
     private struct StreamFrame: Decodable {
@@ -53,10 +56,15 @@ enum TalkToMeService {
         debriefId: String?,
         message: String?,
         followUpId: String? = nil,
+        practiceAttemptId: String? = nil,
         onSentence: @MainActor @escaping (String) -> Void
     ) async throws -> Debrief {
         let path = debriefId.map { "/api/debriefs/\($0)/chat/stream" } ?? "/api/debriefs/talk/stream"
-        let body = MessageBody(message: message, followUpId: debriefId == nil ? followUpId : nil)
+        let body = MessageBody(
+            message: message,
+            followUpId: debriefId == nil ? followUpId : nil,
+            practiceAttemptId: debriefId == nil ? practiceAttemptId : nil
+        )
         var result: Debrief?
         try await APIClient.shared.streamLines(path, body: body) { line in
             guard let data = line.data(using: .utf8),

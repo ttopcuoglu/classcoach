@@ -13,6 +13,7 @@ import { useVoiceTurn } from '../hooks/useVoiceTurn'
 import {
   deleteDebrief,
   generateTalkTakeaway,
+  getAttempts,
   getDebriefs,
   dismissFollowUpForDebrief,
   getFollowUp,
@@ -27,6 +28,7 @@ import {
   type CoachFollowUp,
   type ChatMessage,
   type Debrief,
+  type ScenarioAttempt,
   type TalkTakeaway,
   type TalkVoice,
 } from '../lib/api'
@@ -61,6 +63,15 @@ const CHECK_IN_PROMPTS = [
   'It went okay, but not quite how I planned.',
   "It didn't work.",
   "I haven't had a chance to try it yet.",
+]
+
+// Opened from Practice's "Discuss with Wivoza Coach": ways into saying it out
+// loud, for a teacher who is not sure how to begin.
+const PRACTICE_PROMPTS = [
+  'I don\u2019t know how to start it.',
+  'Play the other person and let me try.',
+  'Here\u2019s what I\u2019d say first.',
+  'Help me say it more calmly.',
 ]
 
 const DEBRIEF_PROMPTS = [
@@ -147,6 +158,15 @@ export default function TalkToMe() {
   const [followUp, setFollowUp] = useState<CoachFollowUp | null>(null)
   const followUpRef = useRef<CoachFollowUp | null>(null)
   followUpRef.current = followUp
+  // Practice's "Discuss with Wivoza Coach": the attempt to rehearse out loud.
+  // Sent with the first turn only; the server keeps it on the conversation.
+  const practiceId = searchParams.get('practice')
+  const [practice, setPractice] = useState<ScenarioAttempt | null>(null)
+  const practiceRef = useRef<ScenarioAttempt | null>(null)
+  practiceRef.current = practice
+  // From the link itself, so the start screen opens on the rehearsal rather
+  // than flashing the ordinary topic chips while the attempt loads.
+  const rehearsing = !!practiceId
   const [phase, setPhase] = useState<Phase>('idle')
   const [debrief, setDebrief] = useState<Debrief | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -373,6 +393,16 @@ export default function TalkToMe() {
   }, [fatalError])
 
   useEffect(() => {
+    if (!practiceId) {
+      setPractice(null)
+      return
+    }
+    getAttempts()
+      .then((all) => setPractice(all.find((a) => a.id === practiceId) ?? null))
+      .catch(() => setPractice(null))
+  }, [practiceId])
+
+  useEffect(() => {
     if (!followUpId) {
       setFollowUp(null)
       return
@@ -485,6 +515,8 @@ export default function TalkToMe() {
           queue.push(sentence)
         },
         followUpRef.current?.id,
+        undefined,
+        practiceRef.current?.id,
       )
       const result = await trackReply(reply)
       setDebrief(result)
@@ -690,6 +722,7 @@ export default function TalkToMe() {
       },
       followUpRef.current?.id,
       controller.signal,
+      practiceRef.current?.id,
     )
     // Nothing awaits this until the turn ends, and it may never be awaited at
     // all, so its rejection is absorbed here and re-read later if it matters.
@@ -758,7 +791,7 @@ export default function TalkToMe() {
         const current = debriefRef.current
         const result = current
           ? await sendDebriefChat(current.id, text)
-          : await startTalkToMe(text, followUpRef.current?.id)
+          : await startTalkToMe(text, followUpRef.current?.id, practiceRef.current?.id)
         setDebrief(result)
         // A typed turn comes back to the keyboard, so settle to idle. Calling
         // resumeListeningIfActive here would no-op — there is no live session —
@@ -857,6 +890,7 @@ export default function TalkToMe() {
             },
             followUpRef.current?.id,
             resumption.signal,
+            practiceRef.current?.id,
           ),
         )
       }
@@ -1111,6 +1145,7 @@ export default function TalkToMe() {
     setNextStepOpen(false)
     setNextStepDraft('')
     setFollowUp(null)
+    setPractice(null)
     setPhase('idle')
     // The saved list was loaded when the page opened. A conversation resumed
     // since then has more turns and possibly a newer takeaway, and a stale
@@ -1476,20 +1511,24 @@ export default function TalkToMe() {
                   {/* The kicker only earns its place when the page arrived with
                       a subject of its own. On a plain start screen it was
                       labelling the obvious. */}
-                  {(followUp || isDebrief) && (
+                  {(rehearsing || followUp || isDebrief) && (
                     <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
-                      {followUp ? 'Coach is checking in' : 'Debrief'}
+                      {rehearsing ? 'From Practice' : followUp ? 'Coach is checking in' : 'Debrief'}
                     </p>
                   )}
                   <h2 className="mt-2 font-heading text-3xl font-bold text-cream sm:text-4xl">
-                    {followUp
+                    {rehearsing
+                      ? 'Ready to say it out loud?'
+                      : followUp
                       ? followUp.checkInQuestion
                       : isDebrief
                         ? 'How did it go?'
                         : 'Hi. What would you like to talk about?'}
                   </h2>
                   <p className="mx-auto mt-2 max-w-xl text-base text-cream/70">
-                    {followUp
+                    {rehearsing
+                      ? 'Coach knows the situation and what it suggested. Try saying it the way you would to the person, and Coach will coach the words.'
+                      : followUp
                       ? 'Say how it went — good, bad, or not yet. Coach will take it from there.'
                       : isDebrief
                         ? 'Start wherever you like — Coach will walk through the rest with you.'
@@ -1527,6 +1566,18 @@ export default function TalkToMe() {
 
             {onStartScreen ? (
               <div className="flex w-full max-w-3xl flex-col gap-5 text-left">
+                {practice && (
+                  <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5 text-left">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">The situation</p>
+                    <p className="mt-1.5 text-sm text-ink">{practice.scenario.text}</p>
+                    <Link
+                      to={`/coach-chat?start=real&open=${practice.id}`}
+                      className="mt-2 inline-block text-xs font-semibold text-terracotta-600 hover:underline"
+                    >
+                      Back to the written coaching
+                    </Link>
+                  </div>
+                )}
                 {followUp && (
                   <div className="rounded-2xl border-l-8 border-gold bg-gold-tint/50 p-5 text-left">
                     <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">What you planned to try</p>
@@ -1548,7 +1599,7 @@ export default function TalkToMe() {
                     words anyway. A check-in or a debrief already has its
                     subject, so the chips would be asking a question that is
                     already answered. */}
-                {!isDebrief && !followUp && (
+                {!isDebrief && !followUp && !rehearsing && (
                   <div className="flex flex-col gap-2">
                     <SectionLabel title="Want me focused on something?" hint="Optional — skip it and I'll just listen." />
                     <div className="flex flex-wrap gap-2.5">
@@ -1623,7 +1674,9 @@ export default function TalkToMe() {
                 <div className="flex flex-col gap-2">
                   <SectionLabel title="Or start with one of these" kicker />
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {(followUp
+                    {(rehearsing
+                      ? PRACTICE_PROMPTS
+                      : followUp
                       ? CHECK_IN_PROMPTS
                       : isDebrief
                         ? DEBRIEF_PROMPTS
@@ -1644,7 +1697,7 @@ export default function TalkToMe() {
                   </div>
                 </div>
 
-                {!isDebrief && !followUp && (
+                {!isDebrief && !followUp && !rehearsing && (
                   <Link
                     to="/guide/talk-it-through"
                     className="text-xs font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta-600"
@@ -1655,6 +1708,14 @@ export default function TalkToMe() {
               </div>
             ) : (
               <div className="flex w-full max-w-3xl flex-col gap-3">
+                {debrief?.practiceAttemptId && (
+                  <Link
+                    to={`/coach-chat?start=real&open=${debrief.practiceAttemptId}`}
+                    className="self-start text-xs font-semibold text-terracotta-600 hover:underline"
+                  >
+                    Rehearsing from Practice — back to the written coaching
+                  </Link>
+                )}
                 {/* Spoken, the last exchange is enough: the teacher heard the
                     rest. Typed, the thread is the conversation — scrolling back
                     to what Coach said four turns ago is the whole point of

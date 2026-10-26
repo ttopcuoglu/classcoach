@@ -769,6 +769,25 @@ export default function TryItOut({
                   placeholder={walkedThrough ? 'Try saying it in your own words...' : 'Ask a follow-up about this feedback...'}
                 />
 
+                {/* The same move as Lesson Debrief's Discuss: hand Coach what is
+                    on this page and say it out loud in Talk It Through, which
+                    is where the voice lives. Their own situation only — a
+                    generated one has nobody real to say it to. */}
+                {isOwn && (
+                  <Link
+                    to={`/talk-to-me?practice=${attempt.id}`}
+                    className="flex items-center justify-between gap-4 rounded-2xl border border-hairline bg-cream p-4 transition-colors hover:border-forest"
+                  >
+                    <span>
+                      <span className="block text-sm font-semibold text-forest">Say it out loud with Coach</span>
+                      <span className="block text-xs text-ink-soft">
+                        Coach knows this situation. Try your words by voice and get coached on them as you go.
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-sm font-semibold text-terracotta-600">Discuss with Wivoza Coach →</span>
+                  </Link>
+                )}
+
                 <ReflectionTimeline
                   triedAt={attempt.triedAt}
                   reflectionNote={attempt.reflectionNote}

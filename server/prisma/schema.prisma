@@ -287,6 +287,10 @@ model ScenarioAttempt {
   // Reflection timeline (Practiced -> Tried in class -> Reflected).
   triedAt        DateTime?
   reflectionNote String?
+
+  // Talk It Through conversations opened from this attempt's "Discuss with
+  // Wivoza Coach" — the spoken rehearsal of it.
+  talkThroughs Debrief[] @relation("PracticeRehearsal")
 }
 
 // Backs the "Ask" tab — a teacher either reflecting on something that
@@ -349,6 +353,15 @@ model Debrief {
 
   // The check-in scheduled from this conversation's takeaway, if any.
   coachFollowUp CoachFollowUp? @relation("FollowUpSource")
+
+  // Talk It Through only: the Practice attempt this conversation rehearses
+  // out loud, opened from its "Discuss with Wivoza Coach". Read on every
+  // turn, so Coach keeps the situation for the whole conversation rather than
+  // only the first reply. Cleared, not cascaded, if the attempt goes.
+  practiceAttemptId String?
+  practiceAttempt   ScenarioAttempt? @relation("PracticeRehearsal", fields: [practiceAttemptId], references: [id], onDelete: SetNull)
+
+  @@index([practiceAttemptId])
 }
 
 // Coach coming back to ask how a planned step went. Created from a Talk It

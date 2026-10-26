@@ -15,6 +15,7 @@ import { streamCoachReply, trimIfTruncated } from '../lib/coachStream.ts'
 import { buildFeelingBlock } from '../lib/feelingSteer.ts'
 import { talkWordBudget } from '../lib/rehearsalTurn.ts'
 import { buildFollowUpContextBlock, checkInQuestionFor, nextCheckInDate } from '../lib/followUps.ts'
+import { buildPracticeRehearsalBlock, findPracticeAttempt } from '../lib/practiceRehearsal.ts'
 import {
   appendTurn,
   CHAT_TURN_CAP,
@@ -479,7 +480,7 @@ async function markFollowUpAnswered(followUpId: string, debriefId: string) {
 }
 
 debriefRouter.post('/talk/stream', async (req, res) => {
-  const { message, followUpId } = req.body ?? {}
+  const { message, followUpId, practiceAttemptId } = req.body ?? {}
   // No message at all means Coach opens the conversation — an empty string
   // still does not, because that is a client bug rather than a greeting.
   const isGreeting = message == null
@@ -512,12 +513,22 @@ debriefRouter.post('/talk/stream', async (req, res) => {
   void logUsage(userId, 'talk_to_me')
 
   const memoryOn = (user?.coachMemoryEnabled ?? false) && hasActivePlanFor(user)
-  const followUp = await findPendingFollowUp(userId, followUpId)
+  const [followUp, practice] = await Promise.all([
+    findPendingFollowUp(userId, followUpId),
+    findPracticeAttempt(userId, practiceAttemptId),
+  ])
   // TALK_SYSTEM_PROMPT is byte-identical for every teacher, so it caches once
   // and is reused across all of them; everything per-teacher follows it.
   // Before the memory block, which says never to record it.
   const focusBlock = schoolFocusBlock(await focusPromise, 'talk')
-  const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${isGreeting ? buildGreetingBlock(firstNameOf(user?.name)) : buildFeelingBlock(trimmed)}${focusBlock}`
+  // A rehearsal opens about its own situation, so it replaces the hello
+  // rather than following it.
+  const opener = practice
+    ? buildPracticeRehearsalBlock(practice, isGreeting)
+    : isGreeting
+      ? buildGreetingBlock(firstNameOf(user?.name))
+      : ''
+  const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${opener}${isGreeting ? '' : buildFeelingBlock(trimmed)}${focusBlock}`
 
   await streamCoachReply(res, 'talk_start', {
     gateMs: Date.now() - gateStart,
@@ -543,8 +554,11 @@ debriefRouter.post('/talk/stream', async (req, res) => {
           // A greeting is not something the teacher brought, so it is neither
           // stored as their words nor shown as a turn they took. The first
           // thing they actually say becomes the title (see the chat routes).
-          incidentText: isGreeting ? '' : trimmed,
+          // A rehearsal is titled by its situation, so it reads as that in the
+          // teacher's history rather than as whatever they said first.
+          incidentText: practice ? practice.scenario.text.slice(0, 300) : isGreeting ? '' : trimmed,
           source: 'talk_to_me',
+          practiceAttemptId: practice?.id ?? null,
           conversation: isGreeting
             ? [{ role: 'assistant' as const, text: reply, createdAt: new Date().toISOString() }]
             : appendTurn([], trimmed, reply),
@@ -595,7 +609,7 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
   // round trips, and the digest needs a query of its own. Ask only: Talk It
   // Through is the spoken surface, where an extra block costs time to first
   // word and the teacher never asked for the report.
-  const [chatDenied, digest, focuses] = await Promise.all([
+  const [chatDenied, digest, focuses, practice] = await Promise.all([
     checkUsage(userId, action, user),
     isTalk
       ? Promise.resolve('')
@@ -609,6 +623,7 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
         }),
     // Talk It Through only, for now (Coaching Priorities phase one).
     isTalk ? activeFocusFor(userId) : Promise.resolve([]),
+    findPracticeAttempt(userId, debrief.practiceAttemptId),
   ])
   if (chatDenied) {
     res.status(429).json({ error: chatDenied })
@@ -631,6 +646,8 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
   const feelingBlock = isTalk ? buildFeelingBlock(trimmed) : ''
   // Before the memory block, which says never to record it.
   const focusBlock = schoolFocusBlock(focuses, 'talk')
+  // A Practice rehearsal keeps its situation on every turn, not just the first.
+  const practiceBlock = practice ? buildPracticeRehearsalBlock(practice, false) : ''
   const baseMaxTokens = isTalk ? TALK_REPLY_MAX_TOKENS : 300
   // Memory is read every turn but rewritten only on some — see shouldWriteMemory.
   const writeMemory = memoryOn && shouldWriteMemory(countUserTurns(existing) + 1)
@@ -645,8 +662,8 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
     system: cachedSystem(
       stablePrompt,
       memoryOn
-        ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}${focusBlock}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
-        : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}${focusBlock}`,
+        ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${practiceBlock}${feelingBlock}${focusBlock}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
+        : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${practiceBlock}${feelingBlock}${focusBlock}`,
     ),
     maxTokens: writeMemory ? baseMaxTokens + MEMORY_UPDATE_TOKEN_BUFFER : baseMaxTokens,
     // Only the spoken surface has a budget: Lesson Debrief's Reflect chat is
@@ -673,7 +690,7 @@ debriefRouter.post('/:id/chat/stream', async (req, res) => {
 })
 
 debriefRouter.post('/talk', async (req, res) => {
-  const { message, followUpId } = req.body ?? {}
+  const { message, followUpId, practiceAttemptId } = req.body ?? {}
   if (typeof message !== 'string' || !message.trim()) {
     res.status(400).json({ error: 'message is required' })
     return
@@ -693,8 +710,9 @@ debriefRouter.post('/talk', async (req, res) => {
     })
     const memoryOn = (user?.coachMemoryEnabled ?? false) && (await hasActivePlan(req.user!.userId))
     const followUp = await findPendingFollowUp(req.user!.userId, followUpId)
+    const practice = await findPracticeAttempt(req.user!.userId, practiceAttemptId)
     const focusBlock = schoolFocusBlock(await activeFocusFor(req.user!.userId), 'talk')
-    const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${buildFeelingBlock(trimmed)}${focusBlock}`
+    const talkTail = `${buildExperienceContextBlock(user?.experienceLevel)}${followUp ? buildFollowUpContextBlock(followUp) : ''}${practice ? buildPracticeRehearsalBlock(practice, false) : ''}${buildFeelingBlock(trimmed)}${focusBlock}`
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -720,7 +738,13 @@ debriefRouter.post('/talk', async (req, res) => {
 
     const conversation = appendTurn([], trimmed, reply)
     const debrief = await prisma.debrief.create({
-      data: { userId: req.user!.userId, incidentText: trimmed, source: 'talk_to_me', conversation },
+      data: {
+        userId: req.user!.userId,
+        incidentText: practice ? practice.scenario.text.slice(0, 300) : trimmed,
+        source: 'talk_to_me',
+        practiceAttemptId: practice?.id ?? null,
+        conversation,
+      },
     })
     if (followUp) await markFollowUpAnswered(followUp.id, debrief.id)
 
@@ -790,6 +814,8 @@ debriefRouter.post('/:id/chat', async (req, res) => {
     const roomBlock = isTalk ? '' : teachingContextBlock(debrief)
     const feelingBlock = isTalk ? buildFeelingBlock(trimmed) : ''
     const focusBlock = isTalk ? schoolFocusBlock(await activeFocusFor(req.user!.userId), 'talk') : ''
+    const practice = await findPracticeAttempt(req.user!.userId, debrief.practiceAttemptId)
+    const practiceBlock = practice ? buildPracticeRehearsalBlock(practice, false) : ''
     const baseMaxTokens = isTalk ? TALK_REPLY_MAX_TOKENS : 300
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -798,8 +824,8 @@ debriefRouter.post('/:id/chat', async (req, res) => {
       system: cachedSystem(
         stablePrompt,
         memoryOn
-          ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}${focusBlock}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
-          : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${feelingBlock}${focusBlock}`,
+          ? `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${practiceBlock}${feelingBlock}${focusBlock}${buildMemoryContextBlock(user!.coachMemory)}${writeMemory ? MEMORY_UPDATE_INSTRUCTION : ''}`
+          : `${roomBlock}${digest}${buildExperienceContextBlock(user?.experienceLevel)}${practiceBlock}${feelingBlock}${focusBlock}`,
       ),
       messages: toClaudeMessages(existing, trimmed),
     })

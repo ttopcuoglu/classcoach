@@ -385,6 +385,9 @@ export type TalkTakeaway = { explored: string; tryNext: string; notice: string }
 export type Debrief = {
   id: string
   incidentText: string
+  /// Talk It Through only: the Practice attempt this conversation rehearses,
+  /// when it was opened from that attempt's "Discuss with Wivoza Coach".
+  practiceAttemptId?: string | null
   // The area this question belongs to — the teacher's pick, or the coach's
   // read when they didn't pick one. Null on Talk It Through rows and on rows
   // written before the area axis existed.
@@ -1772,6 +1775,9 @@ export async function streamCoachReply(
   // instead of saving a turn nobody heard — see streamCoachReply in
   // server/src/routes/debrief.ts.
   signal?: AbortSignal,
+  // Practice's "Discuss with Wivoza Coach": only read when starting, since
+  // the server keeps it on the conversation from then on.
+  practiceAttemptId?: string | null,
 ): Promise<Debrief> {
   const path = id ? `/api/debriefs/${id}/chat/stream` : '/api/debriefs/talk/stream'
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -1779,7 +1785,13 @@ export async function streamCoachReply(
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify(
-      id ? { message } : { ...(message == null ? {} : { message }), followUpId: followUpId ?? undefined },
+      id
+        ? { message }
+        : {
+            ...(message == null ? {} : { message }),
+            followUpId: followUpId ?? undefined,
+            practiceAttemptId: practiceAttemptId ?? undefined,
+          },
     ),
     signal,
   })
@@ -1821,10 +1833,14 @@ export async function streamCoachReply(
   return debrief
 }
 
-export function startTalkToMe(message: string, followUpId?: string | null): Promise<Debrief> {
+export function startTalkToMe(
+  message: string,
+  followUpId?: string | null,
+  practiceAttemptId?: string | null,
+): Promise<Debrief> {
   return request('/api/debriefs/talk', {
     method: 'POST',
-    body: JSON.stringify({ message, followUpId: followUpId ?? undefined }),
+    body: JSON.stringify({ message, followUpId: followUpId ?? undefined, practiceAttemptId: practiceAttemptId ?? undefined }),
   })
 }
 

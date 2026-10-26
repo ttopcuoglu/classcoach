@@ -29,6 +29,15 @@ private let checkInPrompts = [
     "I haven't had a chance to try it yet.",
 ]
 
+/// Opened from Practice's "Discuss with Wivoza Coach" — same list as
+/// `PRACTICE_PROMPTS` in web/src/pages/TalkToMe.tsx.
+private let practicePrompts = [
+    "I don\u{2019}t know how to start it.",
+    "Play the other person and let me try.",
+    "Here\u{2019}s what I\u{2019}d say first.",
+    "Help me say it more calmly.",
+]
+
 /// Mirrors `web/src/pages/TalkToMe.tsx` — a voice conversation with Coach:
 /// record a turn → transcribe → stream Coach's reply, speaking each sentence
 /// as it arrives → listen again, until the teacher pauses or finishes. A
@@ -90,8 +99,13 @@ struct TalkToMeView: View {
     @State private var checkInOff = false
     @State private var checkInNote: String?
 
-    init(followUp: CoachFollowUp? = nil) {
+    /// The Practice attempt this conversation rehearses out loud, when opened
+    /// from its "Discuss with Wivoza Coach". Sent with the first turn only.
+    @State private var activePractice: ScenarioAttempt?
+
+    init(followUp: CoachFollowUp? = nil, practice: ScenarioAttempt? = nil) {
         _activeFollowUp = State(initialValue: followUp)
+        _activePractice = State(initialValue: practice)
     }
 
     private var voice: String? { authManager.currentUser?.talkVoice }
@@ -230,16 +244,20 @@ struct TalkToMeView: View {
 
             if onStartScreen {
                 VStack(spacing: 8) {
-                    if activeFollowUp != nil {
-                        Text("COACH IS CHECKING IN")
+                    if activePractice != nil || activeFollowUp != nil {
+                        Text(activePractice != nil ? "FROM PRACTICE" : "COACH IS CHECKING IN")
                             .font(.caption2.weight(.bold)).tracking(0.8)
                             .foregroundStyle(AppTheme.gold)
                     }
-                    Text(activeFollowUp?.checkInQuestion ?? "Hi. What would you like to talk about?")
+                    Text(activePractice != nil
+                         ? "Ready to say it out loud?"
+                         : activeFollowUp?.checkInQuestion ?? "Hi. What would you like to talk about?")
                         .font(.heading(.title2))
                         .foregroundStyle(AppTheme.cream)
                         .multilineTextAlignment(.center)
-                    Text(activeFollowUp != nil
+                    Text(activePractice != nil
+                         ? "Coach knows the situation and what it suggested. Try saying it the way you would to the person, and Coach will coach the words."
+                         : activeFollowUp != nil
                          ? "Say how it went — good, bad, or not yet. Coach will take it from there."
                          : "Say whatever is on your mind and I will follow you. Pick a topic below only if you want me to start somewhere.")
                         .font(.subheadline)
@@ -361,6 +379,7 @@ struct TalkToMeView: View {
     // MARK: - Start screen
 
     private var startPrompts: [String] {
+        if activePractice != nil { return practicePrompts }
         if activeFollowUp != nil { return checkInPrompts }
         return pickTopicStarters(
             topic: topic,
@@ -398,6 +417,19 @@ struct TalkToMeView: View {
     /// The heading moved into the hero card, beside the mic it belongs to.
     private var startScreen: some View {
         VStack(alignment: .leading, spacing: 16) {
+            if let activePractice {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("THE SITUATION")
+                        .font(.caption2.weight(.bold)).tracking(0.8)
+                        .foregroundStyle(AppTheme.terracotta600)
+                    Text(activePractice.scenario.text)
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(AppTheme.goldTint.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
+            }
             if let activeFollowUp {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("WHAT YOU PLANNED TO TRY")
@@ -415,7 +447,7 @@ struct TalkToMeView: View {
             // Genuinely optional, and it says so: Coach reads the topic out of
             // the teacher's own words anyway. A check-in already has its
             // subject, so the chips would be asking a question already answered.
-            if activeFollowUp == nil {
+            if activeFollowUp == nil && activePractice == nil {
                 VStack(alignment: .leading, spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Want me focused on something?")
@@ -978,7 +1010,8 @@ struct TalkToMeView: View {
                         return try await TalkToMeService.streamReply(
                             debriefId: debrief?.id,
                             message: text,
-                            followUpId: activeFollowUp?.id
+                            followUpId: activeFollowUp?.id,
+                            practiceAttemptId: activePractice?.id
                         ) { sentence in
                             heardAnything = true
                             streamingReply = streamingReply.map { "\($0) \(sentence)" } ?? sentence
@@ -1102,6 +1135,7 @@ struct TalkToMeView: View {
         finishing = false
         takeawayError = nil
         activeFollowUp = nil
+        activePractice = nil
         checkInOff = false
         checkInNote = nil
         Task { await loadSavedTalks() }
