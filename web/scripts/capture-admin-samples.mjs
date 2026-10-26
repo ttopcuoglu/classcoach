@@ -1,7 +1,7 @@
 // Regenerates the For Schools marketing samples from the real admin pages:
 //   public/samples/pilot-report.pdf     the printed pilot report, sample mode
 //   public/samples/pilot-report.png     its first page
-//   public/samples/admin-dashboard.png  At a glance + What needs your attention
+//   public/samples/admin-dashboard.png  the School Admin sidebar + the Dashboard's top
 //   public/samples/admin-pd-progress.png  a tracked Professional Learning focus area
 //
 //   npm run dev                                   (in another terminal)
@@ -88,6 +88,19 @@ const FIXTURES = {
     }],
     themeCounts: { 'talk-balance': T(23, 14), questioning: T(20, 9), 'wait-time': T(11, 8), cfu: T(0, 0), feedback: T(2, 2) },
   },
+  // The school's one shared Coaching Priority, as the Dashboard's focus card
+  // shows it. Nothing about which teachers chose it exists to show.
+  '/api/admin/coaching-priorities': {
+    maxActive: 2,
+    items: [{
+      id: 'cp1', name: 'Academic Discussions',
+      purpose: "Students explain their reasoning, build on each other's ideas, and test claims with evidence.",
+      looksLike: 'A question goes to pairs before anyone answers it.', whenItFits: 'Questions with more than one defensible answer.',
+      ideas: 'Two minutes of turn-and-talk before taking answers.', whenNotToUse: 'Introducing brand-new vocabulary.',
+      startsOn: '2026-09-08T00:00:00Z', endsOn: '2027-01-22T00:00:00Z', status: 'active', version: 1, changeNote: null,
+      publishedAt: '2026-09-08T12:00:00Z', createdAt: '2026-09-05T12:00:00Z', updatedAt: '2026-09-08T12:00:00Z',
+    }],
+  },
   'breakdown:gradeBand': { by: 'gradeBand', minTeachers: 5, breakdown: [
     { bucket: 'Grades 6-8', suppressed: false, teacherCount: 11, metrics: M(61, 2.6, 49) },
     { bucket: 'Grades 9-12', suppressed: false, teacherCount: 10, metrics: M(57, 2.8, 47) },
@@ -112,19 +125,19 @@ await withChrome({ fixtures: FIXTURES, route }, async ({ open, pdf, shoot, viewp
     [...document.querySelectorAll('section')].find(s => s.querySelector('h2')?.textContent === 'Adoption'),
   ]`)
 
-  // The admin pages sit beside two navigation columns; a wider window gives
-  // their content the room a principal's laptop would.
-  await viewport(1760)
+  // A principal's laptop: the one Wivoza sidebar, then the page.
+  await viewport(1440, 1200)
 
-  // Dashboard: At a glance + What needs your attention.
+  // Dashboard: the School Admin sidebar beside the Dashboard's top — the
+  // school's focus and Explore your school.
   await open('/admin')
   await shoot('admin-dashboard.png', `() => [
-    [...document.querySelectorAll('p')].find(p => p.textContent === 'At a glance').parentElement,
-    [...document.querySelectorAll('section')].find(s => s.querySelector('h2')?.textContent === 'What needs your attention'),
-  ]`)
+    document.querySelector('aside'),
+    document.querySelector('#explore-school')?.closest('section'),
+  ].map((el, i) => i === 0 ? el.firstElementChild : el)`)
 
-  // Professional Learning: the tracked focus area.
-  await evaluate(`[...document.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Professional Learning').click()`)
-  await sleep(1500)
+  // Professional Learning, at its own address: the tracked focus area.
+  await open('/admin/professional-learning')
+  await sleep(500)
   await shoot('admin-pd-progress.png', `() => [[...document.querySelectorAll('h3')].find(h => h.textContent === 'Talk time balance').closest('.rounded-3xl')]`)
 })

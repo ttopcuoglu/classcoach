@@ -103,7 +103,10 @@ export async function withChrome({ fixtures, route = (pathname) => pathname }, s
         const r = await evaluate(`(() => { const els = (${pick})().filter(Boolean); const rs = els.map(e => e.getBoundingClientRect());
           const x = Math.min(...rs.map(r => r.left)), y = Math.min(...rs.map(r => r.top)) + scrollY;
           const right = Math.max(...rs.map(r => r.right)), bottom = Math.max(...rs.map(r => r.bottom)) + scrollY;
-          return { x: x - 16, y: y - 16, width: right - x + 32, height: bottom - y + 32 }; })()`)
+          // Never past the page's own edge: a shot that starts at the sidebar
+          // starts at 0, not 16px off the left of the page.
+          const x0 = Math.max(0, x - 16), y0 = Math.max(0, y - 16);
+          return { x: x0, y: y0, width: right + 16 - x0, height: bottom + 16 - y0 }; })()`)
         const { data } = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: { ...r, scale: 1 } })
         writeFileSync(join(OUT, file), Buffer.from(data, 'base64'))
         console.log(`✓ ${file} (${Math.round(r.width)}×${Math.round(r.height)})`)

@@ -472,21 +472,22 @@ export default function ForSchools() {
             Every number explains itself<span className="text-gold">.</span>
           </h2>
           <p className="mt-3 text-ink-soft">
-            Your dashboard opens with the answer, points to what needs your attention, and shows whether the work you
-            chose as a school is paying off. Shown here with an invented school.
+            School Admin has its own side of Wivoza, one switch away from your own coaching. Your dashboard opens with
+            your school&rsquo;s focus, points to what needs your attention, and shows whether the work you chose as a
+            school is paying off. Shown here with an invented school.
           </p>
         </div>
         <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr] lg:items-start">
           <figure className="overflow-hidden rounded-3xl border border-hairline bg-cream-card p-3 shadow-sm">
             <img
               src="/samples/admin-dashboard.png"
-              alt="The admin dashboard for an invented school: an At a glance summary, this period's adoption numbers, and three things that need attention."
+              alt="School Admin for an invented school: the sidebar with its grouped pages, and the Dashboard opening with the school's focus (its coaching priority, Academic Discussions, and a tracked growth area) and links to explore further."
               className="w-full rounded-2xl"
               loading="lazy"
             />
             <figcaption className="px-2 pb-1 pt-3 text-sm text-ink-soft">
-              <span className="font-semibold text-forest">Dashboard.</span> The four things a principal needs to know,
-              then what to look at this week.
+              <span className="font-semibold text-forest">Dashboard.</span> Your school&rsquo;s focus first, then
+              where to look further, with this week&rsquo;s numbers and what needs your attention below.
             </figcaption>
           </figure>
           <div className="flex flex-col gap-6">
