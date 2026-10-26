@@ -473,6 +473,11 @@ struct AudioTeachingMoves: Decodable {
     struct QuestionKind: Decodable {
         let timestampSec: Double
         let kind: String
+        /// Whether the question was also a deliberate pause to take stock.
+        /// Optional because array decoding is all-or-nothing: one row without
+        /// it would empty the whole list, which is how every live iPhone lost
+        /// its lessons in October.
+        let check: String?
     }
     struct Direction: Decodable {
         let quote: String

@@ -114,27 +114,33 @@ struct NextTimeItem: Identifiable, Equatable {
 /// same way: the finer read where it found the question, else the recall /
 /// higher-order split (higher-order without a finer kind reads as explain).
 enum QuestionMix: String, CaseIterable {
-    case recall, explain, reasoning
+    case recall, understand, apply, higherOrder
 
     var color: Color {
         switch self {
         case .recall: return Color(hex: 0xA89C84)
-        case .explain: return Color(hex: 0x4F9A72)
-        case .reasoning: return Color(hex: 0x173F2D)
+        case .understand: return Color(hex: 0x4F9A72)
+        case .apply: return Color(hex: 0x2F6F66)
+        case .higherOrder: return Color(hex: 0x173F2D)
         }
     }
 
+    /// Bloom's as the server stores it now, and the words it stored before,
+    /// which are still in every row read earlier. `kind` arrives as a plain
+    /// String precisely so a vocabulary the app has not seen cannot break
+    /// decoding — an unknown value falls to recall rather than throwing.
     static func classify(_ session: AudioSessionWithSegments) -> [(entry: AudioQuestionLogEntry, mix: QuestionMix)] {
         let kinds = session.teachingMoves?.questionKinds ?? []
         return (session.questionLog ?? []).map { q in
             let kind = kinds.first { abs($0.timestampSec - q.timestampSec) <= 4 }?.kind
             let mix: QuestionMix
             switch kind {
-            case "recall": mix = .recall
-            case "explain": mix = .explain
-            case "justify", "compare", "evaluate": mix = .reasoning
+            case "remember", "recall": mix = .recall
+            case "understand", "explain": mix = .understand
+            case "apply": mix = .apply
+            case "analyze", "evaluate", "create", "justify", "compare": mix = .higherOrder
             case .some: mix = .recall
-            case .none: mix = q.type == "higher_order" ? .explain : .recall
+            case .none: mix = q.type == "higher_order" ? .understand : .recall
             }
             return (q, mix)
         }
@@ -616,9 +622,9 @@ struct OverviewTab: View {
 
     @ViewBuilder private var keepDoingCard: some View {
         let questions = QuestionMix.classify(session)
-        let reasoning = questions.filter { $0.mix == .reasoning }.count
-        let explain = questions.filter { $0.mix == .explain }.count
-        if let q = questions.first(where: { $0.mix == .reasoning }) ?? questions.first(where: { $0.mix == .explain }) {
+        let reasoning = questions.filter { $0.mix == .higherOrder }.count
+        let explain = questions.filter { $0.mix == .understand }.count
+        if let q = questions.first(where: { $0.mix == .higherOrder }) ?? questions.first(where: { $0.mix == .understand }) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("KEEP DOING").font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(AppTheme.forest)
                 Text(reasoning > 0

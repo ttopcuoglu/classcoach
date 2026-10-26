@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Segment } from './audioAnalysis.ts'
-import { countMoves, parseTeachingMoves } from './teachingMoves.ts'
+import { countMoves, parseTeachingMoves, questionBucket } from './teachingMoves.ts'
 
 // The parser, not the model. What is pinned here is the handling a model's
 // reply must survive: quotes it invented, attributes it left off, the same
@@ -100,12 +100,53 @@ test('a direction that names none of them keeps an empty list, which is the find
 // --- attributes the model may get wrong or omit -----------------------------
 
 test('a missing question kind falls back to the least flattering reading', () => {
-  // Unlabelled must not become "evaluate". Recall is the floor.
+  // Unlabelled must not become "evaluate". Remember is the floor of Bloom's.
   const moves = parseTeachingMoves(
     reply('<question_kinds>\nSo why did wages rise? Because there were fewer workers left. @ 0:10\n</question_kinds>'),
     SEGMENTS,
   )
-  assert.equal(moves.questionKinds[0]?.kind, 'recall')
+  assert.equal(moves.questionKinds[0]?.kind, 'remember')
+})
+
+// --- the check tag ----------------------------------------------------------
+
+test('a question carries its check tag', () => {
+  const moves = parseTeachingMoves(
+    reply('<question_kinds>\nWho can build on what she just said? @ 2:10 | analyze | check: demonstrate\n</question_kinds>'),
+    SEGMENTS,
+  )
+  assert.equal(moves.questionKinds[0]?.kind, 'analyze')
+  assert.equal(moves.questionKinds[0]?.check, 'demonstrate')
+})
+
+test('a question with no check tag has none \u2014 absent, not a default', () => {
+  const moves = parseTeachingMoves(
+    reply('<question_kinds>\nWho can build on what she just said? @ 2:10 | analyze\n</question_kinds>'),
+    SEGMENTS,
+  )
+  assert.equal(moves.questionKinds[0]?.check, undefined)
+})
+
+test('the check vocabulary cannot answer for the kind, or the other way round', () => {
+  // Both attributes live on one line now. Matching the whole string would let
+  // "check: general" satisfy a search for a level, or a level satisfy a search
+  // for a check kind.
+  const moves = parseTeachingMoves(
+    reply('<question_kinds>\nSay more about that \u2014 what makes you think so? @ 1:40 | evaluate | check: probe\n</question_kinds>'),
+    SEGMENTS,
+  )
+  assert.equal(moves.questionKinds[0]?.kind, 'evaluate')
+  assert.equal(moves.questionKinds[0]?.check, 'probe')
+})
+
+test('a legacy kind still reads into a bucket', () => {
+  // Rows stored before Bloom's keep their old words; nothing rewrites them.
+  assert.equal(questionBucket('recall'), 'recall')
+  assert.equal(questionBucket('explain'), 'understand')
+  assert.equal(questionBucket('compare'), 'higher_order')
+  assert.equal(questionBucket('justify'), 'higher_order')
+  assert.equal(questionBucket('apply'), 'apply')
+  assert.equal(questionBucket('create'), 'higher_order')
 })
 
 test('a missing redirection clarity falls back to vague, not actionable', () => {

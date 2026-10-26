@@ -52,10 +52,49 @@ export type SelfAnswered = Quoted
 /// so the report can say what it set aside, and why.
 export type Housekeeping = Quoted
 
-/// What answering would have required of a student. Finer than the
-/// recall/higher-order split, and additive: it labels examples for the
-/// report to show, and never touches the counts classroomMoves produces.
-export type QuestionKind = 'recall' | 'explain' | 'justify' | 'compare' | 'evaluate'
+/// What answering would have required of a student, in Bloom's revised
+/// vocabulary. Finer than the recall/higher-order split, and additive: it
+/// labels examples for the report to show, and never touches the counts
+/// classroomMoves produces.
+///
+/// Bloom's rather than our own words because teachers are evaluated against
+/// frameworks that use it, so the report is recognisable and arguable in a
+/// PD conversation. Six levels are stored; the report shows four, grouping
+/// the top three, because a real lesson carries too few questions for six
+/// cells to mean anything.
+export type QuestionKind = 'remember' | 'understand' | 'apply' | 'analyze' | 'evaluate' | 'create'
+
+/// The vocabulary used before Bloom's, still in every row read before this
+/// shipped. Mapped rather than migrated: a stored read is evidence of what
+/// the model said at the time, and rewriting it would lose that.
+const LEGACY_KINDS: Record<string, QuestionKind> = {
+  recall: 'remember',
+  explain: 'understand',
+  justify: 'evaluate',
+  compare: 'analyze',
+}
+
+/// Four display buckets over six stored levels.
+export type QuestionBucket = 'recall' | 'understand' | 'apply' | 'higher_order'
+
+export function questionBucket(kind: string): QuestionBucket {
+  const k = LEGACY_KINDS[kind] ?? (kind as QuestionKind)
+  if (k === 'remember') return 'recall'
+  if (k === 'understand') return 'understand'
+  if (k === 'apply') return 'apply'
+  return 'higher_order'
+}
+
+/// Whether a question also worked as a check — a property of the question,
+/// not a second listing of it. Absent means it was not one.
+///
+/// This exists because the prompt used to say a probing question could be
+/// "BOTH a question and a check", eight lines before telling the model a
+/// moment belongs to ONE kind. The model obeyed the second rule, so every
+/// probing question was filed as a question and the check count was left
+/// holding only the rituals and the vague "any questions?" — the weakest
+/// checks there are, because nothing else could claim them.
+export type CheckTag = 'general' | 'demonstrate' | 'probe'
 
 /// The four things a direction can carry. A direction naming all four leaves
 /// nothing to guess at; one naming none is "off you go".
@@ -74,7 +113,7 @@ export type TeachingMoves = {
   selfAnswered: SelfAnswered[]
   /// Absent on lessons read before it existed.
   housekeeping?: Housekeeping[]
-  questionKinds: (Quoted & { kind: QuestionKind })[]
+  questionKinds: (Quoted & { kind: QuestionKind; check?: CheckTag })[]
   directions: (Quoted & { parts: DirectionPart[] })[]
   explanations: (Quoted & { kind: ExplanationKind })[]
   revisionPrompts: Quoted[]
@@ -105,12 +144,25 @@ QUESTION KINDS — for questions the teacher LEFT with students, what answering 
 - an imperative — "circle one of the reasons", "write down three causes" — that is a DIRECTION;
 - a request to do a task, however politely phrased — "does anybody want to read this out?" — also a DIRECTION, and an INVITATION if it opens the floor;
 - a discourse marker the teacher talks straight through — "right?", "okay?", "you know?".
-For the real ones, what answering would have required:
-- recall — a fact, name, number, definition, or step the class already has.
-- explain — saying how or why something works, in their own words.
-- justify — giving a reason for a claim or a choice, backing it with evidence.
-- compare — setting two things against each other.
-- evaluate — judging, weighing a trade-off, or deciding which is better.
+For the real ones, what answering would have required, in Bloom's revised terms. Judge what THIS class had to do at THIS moment, not the wording: "what is liquefaction?" is remember if they were told it, understand if they are working it out now.
+- remember — retrieving a fact, name, number, definition, or step they already have.
+- understand — putting meaning into their own words: explaining, summarising, interpreting.
+- apply — using what they have learned on a new case or example.
+- analyze — breaking something into parts, comparing, or tracing how parts relate.
+- evaluate — judging, weighing a trade-off, defending a claim, deciding which is better.
+- create — making something new from what they have.
+
+Then, on the same line, whether the question was also a CHECK. A check is a deliberate PAUSE TO TAKE STOCK: the teacher stops moving the lesson forward to find out where the class is. Be strict — most lessons have between none and three, and a lesson where most questions are tagged is a lesson read wrongly.
+
+These are NOT checks, however informative the answer would be:
+- a question naming one student — "Who are the monsters that lay asleep, Naomi?" is addressed to Naomi, whatever the room hears;
+- a question that carries the lesson forward — the next step in the thing being taught, the next line of the text, the next part of the argument. Teaching by question is still teaching;
+- a question thrown out mid-explanation and answered by the teacher, or talked straight past.
+
+Tag it only when the teacher stopped to find out, and say which kind:
+- general — asked the room to report its own state: "any questions so far?", "is that clear?". Reveals nothing by itself, and that is worth seeing.
+- demonstrate — stopped and asked the room to show what they know before going on: "before we move on, what's the next step?".
+- probe — pushed on an answer already given, for reasoning or evidence: "what makes you say that?", "how do you know?".
 
 DIRECTIONS — telling students what to do with the work. ONE STRETCH OF INSTRUCTION IS ONE DIRECTION, however many sentences it runs to: "I'll give you five minutes. Read the passage, then answer the two questions, and hand the sheet in" is a single direction, listed once from the sentence that starts it. Judge the whole stretch together — splitting it would report a teacher as naming only the time when they also named the task.
 
@@ -139,7 +191,7 @@ Rules that matter more than finding things:
 - Ignore anything a student said. You are reading the teacher only.
 - Do not count, rank, or draw a conclusion. List the moments; something else decides what they mean.
 
-Write nothing outside these tags. One per line in the given shape, or NONE:
+Write nothing outside these tags. One per line in the given shape, or NONE. The "| check:" part of a question line is optional — leave it off entirely when the question was not a check:
 <self_answered>
 sentence @ m:ss
 </self_answered>
@@ -147,7 +199,7 @@ sentence @ m:ss
 sentence @ m:ss
 </housekeeping>
 <question_kinds>
-sentence @ m:ss | recall or explain or justify or compare or evaluate
+sentence @ m:ss | remember or understand or apply or analyze or evaluate or create | check: general or demonstrate or probe
 </question_kinds>
 <directions>
 sentence @ m:ss | comma-separated from task, steps, time, product — or none
@@ -209,6 +261,26 @@ function pick<T extends string>(attr: string, allowed: readonly T[], fallback: T
   return allowed.find((a) => attr.includes(a)) ?? fallback
 }
 
+/// A question line now carries two attributes, so matching against the whole
+/// string would let one vocabulary answer for the other. Scoped by pipe
+/// instead: the check part is the one that says so.
+function attrParts(attr: string): string[] {
+  return attr.split('|').map((part) => part.trim()).filter(Boolean)
+}
+
+function kindPart(attr: string): string {
+  return attrParts(attr).find((part) => !part.startsWith('check')) ?? ''
+}
+
+/// Absent is the common case and the right default: most questions are not
+/// checks, and a question wrongly counted as one tells a teacher they found
+/// out where the class was when they did not.
+function checkPart(attr: string): CheckTag | undefined {
+  const part = attrParts(attr).find((x) => x.startsWith('check'))
+  if (!part) return undefined
+  return (['general', 'demonstrate', 'probe'] as const).find((c) => part.includes(c))
+}
+
 export function parseTeachingMoves(text: string, segments: Segment[]): TeachingMoves {
   const flat = flattenTeacherSpeech(segments)
   const read = (tag: string) => readLines(extractTag(text, tag), flat)
@@ -217,11 +289,20 @@ export function parseTeachingMoves(text: string, segments: Segment[]): TeachingM
   return {
     selfAnswered: plain('self_answered'),
     housekeeping: plain('housekeeping'),
-    questionKinds: read('question_kinds').map((q) => ({
-      quote: q.quote,
-      timestampSec: q.timestampSec,
-      kind: pick(q.attr, ['explain', 'justify', 'compare', 'evaluate', 'recall'] as const, 'recall'),
-    })),
+    questionKinds: read('question_kinds').map((q) => {
+      const check = checkPart(q.attr)
+      return {
+        quote: q.quote,
+        timestampSec: q.timestampSec,
+        // Unlabelled falls to the floor of the scale, never the flattering end.
+        kind: pick(
+          kindPart(q.attr),
+          ['understand', 'apply', 'analyze', 'evaluate', 'create', 'remember'] as const,
+          'remember',
+        ),
+        ...(check ? { check } : {}),
+      }
+    }),
     directions: read('directions').map((d) => ({
       quote: d.quote,
       timestampSec: d.timestampSec,

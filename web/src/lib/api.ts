@@ -908,7 +908,18 @@ export type AudioStudentTalkFocus = {
 /// voice the microphone actually has. The same judgments about students were
 /// dropped because it does not.
 export type AudioMoveQuote = { quote: string; timestampSec: number }
-export type AudioQuestionKind = 'recall' | 'explain' | 'justify' | 'compare' | 'evaluate'
+/// Bloom's revised. Rows read before this carry the earlier vocabulary
+/// ('recall' | 'explain' | 'justify' | 'compare'), which is mapped for
+/// display rather than migrated — a stored read is evidence of what the
+/// model said at the time.
+export type AudioQuestionKind =
+  | 'remember' | 'understand' | 'apply' | 'analyze' | 'evaluate' | 'create'
+  | 'recall' | 'explain' | 'justify' | 'compare'
+
+/// Whether the question was also a deliberate pause to take stock, and what
+/// it asked the room for. Absent means it was not one — or, on a lesson the
+/// finer read never covered, that nothing was judged.
+export type AudioCheckTag = 'general' | 'demonstrate' | 'probe'
 export type AudioDirectionPart = 'task' | 'steps' | 'time' | 'product'
 export type AudioExplanationKind = 'example' | 'analogy' | 'vocabulary' | 'modeling'
 export type AudioConnectionKind = 'prior' | 'purpose' | 'closing'
@@ -920,7 +931,7 @@ export type AudioTeachingMoves = {
   /// Questions about logistics, not the learning ("where is it?"). Counted
   /// nowhere as questions; absent on lessons read before it existed.
   housekeeping?: AudioMoveQuote[]
-  questionKinds?: (AudioMoveQuote & { kind: AudioQuestionKind })[]
+  questionKinds?: (AudioMoveQuote & { kind: AudioQuestionKind; check?: AudioCheckTag })[]
   /// `parts` is what the direction actually named. An empty list is the
   /// finding, not missing data: that direction named none of the four.
   directions?: (AudioMoveQuote & { parts: AudioDirectionPart[] })[]

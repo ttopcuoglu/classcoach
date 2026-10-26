@@ -2807,13 +2807,13 @@ function SummaryTab({
   ]
 
   // Keep doing: a reasoning question, else one of the talk moves.
-  const reasoningQ = questions.find((q) => q.mix === 'reasoning') ?? questions.find((q) => q.mix === 'explain')
+  const reasoningQ = questions.find((q) => q.mix === 'higher_order') ?? questions.find((q) => q.mix === 'understand')
   const keep: KeepLine | null = reasoningQ
     ? {
         text:
-          mixCount('reasoning') > 0
-            ? `Your “why” questions. ${mixCount('reasoning')} asked students to justify, compare or judge, not just answer.`
-            : `${mixCount('explain')} of your questions asked students to explain why or how.`,
+          mixCount('higher_order') > 0
+            ? `Your “why” questions. ${mixCount('higher_order')} asked students to analyse, judge with evidence, or make something new.`
+            : `${mixCount('understand')} of your questions asked students to put an idea in their own words.`,
         quote: reasoningQ.quote,
         timestampSec: reasoningQ.timestampSec,
       }
@@ -5886,13 +5886,23 @@ function withoutAddressedNames(text: string): string {
   return text.replace(ADDRESSED, (whole, lead: string, word: string) => (NOT_NAMES.has(word.toLowerCase()) ? whole : `${lead}[name]`))
 }
 
+/// Bloom's revised, grouped for display. Six levels are stored; four are
+/// shown, because a real lesson carries 8-20 questions and six cells over
+/// that many items is noise rather than a distribution.
 const MIX = {
-  recall: { label: 'Recall', color: '#A89C84', desc: 'One right answer, retrieved from memory.' },
-  explain: { label: 'Explain', color: '#4F9A72', desc: 'Students put an idea in their own words — why or how.' },
-  reasoning: { label: 'Reasoning', color: '#173F2D', desc: 'Asked students to justify, compare or judge.' },
+  recall: { label: 'Recall', color: '#A89C84', desc: 'Retrieved from memory — a fact, name or step they already had.' },
+  understand: { label: 'Understand', color: '#4F9A72', desc: 'Put meaning into their own words — explain, summarise, interpret.' },
+  apply: { label: 'Apply', color: '#2F6F66', desc: 'Used what they had learned on a new case.' },
+  higher_order: { label: 'Higher-order', color: '#173F2D', desc: 'Analysed, judged with evidence, or made something new.' },
 } as const
 type MixKey = keyof typeof MIX
-const KIND_TO_MIX: Record<string, MixKey> = { recall: 'recall', explain: 'explain', justify: 'reasoning', compare: 'reasoning', evaluate: 'reasoning' }
+/// Both vocabularies: Bloom's as stored now, and the words used before it,
+/// which are still in every row read earlier. Nothing rewrites those rows.
+const KIND_TO_MIX: Record<string, MixKey> = {
+  remember: 'recall', understand: 'understand', apply: 'apply',
+  analyze: 'higher_order', evaluate: 'higher_order', create: 'higher_order',
+  recall: 'recall', explain: 'understand', justify: 'higher_order', compare: 'higher_order',
+}
 
 /// Each counted question in one of three kinds: the finer read where it found
 /// the question, else the recall / higher-order split (higher-order without a
@@ -5900,11 +5910,19 @@ const KIND_TO_MIX: Record<string, MixKey> = { recall: 'recall', explain: 'explai
 /// My Growth so the three never show different numbers.
 function classifyQuestions(session: Pick<AudioSession, 'questionLog' | 'teachingMoves'>) {
   const kinds = session.teachingMoves?.questionKinds ?? []
-  const kindAt = (sec: number) => kinds.find((k) => Math.abs(k.timestampSec - sec) <= 4)?.kind
+  const kindAt = (sec: number) => kinds.find((k) => Math.abs(k.timestampSec - sec) <= 4)
   return (session.questionLog ?? []).map((q) => {
-    const kind = kindAt(q.timestampSec)
-    const mix: MixKey = kind ? (KIND_TO_MIX[kind] ?? 'recall') : q.type === 'higher_order' ? 'explain' : 'recall'
-    return { quote: withoutAddressedNames(q.text), timestampSec: q.timestampSec, mix, byName: addressedName(q.text) }
+    const kind = kindAt(q.timestampSec)?.kind
+    const mix: MixKey = kind ? (KIND_TO_MIX[kind] ?? 'recall') : q.type === 'higher_order' ? 'understand' : 'recall'
+    return {
+      quote: withoutAddressedNames(q.text),
+      timestampSec: q.timestampSec,
+      mix,
+      byName: addressedName(q.text),
+      // Present only where the finer read ran AND judged it a check. Absent
+      // is not "no" when the read never happened — see `read` below.
+      check: kindAt(q.timestampSec)?.check,
+    }
   })
 }
 
@@ -5943,13 +5961,13 @@ function QuestioningCheckingTab({
   const [showAlsoHeardState, setShowAlsoHeard] = useState(false)
   const showAlsoHeard = showAlsoHeardState || usePrintAll()
 
-  const reasoningFirst = questions.find((q) => q.mix === 'reasoning') ?? questions.find((q) => q.mix === 'explain')
+  const reasoningFirst = questions.find((q) => q.mix === 'higher_order') ?? questions.find((q) => q.mix === 'understand')
   const keep: KeepLine | null = reasoningFirst
     ? {
         text:
-          count('reasoning') > 0
-            ? `Your “why” questions. ${count('reasoning')} asked students to justify, compare or judge, not just answer.`
-            : `${count('explain')} of your questions asked students to explain why or how.`,
+          count('higher_order') > 0
+            ? `Your “why” questions. ${count('higher_order')} asked students to analyse, judge with evidence, or make something new.`
+            : `${count('understand')} of your questions asked students to put an idea in their own words.`,
         quote: reasoningFirst.quote,
         timestampSec: reasoningFirst.timestampSec,
       }
@@ -6023,6 +6041,13 @@ function QuestioningCheckingTab({
   )
 }
 
+/// What a question-that-was-also-a-check asked the room for.
+const CHECK_TAG: Record<string, string> = {
+  general: 'asked the room to say if they were with you',
+  demonstrate: 'stopped and asked the room to show what they knew',
+  probe: 'pushed on an answer for reasoning',
+}
+
 const CHECK_WHO: Record<string, string> = {
   everyone: 'Asked everyone',
   few: 'A few answered',
@@ -6082,9 +6107,9 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
     quote: withoutAddressedNames(f.text),
   }))
   const count = (k: MixKey) => questions.filter((q) => q.mix === k).length
-  const beyond = count('explain') + count('reasoning')
+  const beyond = count('understand') + count('apply') + count('higher_order')
   const [pick, setPick] = useState<QPick>(
-    count('reasoning') > 0 ? 'reasoning' : count('explain') > 0 ? 'explain' : questions.length > 0 ? 'recall' : selfAnswered.length > 0 ? 'self' : 'checks',
+    count('higher_order') > 0 ? 'higher_order' : count('understand') > 0 ? 'understand' : questions.length > 0 ? 'recall' : selfAnswered.length > 0 ? 'self' : 'checks',
   )
   const [hot, setHot] = useState<number | null>(null)
   if (questions.length === 0 && checks.length === 0 && selfAnswered.length === 0 && followUps.length === 0) {
@@ -6102,21 +6127,38 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
   const everyone = checks.filter((c) => c.loop?.who === 'everyone').length
   const askedIf = checks.filter((c) => c.loop?.who === 'asked_if_understood').length
   const acted = checks.filter((c) => c.loop?.acted).length
+  // A question that was also a deliberate pause to take stock. It is ONE
+  // moment carrying two labels, so it keeps its question dot on the timeline
+  // and is never drawn twice — it simply also counts here.
+  const taggedChecks = questions.filter((q) => q.check)
+  const checkCount = checks.length + taggedChecks.length
 
   // Every mark's id says what it is: questions from 0, checks from 1000,
   // answered yourself from 2000, follow-ups from 3000.
   const kindOf = (id: number): QPick => (id >= 3000 ? 'follow' : id >= 2000 ? 'self' : id >= 1000 ? 'checks' : questions[id].mix)
   const momentsFor = (k: QPick): QMoment[] =>
     k === 'checks'
-      ? checks.map((c, i) => ({
-          id: 1000 + i,
-          t: c.timestampSec,
-          quote: withoutAddressedNames(c.text),
-          tag: [c.loop ? CHECK_WHO[c.loop.who] : 'Check for understanding', c.loop?.acted ? CHECK_ACTED[c.loop.acted.how] : null]
-            .filter(Boolean)
-            .join(' · '),
-          then: c.loop?.acted?.text ? withoutAddressedNames(c.loop.acted.text) : null,
-        }))
+      ? [
+          ...checks.map((c, i) => ({
+            id: 1000 + i,
+            t: c.timestampSec,
+            quote: withoutAddressedNames(c.text),
+            tag: [c.loop ? CHECK_WHO[c.loop.who] : 'Check for understanding', c.loop?.acted ? CHECK_ACTED[c.loop.acted.how] : null]
+              .filter(Boolean)
+              .join(' · '),
+            then: c.loop?.acted?.text ? withoutAddressedNames(c.loop.acted.text) : null,
+          })),
+          ...taggedChecks.map((q) => ({
+            id: questions.indexOf(q),
+            t: q.timestampSec,
+            quote: q.quote,
+            // Both labels on one line: what it asked of students, and what it
+            // told you. That is the whole point of tagging rather than listing
+            // the sentence twice.
+            tag: `${MIX[q.mix].label} · ${CHECK_TAG[q.check!]}`,
+            then: null,
+          })),
+        ].sort((a, b) => a.t - b.t)
       : k === 'self'
         ? selfAnswered.map((q, i) => ({ id: 2000 + i, t: q.timestampSec, quote: q.quote }))
         : k === 'follow'
@@ -6131,17 +6173,21 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
     {
       key: 'checks',
       label: 'Checks for understanding',
-      n: checks.length,
+      n: checkCount,
       swatch: <i className="inline-block h-3 w-3 rounded-full border-2 border-[#B4593A]" />,
     },
   ]
   const ring = (who: string | undefined) => (who === 'asked_if_understood' ? 'border-dashed' : '')
   // A white edge keeps dots that fall close together readable as separate.
   const qDot = (color: string) => <i className="block h-3.5 w-3.5 rounded-full ring-2 ring-cream-card" style={{ background: color }} />
+  /// The same dot with the check ring around it — one mark, both labels.
+  const qCheckDot = (color: string) => (
+    <i className="block h-3.5 w-3.5 rounded-full ring-2 ring-[#B4593A]" style={{ background: color }} />
+  )
   const printAll = usePrintAll()
   const titleFor = (k: QPick, n: number) =>
     k === 'checks'
-      ? `Checks for understanding · ${checks.length}`
+      ? `Checks for understanding · ${checkCount}`
       : k === 'self' || k === 'follow'
         ? `${EXTRA_KIND[k].label} · ${n}`
         : `${MIX[k].label} · ${n} of ${questions.length}`
@@ -6209,7 +6255,11 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
           {
             label: 'Questions',
             items: [
-              ...questions.map((q, i) => ({ i, t: q.timestampSec, node: qDot(MIX[q.mix].color) })),
+              ...questions.map((q, i) => ({
+                i,
+                t: q.timestampSec,
+                node: q.check ? qCheckDot(MIX[q.mix].color) : qDot(MIX[q.mix].color),
+              })),
               ...selfAnswered.map((q, i) => ({ i: 2000 + i, t: q.timestampSec, node: qDot(EXTRA_KIND.self.color) })),
               ...followUps.map((q, i) => ({ i: 3000 + i, t: q.timestampSec, node: qDot(EXTRA_KIND.follow.color) })),
             ],

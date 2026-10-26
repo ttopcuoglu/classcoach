@@ -923,11 +923,14 @@ struct QuestionsSection: View {
     @State private var hot: Int?
     @State private var showAlsoHeard = false
 
-    private static let mixLabel: [QuestionMix: String] = [.recall: "Recall", .explain: "Explain", .reasoning: "Reasoning"]
+    private static let mixLabel: [QuestionMix: String] = [
+        .recall: "Recall", .understand: "Understand", .apply: "Apply", .higherOrder: "Higher-order",
+    ]
     private static let mixDesc: [QuestionMix: String] = [
-        .recall: "One right answer, retrieved from memory.",
-        .explain: "Students put an idea in their own words \u{2014} why or how.",
-        .reasoning: "Asked students to justify, compare or judge.",
+        .recall: "Retrieved from memory \u{2014} a fact, name or step they already had.",
+        .understand: "Put meaning into their own words \u{2014} explain, summarise, interpret.",
+        .apply: "Used what they had learned on a new case.",
+        .higherOrder: "Analysed, judged with evidence, or made something new.",
     ]
     /// Two kinds beside the three a question can ask for, in their own colours.
     private static let selfColor = Color(hex: 0xC96A45)
@@ -943,11 +946,11 @@ struct QuestionsSection: View {
         let heard = session.metricsDetail?["answersHeardCount"].map { Int($0) }
         let followed = session.metricsDetail?["answersFollowedUpCount"].map { Int($0) }
         let showRate = (heard ?? 0) >= 3 && followed != nil
-        let first = questions.first { $0.mix == .reasoning } ?? questions.first { $0.mix == .explain }
+        let first = questions.first { $0.mix == .higherOrder } ?? questions.first { $0.mix == .understand }
         let keep = first.map {
-            KeepLine(text: count(.reasoning) > 0
-                     ? "Your \u{201C}why\u{201D} questions. \(count(.reasoning)) asked students to justify, compare or judge, not just answer."
-                     : "\(count(.explain)) of your questions asked students to explain why or how.",
+            KeepLine(text: count(.higherOrder) > 0
+                     ? "Your \u{201C}why\u{201D} questions. \(count(.higherOrder)) asked students to analyse, judge with evidence, or make something new."
+                     : "\(count(.understand)) of your questions asked students to put an idea in their own words.",
                      quote: $0.entry.text, timestampSec: $0.entry.timestampSec)
         }
         // The follow-up rate lives only in this goal; the follow-ups
@@ -1005,7 +1008,7 @@ struct QuestionsSection: View {
         let selfAnswered = tawt.selfAnswered
         let checks = qcChecks
         let count = { (k: QuestionMix) in questions.filter { $0.mix == k }.count }
-        let current: QPick = pick ?? (count(.reasoning) > 0 ? .mix(.reasoning) : count(.explain) > 0 ? .mix(.explain)
+        let current: QPick = pick ?? (count(.higherOrder) > 0 ? .mix(.higherOrder) : count(.understand) > 0 ? .mix(.understand)
             : !questions.isEmpty ? .mix(.recall) : !selfAnswered.isEmpty ? .selfAnswered : .checks)
         VStack(alignment: .leading, spacing: 12) {
             PartHeading(title: "Your questions and checks",
@@ -1025,7 +1028,7 @@ struct QuestionsSection: View {
     }
 
     private func qcFinding(_ questions: [QItem], _ selfCount: Int, _ checks: [AudioCfuEntry], count: (QuestionMix) -> Int) -> String {
-        let beyond = count(.explain) + count(.reasoning)
+        let beyond = count(.understand) + count(.apply) + count(.higherOrder)
         let everyone = checks.filter { $0.loop?.who == "everyone" }.count
         var q: String
         if questions.isEmpty { q = "No questions were left with students. " }
