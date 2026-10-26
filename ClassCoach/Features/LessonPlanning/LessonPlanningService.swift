@@ -188,6 +188,17 @@ enum LessonPlanningService {
         try await APIClient.shared.request("/api/lesson-plans/\(id)/undo-adaptation", method: "POST")
     }
 
+    /// A school-focus idea for a lesson where the focus was considered and
+    /// left out — the teacher asked anyway. Saved, so it is there next time.
+    static func suggestSchoolFocusIdea(id: String) async throws -> LessonPlan {
+        try await APIClient.shared.request("/api/lesson-plans/\(id)/school-focus-idea/suggest", method: "POST")
+    }
+
+    /// "Not for this class": the idea is put away for this lesson.
+    static func dismissSchoolFocusIdea(id: String) async throws -> LessonPlan {
+        try await APIClient.shared.request("/api/lesson-plans/\(id)/school-focus-idea/dismiss", method: "POST")
+    }
+
     private struct ShareResponse: Decodable { let shareToken: String }
 
     /// A read-only link to the lesson. The same token every time once made.

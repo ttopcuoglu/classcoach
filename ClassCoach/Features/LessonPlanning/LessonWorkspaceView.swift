@@ -962,6 +962,131 @@ private struct DeliveryCoachingCard: View {
     }
 }
 
+// MARK: - School focus
+
+/// The one idea connected to a school focus the teacher chose
+/// (docs/coaching-priorities.md). On screen only: it is not a section, so it
+/// is never in Copy or a download, and the label goes nowhere the teacher
+/// didn't put it. Mirrors `SchoolFocusIdeaBox` in LessonWorkspace.tsx.
+private struct SchoolFocusIdeaBox: View {
+    let plan: LessonPlan
+    @ObservedObject var model: LessonWorkspaceModel
+    let apply: (LessonPlan) -> Void
+    @State private var hidden = false
+    @State private var dismissing = false
+    @State private var suggesting = false
+    @State private var suggestError: String?
+
+    var body: some View {
+        if let idea = plan.schoolFocusIdea, !idea.name.isEmpty, !idea.dismissed, !idea.added, !hidden, plan.pendingAdaptation == nil {
+            let text = idea.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if idea.skipped || text.isEmpty {
+                skippedLine(idea)
+            } else {
+                ideaCard(idea, text: text)
+            }
+        }
+    }
+
+    /// Considered and left out: one quiet line, so a teacher who turned the
+    /// focus on can see it was looked at, and can ask anyway.
+    private func skippedLine(_ idea: LessonSchoolFocusIdea) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            (Text("\(idea.name):").fontWeight(.semibold).foregroundColor(AppTheme.forest)
+                + Text(" no idea for this lesson. ")
+                + Text(idea.reason.map { "It looked like a time your school said it may not fit: “\($0)”" } ?? "It didn't look like a fit."))
+                .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                Task { await suggestAnyway() }
+            } label: {
+                Text(suggesting ? "Thinking…" : "Suggest one anyway")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                    .padding(.horizontal, 16).frame(minHeight: 40)
+                    .background(AppTheme.card, in: Capsule())
+                    .overlay(Capsule().strokeBorder(AppTheme.hairline))
+            }
+            .buttonStyle(.plain)
+            .disabled(suggesting)
+            if let suggestError {
+                Text(suggestError).font(.caption).foregroundStyle(AppTheme.terracotta600)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.gold, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+    }
+
+    private func ideaCard(_ idea: LessonSchoolFocusIdea, text: String) -> some View {
+        let adding = model.busy == .schoolFocus
+        return VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("One option here").font(.headline).foregroundStyle(AppTheme.forest)
+                Text("Connected to your selected school focus · \(idea.name)")
+                    .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
+                    .padding(.horizontal, 10).padding(.vertical, 3)
+                    .background(AppTheme.goldTint, in: Capsule())
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text(text).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            HStack(spacing: 8) {
+                Button {
+                    Task { await model.adapt(plan, .schoolFocus, apply: apply) }
+                } label: {
+                    Text(adding ? "Adding…" : "Add to lesson")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.cream)
+                        .padding(.horizontal, 16).frame(minHeight: 44)
+                        .background(AppTheme.forest, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(adding || dismissing || model.busy != nil)
+                Button {
+                    Task { await notForThisClass() }
+                } label: {
+                    Text("Not for this class")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                        .padding(.horizontal, 16).frame(minHeight: 44)
+                        .background(AppTheme.card, in: Capsule())
+                        .overlay(Capsule().strokeBorder(AppTheme.hairline))
+                }
+                .buttonStyle(.plain)
+                .disabled(adding || dismissing)
+            }
+            .opacity(adding || dismissing ? 0.7 : 1)
+            Text("Only you see this. It isn't part of the lesson unless you add it.")
+                .font(.caption).foregroundStyle(AppTheme.textSecondary)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.goldTint.opacity(0.4), in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.gold, lineWidth: 1.5))
+    }
+
+    private func notForThisClass() async {
+        dismissing = true
+        do {
+            apply(try await LessonPlanningService.dismissSchoolFocusIdea(id: plan.id))
+            hidden = true
+        } catch {
+            dismissing = false
+        }
+    }
+
+    /// The server saves the suggestion too, so it is there next time.
+    private func suggestAnyway() async {
+        suggesting = true
+        suggestError = nil
+        do {
+            apply(try await LessonPlanningService.suggestSchoolFocusIdea(id: plan.id))
+        } catch {
+            suggestError = error.localizedDescription
+        }
+        suggesting = false
+    }
+}
+
 // MARK: - Preview before apply
 
 private struct AdaptationPreview: View {
@@ -1183,6 +1308,10 @@ struct LessonWorkspaceView<Extras: View>: View {
                         DocSectionList(sections: sections)
                             .id("\(plan.id):\(plan.versionHistory?.count ?? 0)")
                     }
+                }
+                if canAdapt && isFullLesson {
+                    SchoolFocusIdeaBox(plan: plan, model: model, apply: apply)
+                        .id(plan.id)
                 }
                 Text(isImprove
                      ? "Coaching on the plan you brought. Your learning goal and the parts that work stay as they are."

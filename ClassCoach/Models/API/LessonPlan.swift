@@ -83,6 +83,13 @@ struct LessonPlan: Codable, Identifiable {
     /// On a lesson opened from a day of a week: that week.
     let weekPlanId: String?
 
+    // MARK: Coaching Priorities
+
+    /// The one idea connected to a school focus the teacher turned on, or a
+    /// record that the focus was considered and left out. Never throws — see
+    /// `LessonSchoolFocusIdea` — so an odd shape hides the idea, not the lesson.
+    let schoolFocusIdea: LessonSchoolFocusIdea?
+
     var isWeek: Bool { planKind == "week" }
 
     /// A lesson a teacher would hand in on their own form: one Planning Coach
@@ -175,6 +182,9 @@ enum LessonAdaptation: String, CaseIterable, Identifiable {
     case challenge
     case participation
     case time
+    /// No Make It Yours button: it is "Add to lesson" on the school-focus
+    /// idea, and only runs from there.
+    case schoolFocus = "school_focus"
 
     var id: String { rawValue }
 
@@ -184,6 +194,7 @@ enum LessonAdaptation: String, CaseIterable, Identifiable {
         case .challenge: return "Add Challenge"
         case .participation: return "Increase Participation"
         case .time: return "Adjust Time"
+        case .schoolFocus: return "Add the school focus idea"
         }
     }
 
@@ -194,7 +205,33 @@ enum LessonAdaptation: String, CaseIterable, Identifiable {
         case .challenge: return "Deeper reasoning, transfer, application"
         case .participation: return "More students contributing and showing their thinking"
         case .time: return "Rebuilt sequence and timings to fit the length you pick"
+        case .schoolFocus: return "The idea connected to your school focus, worked into the lesson"
         }
+    }
+}
+
+/// Mirrors `SchoolFocusIdea` in web/src/lib/api.ts: the idea for this lesson,
+/// or, with `skipped`, a record that the focus was considered and left out —
+/// `reason` is the school's own not-fit line it matched, in its own words.
+/// Decoding never throws; without a name it is treated as no idea at all.
+struct LessonSchoolFocusIdea: Codable {
+    let priorityId: String?
+    let name: String
+    let text: String?
+    let skipped: Bool
+    let reason: String?
+    let dismissed: Bool
+    let added: Bool
+
+    init(from decoder: Decoder) throws {
+        let c = try? decoder.container(keyedBy: CodingKeys.self)
+        priorityId = c.flatMap { try? $0.decodeIfPresent(String.self, forKey: .priorityId) } ?? nil
+        name = c.flatMap { try? $0.decodeIfPresent(String.self, forKey: .name) } ?? ""
+        text = c.flatMap { try? $0.decodeIfPresent(String.self, forKey: .text) } ?? nil
+        skipped = c.flatMap { try? $0.decodeIfPresent(Bool.self, forKey: .skipped) } ?? false
+        reason = c.flatMap { try? $0.decodeIfPresent(String.self, forKey: .reason) } ?? nil
+        dismissed = c.flatMap { try? $0.decodeIfPresent(Bool.self, forKey: .dismissed) } ?? false
+        added = c.flatMap { try? $0.decodeIfPresent(Bool.self, forKey: .added) } ?? false
     }
 }
 
