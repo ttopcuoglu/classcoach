@@ -168,7 +168,15 @@ enum ThinkingPause {
         return abs(aSec - bSec) <= 8 && !na.isEmpty && !nb.isEmpty && (na.hasPrefix(String(nb.prefix(20))) || nb.hasPrefix(String(na.prefix(20))))
     }
 
-    static func pause(after t: Double, quote: String, in ordered: [TranscriptSegment]) -> Double? {
+    /// `answered`: a student was heard before the teacher spoke again.
+    /// `keptTalking`: the teacher talked straight past the question.
+    struct Pause {
+        let sec: Double
+        let answered: Bool
+        var keptTalking = false
+    }
+
+    static func pause(after t: Double, quote: String, in ordered: [TranscriptSegment]) -> Pause? {
         guard let idx = ordered.firstIndex(where: { $0.endSec > t }), ordered[idx].speakerLabel == "Teacher" else { return nil }
         var end = idx
         while end + 1 < ordered.count, ordered[end + 1].speakerLabel == "Teacher", ordered[end + 1].startSec - ordered[end].endSec <= maxJoinGapSec {
@@ -183,28 +191,55 @@ enum ThinkingPause {
             var k = idx
             var upTo = words(ordered[idx].text).count
             while upTo < at && k < end { k += 1; upTo += words(ordered[k].text).count }
-            if upTo - at > maxWordsAfter || k == end { return 0 }
+            if upTo - at > maxWordsAfter || k == end { return Pause(sec: 0, answered: false, keptTalking: true) }
             let inTurn = ordered[k + 1].startSec - ordered[k].endSec
-            return inTurn < minPauseInTurnSec ? 0 : (inTurn * 10).rounded() / 10
+            if inTurn < minPauseInTurnSec { return Pause(sec: 0, answered: false, keptTalking: true) }
+            return Pause(sec: (inTurn * 10).rounded() / 10, answered: false)
         }
-        guard let next = ordered[(end + 1)...].first(where: { $0.speakerLabel == "Teacher" }) else { return nil }
+        let rest = ordered[(end + 1)...]
+        guard let next = rest.first(where: { $0.speakerLabel == "Teacher" }) else { return nil }
         let gap = next.startSec - ordered[end].endSec
         guard gap >= 0, gap <= maxPauseSec else { return nil }
-        return (gap * 10).rounded() / 10
+        let answered = rest.contains { $0.speakerLabel != "Teacher" && $0.startSec < next.startSec }
+        return Pause(sec: (gap * 10).rounded() / 10, answered: answered)
+    }
+
+    typealias Question = (entry: AudioQuestionLogEntry, mix: QuestionMix)
+
+    /// Worked out once for the Summary tile and the Questioning & Checking
+    /// card so the two never disagree — mirrors `tawtOf`: the questions left
+    /// with students (one you answered yourself is not one), the thinking ones
+    /// among them, each one's pause, and their average.
+    struct Detail {
+        let selfAnswered: [AudioTeachingMoves.Quoted]
+        let questions: [Question]
+        let thinking: [Question]
+        let pauses: [Pause?]
+        var measured: Int { pauses.compactMap { $0 }.count }
+        var average: Double? {
+            let secs = pauses.compactMap { $0?.sec }
+            guard !secs.isEmpty else { return nil }
+            return ((secs.reduce(0, +) / Double(secs.count)) * 10).rounded() / 10
+        }
+    }
+
+    static func detail(_ session: AudioSessionWithSegments) -> Detail {
+        let selfAnswered = session.teachingMoves?.selfAnswered ?? []
+        let ordered = session.segments.filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }.sorted { $0.startSec < $1.startSec }
+        let questions = QuestionMix.classify(session).filter { q in
+            !selfAnswered.contains { sa in
+                sameMoment(q.entry.timestampSec, Redaction.withoutAddressedNames(q.entry.text), sa.timestampSec, Redaction.withoutAddressedNames(sa.quote))
+            }
+        }
+        let thinking = questions.filter { $0.mix != .recall }
+        let pauses = thinking.map { pause(after: $0.entry.timestampSec, quote: Redaction.withoutAddressedNames($0.entry.text), in: ordered) }
+        return Detail(selfAnswered: selfAnswered, questions: questions, thinking: thinking, pauses: pauses)
     }
 
     /// The average, and how many questions it rests on.
     static func tawt(_ session: AudioSessionWithSegments) -> (average: Double, count: Int)? {
-        let selfAnswered = session.teachingMoves?.selfAnswered ?? []
-        let ordered = session.segments.filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }.sorted { $0.startSec < $1.startSec }
-        let thinking = QuestionMix.classify(session).filter { q in
-            q.mix != .recall && !selfAnswered.contains { sa in
-                sameMoment(q.entry.timestampSec, Redaction.withoutAddressedNames(q.entry.text), sa.timestampSec, Redaction.withoutAddressedNames(sa.quote))
-            }
-        }
-        let pauses = thinking.compactMap { pause(after: $0.entry.timestampSec, quote: Redaction.withoutAddressedNames($0.entry.text), in: ordered) }
-        guard !pauses.isEmpty else { return nil }
-        return (((pauses.reduce(0, +) / Double(pauses.count)) * 10).rounded() / 10, pauses.count)
+        let d = detail(session)
+        return d.average.map { ($0, d.measured) }
     }
 }
 

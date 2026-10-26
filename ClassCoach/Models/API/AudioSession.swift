@@ -536,10 +536,13 @@ struct AudioTeachingMoves: Decodable {
     let stretch: Stretch?
     /// Questions the teacher answered themselves — left out of TAWT, as on the web.
     let selfAnswered: [Quoted]?
+    /// Questions about logistics, not the learning ("where is it?"). Counted
+    /// nowhere as questions; absent on lessons read before it existed.
+    let housekeeping: [Quoted]?
 
     private enum CodingKeys: String, CodingKey {
         case questionKinds, directions, explanations, invitations, redirections, participation, arc, headline,
-             revisionPrompts, connections, routines, stretch, selfAnswered
+             revisionPrompts, connections, routines, stretch, selfAnswered, housekeeping
     }
 
     init(from decoder: Decoder) throws {
@@ -557,6 +560,7 @@ struct AudioTeachingMoves: Decodable {
         routines = try? c.decodeIfPresent(Routines.self, forKey: .routines)
         stretch = try? c.decodeIfPresent(Stretch.self, forKey: .stretch)
         selfAnswered = (try? c.decodeIfPresent([LossyDecodable<Quoted>].self, forKey: .selfAnswered))?.compactMap(\.value)
+        housekeeping = (try? c.decodeIfPresent([LossyDecodable<Quoted>].self, forKey: .housekeeping))?.compactMap(\.value)
     }
 }
 

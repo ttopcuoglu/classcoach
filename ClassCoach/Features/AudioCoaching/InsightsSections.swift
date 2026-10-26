@@ -912,10 +912,16 @@ struct QuestionsSection: View {
     let hardLook: AnyView?
     let onDiscuss: () -> Void
 
-    /// Which kind the list shows: a question kind, or nil-with-checks.
-    @State private var selected: QuestionMix?
-    @State private var showChecks = false
-    @State private var showUnfollowed = false
+    /// What the list shows: a question kind, answered yourself, follow-ups,
+    /// or checks — mirrors `QPick` in AudioCoaching.tsx.
+    enum QPick: Hashable { case mix(QuestionMix), selfAnswered, followUp, checks }
+
+    @State private var pick: QPick?
+    /// The mark last tapped on the timeline. Ids say what a mark is:
+    /// questions from 0, checks from 1000, answered yourself from 2000,
+    /// follow-ups from 3000.
+    @State private var hot: Int?
+    @State private var showAlsoHeard = false
 
     private static let mixLabel: [QuestionMix: String] = [.recall: "Recall", .explain: "Explain", .reasoning: "Reasoning"]
     private static let mixDesc: [QuestionMix: String] = [
@@ -923,6 +929,13 @@ struct QuestionsSection: View {
         .explain: "Students put an idea in their own words \u{2014} why or how.",
         .reasoning: "Asked students to justify, compare or judge.",
     ]
+    /// Two kinds beside the three a question can ask for, in their own colours.
+    private static let selfColor = Color(hex: 0xC96A45)
+    private static let followColor = Color(hex: 0xE2BC5C)
+    private static let selfLabel = "Answered yourself"
+    private static let followLabel = "Follow-up"
+    private static let selfDesc = "You asked, and gave the answer before a student could."
+    private static let followDesc = "Right after a student answered, you pushed on what they said."
 
     var body: some View {
         let questions = QuestionMix.classify(session)
@@ -937,25 +950,42 @@ struct QuestionsSection: View {
                      : "\(count(.explain)) of your questions asked students to explain why or how.",
                      quote: $0.entry.text, timestampSec: $0.entry.timestampSec)
         }
+        // The follow-up rate lives only in this goal; the follow-ups
+        // themselves are a kind on the questions timeline.
         let goal = showRate && followed! < heard! ? "Goal: \(min(heard!, followed! + 2)) of \(heard!) answers followed up, up from \(followed!)." : nil
         return SectionCard(
             section: .questions, note: note, keep: keep, tryNext: session.nextSteps?.questions, tryGoal: goal,
             howToRead: [
-                "Questions are the ones you asked and left with students \u{2014} not \u{201C}okay?\u{201D}, \u{201C}right?\u{201D} or \u{201C}are we ready?\u{201D}. Each is sorted by what answering it asked for: recall, explaining why or how, or reasoning (justifying, comparing, judging).",
-                "A check is a moment you asked students to show or say what they understood. Each says who it asked and what you did next \u{2014} from your own words, so a check you acted on silently shows as nothing heard. It never says whether students understood.",
+                "Questions are the ones you asked and left with students \u{2014} not \u{201C}okay?\u{201D}, \u{201C}right?\u{201D} or \u{201C}are we ready?\u{201D}. Each is sorted by what answering it asked for: recall, explaining why or how, or reasoning (justifying, comparing, judging). A question you answered yourself before a student could, and a follow-up straight after a student answer, each have their own colour on the timeline. Tags like \u{201C}right?\u{201D} and housekeeping questions are listed but not counted.",
+                "A check is a moment you asked students to show or say what they understood. Each says who it asked and what you did next \u{2014} from your own words, so a check you acted on silently (scanning boards, changing course without saying so) shows as nothing heard. It never says whether students understood.",
                 "A follow-up can only be spotted after a student answer the recording heard, so the dots count those answers only.",
             ],
             hardLook: hardLook, onDiscuss: onDiscuss
         ) {
-            questionsChecksPart(questions, count: count)
-            followUpsPart(heard: heard, followed: followed, showRate: showRate)
+            questionsChecksPart()
+            alsoHeardPart()
         }
     }
 
-    /// Your questions and checks on one lesson timeline: questions as dots in
-    /// their kind's colour, checks as rings (dashed when they only asked
-    /// whether students understood). The pills choose what the list shows.
-    private typealias QItem = (entry: AudioQuestionLogEntry, mix: QuestionMix)
+    // MARK: Your questions and checks
+
+    /// Your questions and checks on one lesson timeline: each question a dot
+    /// in its kind's colour — recall, explain, reasoning, answered yourself,
+    /// follow-up — and each check a ring (dashed when it only asked whether
+    /// students understood). A question you answered yourself is shown as
+    /// that and only that. The pills choose what the list shows; a dot shows
+    /// its own. Never a claim that students understood.
+    private typealias QItem = ThinkingPause.Question
+
+    /// One moment in the list: the mark's id, when, the words, and for a
+    /// check what it asked and what you did next.
+    private struct Moment {
+        let id: Int
+        let t: Double
+        let quote: String
+        var tag: String? = nil
+        var then: String? = nil
+    }
 
     /// Terracotta, so a check can never be read as a question.
     private static let checkColor = Color(hex: 0xB4593A)
@@ -964,60 +994,82 @@ struct QuestionsSection: View {
 
     private var qcChecks: [AudioCfuEntry] { (session.cfuLog ?? []).filter { $0.loop?.who != "not_a_check" } }
 
+    /// The follow-ups the answer log paired with a student answer — the same
+    /// ones the follow-up count rests on.
+    private var followUps: [AudioFollowUpLine] { session.followUpLog ?? [] }
+
     @ViewBuilder
-    private func questionsChecksPart(_ questions: [QItem], count: @escaping (QuestionMix) -> Int) -> some View {
+    private func questionsChecksPart() -> some View {
+        let tawt = ThinkingPause.detail(session)
+        let questions = tawt.questions
+        let selfAnswered = tawt.selfAnswered
         let checks = qcChecks
-        let checksOn = showChecks || questions.isEmpty
-        let current: QuestionMix = selected ?? (count(.reasoning) > 0 ? .reasoning : count(.explain) > 0 ? .explain : .recall)
+        let count = { (k: QuestionMix) in questions.filter { $0.mix == k }.count }
+        let current: QPick = pick ?? (count(.reasoning) > 0 ? .mix(.reasoning) : count(.explain) > 0 ? .mix(.explain)
+            : !questions.isEmpty ? .mix(.recall) : !selfAnswered.isEmpty ? .selfAnswered : .checks)
         VStack(alignment: .leading, spacing: 12) {
             PartHeading(title: "Your questions and checks",
                         count: "\(questions.count) question\(questions.count == 1 ? "" : "s") \u{00B7} \(checks.count) check\(checks.count == 1 ? "" : "s")")
-            if questions.isEmpty && checks.isEmpty {
+            if questions.isEmpty && checks.isEmpty && selfAnswered.isEmpty && followUps.isEmpty {
                 Text("No questions or checks for understanding were heard in this lesson.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
             } else {
-                Text(qcFinding(questions, checks, count: count))
+                Text(qcFinding(questions, selfAnswered.count, checks, count: count))
                     .font(.body.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
-                qcTimeline(questions, checks, checksOn: checksOn, current: current)
-                qcPills(count: count, checks: checks.count, checksOn: checksOn, current: current)
-                qcList(questions, checks, checksOn: checksOn, current: current)
-                if !questions.isEmpty { qcWhoAsked(questions) }
+                qcTimeline(questions, selfAnswered, checks)
+                qcPills(questions, selfAnswered.count, checks.count, current: current, count: count)
+                qcList(current, questions, selfAnswered, checks)
+                if let average = tawt.average { tawtCard(tawt, average: average) }
             }
         }
     }
 
-    private func qcFinding(_ questions: [QItem], _ checks: [AudioCfuEntry], count: (QuestionMix) -> Int) -> String {
+    private func qcFinding(_ questions: [QItem], _ selfCount: Int, _ checks: [AudioCfuEntry], count: (QuestionMix) -> Int) -> String {
         let beyond = count(.explain) + count(.reasoning)
         let everyone = checks.filter { $0.loop?.who == "everyone" }.count
         var q: String
-        if questions.isEmpty { q = "No questions were heard. " }
+        if questions.isEmpty { q = "No questions were left with students. " }
         else if beyond == 0 { q = "All \(questions.count) questions asked students to recall something. " }
         else { q = "\(beyond) of \(questions.count) were higher-order questions (explain or reasoning). " }
+        if selfCount > 0 { q += (selfCount == 1 ? "Once" : "\(selfCount) times") + " you answered your own question. " }
         if checks.isEmpty { return q + "No checks for understanding were heard." }
         var c = "You checked for understanding \(checks.count) time\(checks.count == 1 ? "" : "s")"
         if everyone > 0 { c += ", " + (everyone == checks.count ? "each" : "\(everyone) of them") + " asking everyone" }
         return q + c + "."
     }
 
-    private func qcDuration(_ questions: [QItem], _ checks: [AudioCfuEntry]) -> Double {
-        if let d = session.durationSec { return d }
-        let times = questions.map { $0.entry.timestampSec } + checks.map { $0.timestampSec }
-        return max(60, times.max() ?? 60)
+    private func kindOf(_ id: Int, _ questions: [QItem]) -> QPick {
+        id >= 3000 ? .followUp : id >= 2000 ? .selfAnswered : id >= 1000 ? .checks : .mix(questions[id].mix)
     }
 
-    private func qcTimeline(_ questions: [QItem], _ checks: [AudioCfuEntry], checksOn: Bool, current: QuestionMix) -> some View {
-        let duration = qcDuration(questions, checks)
+    private func qcTimeline(_ questions: [QItem], _ selfAnswered: [AudioTeachingMoves.Quoted], _ checks: [AudioCfuEntry]) -> some View {
+        let times = questions.map { $0.entry.timestampSec } + checks.map(\.timestampSec) + selfAnswered.map(\.timestampSec) + followUps.map(\.timestampSec)
+        let duration = session.durationSec ?? max(60, times.max() ?? 60)
+        let marks: [(id: Int, t: Double, color: Color)] =
+            questions.enumerated().map { ($0.offset, $0.element.entry.timestampSec, $0.element.mix.color) }
+            + selfAnswered.enumerated().map { (2000 + $0.offset, $0.element.timestampSec, Self.selfColor) }
+            + followUps.enumerated().map { (3000 + $0.offset, $0.element.timestampSec, Self.followColor) }
         return VStack(spacing: 4) {
             qcLane("Questions") { width in
-                ForEach(Array(questions.enumerated()), id: \.offset) { _, q in
-                    self.qcQuestionDot(q, on: !checksOn && current == q.mix)
-                        .position(x: self.qx(q.entry.timestampSec, duration, width), y: 14)
+                ForEach(marks, id: \.id) { m in
+                    self.markButton(m.id, questions) {
+                        // A white edge keeps dots that fall close together readable.
+                        Circle().fill(m.color).frame(width: 13, height: 13)
+                            .overlay(Circle().stroke(AppTheme.card, lineWidth: 2))
+                    }
+                    .position(x: self.qx(m.t, duration, width), y: 14)
                 }
             }
             qcLane("Checks") { width in
-                ForEach(Array(checks.enumerated()), id: \.offset) { _, c in
-                    self.qcCheckRing(c, on: checksOn)
-                        .position(x: self.qx(c.timestampSec, duration, width), y: 14)
+                ForEach(Array(checks.enumerated()), id: \.offset) { i, c in
+                    let dash: [CGFloat] = c.loop?.who == "asked_if_understood" ? [3, 2] : []
+                    self.markButton(1000 + i, questions) {
+                        Circle().fill(AppTheme.card)
+                            .overlay(Circle().strokeBorder(Self.checkColor, style: StrokeStyle(lineWidth: 2.5, dash: dash)))
+                            .frame(width: 13, height: 13)
+                            .overlay(Circle().stroke(AppTheme.card, lineWidth: 2).padding(-1))
+                    }
+                    .position(x: self.qx(c.timestampSec, duration, width), y: 14)
                 }
             }
             HStack {
@@ -1033,39 +1085,33 @@ struct QuestionsSection: View {
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(AppTheme.hairline))
     }
 
-    private func qcQuestionDot(_ q: QItem, on: Bool) -> some View {
-        Button { selected = q.mix; showChecks = false } label: {
-            // A white edge keeps dots that fall close together readable.
-            Circle().fill(q.mix.color).frame(width: 13, height: 13)
-                .overlay(Circle().stroke(AppTheme.card, lineWidth: 2))
+    /// A mark on the timeline: tapping it shows its kind with it picked out.
+    /// Every mark in full colour and size; only the one tapped grows.
+    private func markButton<L: View>(_ id: Int, _ questions: [QItem], @ViewBuilder label: () -> L) -> some View {
+        Button {
+            pick = kindOf(id, questions)
+            hot = id
+        } label: {
+            label().scaleEffect(hot == id ? 1.5 : 1)
         }
         .buttonStyle(.plain)
     }
 
-    private func qcCheckRing(_ c: AudioCfuEntry, on: Bool) -> some View {
-        let dash: [CGFloat] = c.loop?.who == "asked_if_understood" ? [3, 2] : []
-        return Button { showChecks = true } label: {
-            Circle().fill(AppTheme.card)
-                .overlay(Circle().strokeBorder(Self.checkColor, style: StrokeStyle(lineWidth: 2.5, dash: dash)))
-                .frame(width: 13, height: 13)
-                .overlay(Circle().stroke(AppTheme.card, lineWidth: 2).padding(-1))
+    private func qcPills(_ questions: [QItem], _ selfCount: Int, _ checks: Int, current: QPick, count: @escaping (QuestionMix) -> Int) -> some View {
+        let dot = { (c: Color) in AnyView(Circle().fill(c).frame(width: 11, height: 11)) }
+        let checksOn = current == .checks
+        var pills: [(key: QPick, label: String, n: Int, swatch: AnyView)] = QuestionMix.allCases.map {
+            (.mix($0), Self.mixLabel[$0]!, count($0), dot($0.color))
         }
-        .buttonStyle(.plain)
-    }
-
-    private func qcPills(count: @escaping (QuestionMix) -> Int, checks: Int, checksOn: Bool, current: QuestionMix) -> some View {
-        FlowLayout(spacing: 8) {
-            ForEach(QuestionMix.allCases.filter { count($0) > 0 }, id: \.self) { k in
-                qcPill(Self.mixLabel[k]!, count(k), on: !checksOn && current == k,
-                       swatch: AnyView(Circle().fill(k.color).frame(width: 11, height: 11))) {
-                    selected = k
-                    showChecks = false
-                }
-            }
-            if checks > 0 {
-                qcPill("Checks for understanding", checks, on: checksOn,
-                       swatch: AnyView(Circle().strokeBorder(checksOn ? AppTheme.cream : Self.checkColor, lineWidth: 2).frame(width: 11, height: 11))) {
-                    showChecks = true
+        pills.append((.selfAnswered, Self.selfLabel, selfCount, dot(Self.selfColor)))
+        pills.append((.followUp, Self.followLabel, followUps.count, dot(Self.followColor)))
+        pills.append((.checks, "Checks for understanding", checks,
+                      AnyView(Circle().strokeBorder(checksOn ? AppTheme.cream : Self.checkColor, lineWidth: 2).frame(width: 11, height: 11))))
+        return FlowLayout(spacing: 8) {
+            ForEach(pills.filter { $0.n > 0 }, id: \.key) { p in
+                qcPill(p.label, p.n, on: current == p.key, swatch: p.swatch) {
+                    pick = p.key
+                    hot = nil
                 }
             }
         }
@@ -1081,32 +1127,48 @@ struct QuestionsSection: View {
         return d
     }
 
-    private func qcCheckLine(_ c: AudioCfuEntry) -> EvidenceLine {
-        let who = c.loop.flatMap { Self.checkWho[$0.who] } ?? "Check for understanding"
-        let did = c.loop?.acted.flatMap { Self.checkActed[$0.how] }
-        let tag = [who, did].compactMap { $0 }.joined(separator: " \u{00B7} ")
-        return EvidenceLine(tag: tag, text: "\u{201C}\(Redaction.withoutAddressedNames(c.text))\u{201D}",
-                            quote: c.loop?.acted?.text, timestampSec: c.timestampSec)
+    private func moments(_ k: QPick, _ questions: [QItem], _ selfAnswered: [AudioTeachingMoves.Quoted], _ checks: [AudioCfuEntry]) -> [Moment] {
+        switch k {
+        case .checks:
+            return checks.enumerated().map { i, c in
+                let who = c.loop.flatMap { Self.checkWho[$0.who] } ?? "Check for understanding"
+                let did = c.loop?.acted.flatMap { Self.checkActed[$0.how] }
+                return Moment(id: 1000 + i, t: c.timestampSec, quote: c.text,
+                              tag: [who, did].compactMap { $0 }.joined(separator: " \u{00B7} "), then: c.loop?.acted?.text)
+            }
+        case .selfAnswered:
+            return selfAnswered.enumerated().map { Moment(id: 2000 + $0.offset, t: $0.element.timestampSec, quote: $0.element.quote) }
+        case .followUp:
+            return followUps.enumerated().map { Moment(id: 3000 + $0.offset, t: $0.element.timestampSec, quote: $0.element.text) }
+        case .mix(let m):
+            return questions.enumerated().compactMap { i, q in q.mix == m ? Moment(id: i, t: q.entry.timestampSec, quote: q.entry.text) : nil }
+        }
     }
 
     @ViewBuilder
-    private func qcList(_ questions: [QItem], _ checks: [AudioCfuEntry], checksOn: Bool, current: QuestionMix) -> some View {
+    private func qcList(_ k: QPick, _ questions: [QItem], _ selfAnswered: [AudioTeachingMoves.Quoted], _ checks: [AudioCfuEntry]) -> some View {
+        let list = moments(k, questions, selfAnswered, checks)
+        let (title, desc, tag): (String, String, String) = {
+            switch k {
+            case .checks: return ("Checks for understanding \u{00B7} \(checks.count)", qcChecksDesc(checks), "")
+            case .selfAnswered: return ("\(Self.selfLabel) \u{00B7} \(list.count)", Self.selfDesc, Self.selfLabel)
+            case .followUp: return ("\(Self.followLabel) \u{00B7} \(list.count)", Self.followDesc, Self.followLabel)
+            case .mix(let m): return ("\(Self.mixLabel[m]!) \u{00B7} \(list.count) of \(questions.count)", Self.mixDesc[m] ?? "", Self.mixLabel[m]!)
+            }
+        }()
         VStack(alignment: .leading, spacing: 8) {
-            if checksOn {
-                Text("Checks for understanding \u{00B7} \(checks.count)").font(.subheadline.weight(.bold)).foregroundStyle(AppTheme.forest)
-                Text(qcChecksDesc(checks)).font(.caption).foregroundStyle(AppTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                ForEach(Array(checks.enumerated()), id: \.offset) { _, c in
-                    EvidenceRow(line: qcCheckLine(c))
-                }
-            } else {
-                let sel = questions.filter { $0.mix == current }
-                let label = Self.mixLabel[current] ?? ""
-                Text("\(label) \u{00B7} \(sel.count) of \(questions.count)").font(.subheadline.weight(.bold)).foregroundStyle(AppTheme.forest)
-                Text(Self.mixDesc[current] ?? "").font(.caption).foregroundStyle(AppTheme.textSecondary)
-                ForEach(Array(sel.enumerated()), id: \.offset) { _, q in
-                    EvidenceRow(line: EvidenceLine(tag: label, quote: q.entry.text, timestampSec: q.entry.timestampSec))
-                }
+            HStack(alignment: .firstTextBaseline) {
+                Text(title).font(.subheadline.weight(.bold)).foregroundStyle(AppTheme.forest)
+                Spacer()
+                Text("Tap a dot, or a kind above").font(.caption2).foregroundStyle(AppTheme.textSecondary)
+            }
+            Text(desc).font(.caption).foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(list, id: \.id) { m in
+                EvidenceRow(line: m.tag != nil
+                            ? EvidenceLine(tag: m.tag!, text: "\u{201C}\(Redaction.withoutAddressedNames(m.quote))\u{201D}", quote: m.then, timestampSec: m.t)
+                            : EvidenceLine(tag: tag, quote: m.quote, timestampSec: m.t))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(AppTheme.forest, lineWidth: 2).opacity(hot == m.id ? 1 : 0))
             }
         }
         .padding(14)
@@ -1114,16 +1176,100 @@ struct QuestionsSection: View {
         .background(AppTheme.cream, in: RoundedRectangle(cornerRadius: 18))
     }
 
-    private func qcWhoAsked(_ questions: [QItem]) -> some View {
-        let byName = questions.filter { Redaction.withoutAddressedNames($0.entry.text) != $0.entry.text }.count
-        return FlowLayout(spacing: 8) {
-            Text("Who you asked").bold()
-            Text("\(questions.count - byName) open to anyone").padding(.horizontal, 10).padding(.vertical, 4).background(AppTheme.cream, in: Capsule())
-            if byName > 0 {
-                Text("\(byName) to a student by name").padding(.horizontal, 10).padding(.vertical, 4).background(AppTheme.cream, in: Capsule())
+    /// Teacher-Anchored Wait Time: how long you left a question that asked
+    /// students to explain or reason with the class, until you spoke again —
+    /// the same number as the Summary tile, with each question behind it.
+    private func tawtCard(_ tawt: ThinkingPause.Detail, average: Double) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Teacher-Anchored Wait Time (TAWT)").font(.heading(.headline)).foregroundStyle(AppTheme.forest)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(String(format: "%.1f", average)).font(.heading(.largeTitle)).foregroundStyle(AppTheme.forest)
+                Text("s").font(.body.weight(.bold)).foregroundStyle(AppTheme.forest)
+                Text("average of \(tawt.measured)").font(.subheadline).foregroundStyle(AppTheme.textSecondary).padding(.leading, 4)
+            }
+            Text("After each question that asked students to think \u{2014} to explain or to reason \u{2014} the time from the end of your question until you spoke again, with any student answer included. It shows how long you left the thinking with the class before stepping back in. When no one answered, three seconds or more of silence gives most students time to think.")
+                .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(Array(tawt.thinking.enumerated()), id: \.offset) { i, q in
+                let p = tawt.pauses[i]
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 5) {
+                            Circle().fill(q.mix.color).frame(width: 9, height: 9)
+                            Text(Self.mixLabel[q.mix] ?? "")
+                            Text("\u{00B7} \(mmss(q.entry.timestampSec))").font(.caption.monospacedDigit().weight(.regular))
+                        }
+                        .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+                        Text("\u{201C}\(Redaction.withoutAddressedNames(q.entry.text))\u{201D}")
+                            .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        if let p {
+                            Text(String(format: "%.1f s", p.sec)).font(.heading(.subheadline)).foregroundStyle(AppTheme.forest)
+                            Text(p.keptTalking ? "you kept talking" : p.answered ? "a student answered" : "no one answered")
+                        } else {
+                            Text("not measured")
+                        }
+                    }
+                    .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                    .multilineTextAlignment(.trailing)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.cream, in: RoundedRectangle(cornerRadius: 12))
             }
         }
-        .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
+    }
+
+    // MARK: Also heard
+
+    /// Question marks that asked nothing of students. Tags are counted from
+    /// the transcript (QuestionTags); housekeeping comes from the moves read,
+    /// on lessons read since it existed. Not counted as questions anywhere.
+    @ViewBuilder
+    private func alsoHeardPart() -> some View {
+        let tags = QuestionTags.find(session.segments)
+        let housekeeping = session.teachingMoves?.housekeeping ?? []
+        if !tags.isEmpty || !housekeeping.isEmpty {
+            let summary = [
+                tags.isEmpty ? nil : "\(tags.count) \u{201C}right?\u{201D} / \u{201C}okay?\u{201D} tag\(tags.count == 1 ? "" : "s")",
+                housekeeping.isEmpty ? nil : "\(housekeeping.count) housekeeping question\(housekeeping.count == 1 ? "" : "s")",
+            ].compactMap { $0 }.joined(separator: " \u{00B7} ")
+            VStack(alignment: .leading, spacing: 8) {
+                Button { withAnimation { showAlsoHeard.toggle() } } label: {
+                    (Text("Also heard, not counted as questions: ").bold().foregroundColor(AppTheme.textPrimary)
+                        + Text(summary + " ").foregroundColor(AppTheme.textSecondary)
+                        + Text(showAlsoHeard ? "Hide" : "Show").bold().foregroundColor(AppTheme.terracotta600))
+                        .font(.subheadline)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .buttonStyle(.plain)
+                if showAlsoHeard {
+                    FlowLayout(spacing: 6) {
+                        ForEach(Array(tags.enumerated()), id: \.offset) { _, g in
+                            alsoHeardChip("\u{201C}\(g.tag)?\u{201D}", g.timestampSec)
+                        }
+                        ForEach(Array(housekeeping.enumerated()), id: \.offset) { _, h in
+                            alsoHeardChip("\u{201C}\(Redaction.withoutAddressedNames(h.quote))\u{201D}", h.timestampSec)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func alsoHeardChip(_ text: String, _ t: Double) -> some View {
+        (Text(text + " ") + Text(mmss(t)).monospacedDigit())
+            .font(.caption).foregroundStyle(AppTheme.textSecondary)
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(AppTheme.cream, in: Capsule())
     }
 
     private func qx(_ t: Double, _ duration: Double, _ width: CGFloat) -> CGFloat {
@@ -1161,76 +1307,33 @@ struct QuestionsSection: View {
         }
         .buttonStyle(.plain)
     }
+}
 
-    private func pairedFollowUps(_ answers: [AudioAnswer], _ readLines: [EvidenceLine]) -> [EvidenceLine] {
-        let log = session.followUpLog ?? []
-        var out: [EvidenceLine] = []
-        for (i, a) in answers.enumerated() where a.followed {
-            let nextAt = i + 1 < answers.count ? answers[i + 1].timestampSec : .infinity
-            guard let fu = log.first(where: { $0.timestampSec >= a.timestampSec && $0.timestampSec < nextAt }) else { continue }
-            let tag = readLines.first { abs(($0.timestampSec ?? -99) - fu.timestampSec) <= 5 }?.tag ?? "Follow-up"
-            out.append(EvidenceLine(tag: tag, quote: fu.text, timestampSec: fu.timestampSec))
-        }
-        return out.isEmpty ? Array(readLines.prefix(1)) : out
-    }
+/// "Right?", "okay?", "k?" — the tags a teacher ends a sentence with and
+/// talks straight through — mirrors web/src/lib/questionTags.ts. They carry a
+/// question mark but ask nothing of students, so the question count leaves
+/// them out; counted from the transcript, as on the web. "Yes?" and "huh?"
+/// are left out on purpose: they do ask something.
+enum QuestionTags {
+    private static let tags: Set<String> = ["right", "okay", "ok", "k", "kay", "you know", "yeah", "alright", "all right", "mhm", "mm-hmm"]
 
-    @ViewBuilder
-    private func followUpsPart(heard: Int?, followed: Int?, showRate: Bool) -> some View {
-        let answers = session.answerLog ?? []
-        let moves = session.teachingMoves
-        let checks = (session.cfuLog ?? []).filter { $0.loop?.who != "not_a_check" }
-        let followLines: [EvidenceLine] = checks.compactMap { c -> EvidenceLine? in
-            guard let acted = c.loop?.acted, acted.how == "adjusted", let text = acted.text else { return nil }
-            return EvidenceLine(tag: "Revisited a possible misunderstanding", quote: text, timestampSec: acted.atSec)
-        } + (moves?.participation?.extending ?? moves?.revisionPrompts ?? []).map {
-            EvidenceLine(tag: $0.kind.flatMap { extendKindLabel[$0] } ?? "Follow-up", quote: $0.quote, timestampSec: $0.timestampSec)
-        }
-        let unfollowed = answers.filter { !$0.followed }
-        VStack(alignment: .leading, spacing: 12) {
-            PartHeading(title: "Your follow-ups")
-            if showRate, let heard, let followed {
-                if !answers.isEmpty {
-                    FlowLayout(spacing: 5) {
-                        ForEach(Array(answers.enumerated()), id: \.offset) { _, a in
-                            Circle().fill(a.followed ? AppTheme.terracotta : .clear)
-                                .overlay(Circle().strokeBorder(a.followed ? AppTheme.terracotta : Color(hex: 0xD8CDB8), lineWidth: 2))
-                                .frame(width: 18, height: 18)
-                        }
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(followed) of \(heard) answers followed up")
-                }
-                Text("You followed up on \(followed) of the \(heard) student answers the recording could hear.")
-                    .font(.body.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("Too few student answers came through to count follow-ups" + (followLines.isEmpty ? "." : " \u{2014} here is one the recording caught."))
-                    .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            // What you said right after each answer you followed up — the
-            // same pairing the dots count, so the list and "X of Y" agree.
-            ForEach(Array(pairedFollowUps(answers, followLines).enumerated()), id: \.offset) { _, line in
-                EvidenceRow(line: line, fill: AppTheme.cream)
-            }
-            if !unfollowed.isEmpty {
-                Button(showUnfollowed ? "Hide" : "Answers without a follow-up (\(unfollowed.count))") { withAnimation { showUnfollowed.toggle() } }
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
-                if showUnfollowed {
-                    FlowLayout(spacing: 6) {
-                        ForEach(Array(unfollowed.enumerated()), id: \.offset) { _, a in
-                            Text(mmss(a.timestampSec)).font(.caption.monospacedDigit())
-                                .padding(.horizontal, 9).padding(.vertical, 3)
-                                .background(AppTheme.cream, in: Capsule())
-                        }
-                    }
-                    .foregroundStyle(AppTheme.textSecondary)
-                    Text("A student answered at these times and the next thing you said was not a follow-up.")
-                        .font(.caption).foregroundStyle(AppTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+    /// Every tag the teacher said, in order. A tag is a question-marked piece
+    /// of a teacher line that is nothing but one of the words above.
+    static func find(_ segments: [TranscriptSegment]) -> [(tag: String, timestampSec: Double)] {
+        var out: [(tag: String, timestampSec: Double)] = []
+        for s in segments where s.speakerLabel == "Teacher" {
+            var piece = ""
+            for ch in s.text {
+                if ch == "." || ch == "!" { piece = ""; continue }
+                guard ch == "?" else { piece.append(ch); continue }
+                var w = piece.lowercased().replacingOccurrences(of: ",", with: " ")
+                if let r = w.range(of: "^\\s*(so|and|but|now)\\s+", options: .regularExpression) { w.removeSubrange(r) }
+                w = w.trimmingCharacters(in: .whitespacesAndNewlines)
+                if tags.contains(w) { out.append((w, s.startSec)) }
+                piece = ""
             }
         }
+        return out
     }
 }
 
