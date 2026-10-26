@@ -252,7 +252,8 @@ export default function TryItOut({
   async function handleSubmitReal() {
     const situation = situationText.trim()
     const response = responseText.trim()
-    if (!situation || !response || submitting) return
+    // The response is optional: left blank, the coach walks them through it.
+    if (!situation || submitting) return
     setSubmitting(true)
     setError(null)
     try {
@@ -374,6 +375,7 @@ export default function TryItOut({
   // The teacher's own situation, not a generated one: there is no other
   // scenario to swap in, only a fresh situation of their own.
   const isOwn = attempt?.scenario.source === 'teacher'
+  const walkedThrough = isOwn && !!attempt && !attempt.responseText.trim()
   // Re-picked whenever the section or the room changes — a K-2 rehearsal and a
   // 9-12 rehearsal should not open with the same three scenarios.
   const subCategories = subCategoriesFor(focusArea)
@@ -475,7 +477,9 @@ export default function TryItOut({
             <TeachingContextFields value={room} onChange={onRoomChange} disabled={submitting} />
 
             <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">How would you handle it?</span>
+              <span className="text-sm font-medium text-ink">
+                How would you handle it? <span className="font-normal text-ink-soft">(optional)</span>
+              </span>
               <textarea
                 value={responseText}
                 onChange={(e) => setResponseText(e.target.value)}
@@ -484,6 +488,9 @@ export default function TryItOut({
                 placeholder="What you'd say, word for word, and what you'd do."
                 className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
               />
+              <span className="text-xs text-ink-soft">
+                Not sure what to say yet? Leave it blank and your coach will walk you through it.
+              </span>
             </label>
             {speechSupported && (
               <button
@@ -505,7 +512,7 @@ export default function TryItOut({
               <button
                 type="button"
                 onClick={handleSubmitReal}
-                disabled={submitting || situationText.trim().length < 15 || !responseText.trim()}
+                disabled={submitting || situationText.trim().length < 15}
                 className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
               >
                 {submitting ? 'Getting coaching...' : 'Get coaching'}
@@ -727,16 +734,21 @@ export default function TryItOut({
               </div>
             ) : (
               <div className="flex flex-col gap-4">
+                {/* A blank response on their own situation means "walk me
+                    through it": nothing of theirs to show, and the coaching is
+                    a way in rather than a review. */}
                 {[
-                  { title: 'Your response', subtitle: 'What you said you would do.', body: attempt.responseText },
+                  walkedThrough
+                    ? null
+                    : { title: 'Your response', subtitle: 'What you said you would do.', body: attempt.responseText },
                   attempt.feedback && {
                     title: 'Coaching',
-                    subtitle: 'What worked, and what to strengthen.',
+                    subtitle: walkedThrough ? 'How to approach it.' : 'What worked, and what to strengthen.',
                     body: attempt.feedback,
                   },
                   attempt.modelResponse && {
-                    title: 'A model response',
-                    subtitle: 'One way to handle it, to compare with yours.',
+                    title: walkedThrough ? 'What you could say' : 'A model response',
+                    subtitle: walkedThrough ? 'One way to put it — try your own below.' : 'One way to handle it, to compare with yours.',
                     body: attempt.modelResponse,
                   },
                 ]
@@ -754,7 +766,7 @@ export default function TryItOut({
                   draft={chatDraft}
                   onDraftChange={setChatDraft}
                   onSend={handleSendChat}
-                  placeholder="Ask a follow-up about this feedback..."
+                  placeholder={walkedThrough ? 'Try saying it in your own words...' : 'Ask a follow-up about this feedback...'}
                 />
 
                 <ReflectionTimeline

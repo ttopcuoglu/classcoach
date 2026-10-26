@@ -53,10 +53,14 @@ export default function Export() {
                         {categoryLabel(a.scenario.category)} · Grades {a.scenario.gradeBand}
                       </p>
                       <p className="mt-1.5 text-sm text-ink">{a.scenario.text}</p>
-                      <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                        Your response
-                      </p>
-                      <p className="mt-1 text-sm text-ink">{a.responseText}</p>
+                      {a.responseText.trim() && (
+                        <>
+                          <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                            Your response
+                          </p>
+                          <p className="mt-1 text-sm text-ink">{a.responseText}</p>
+                        </>
+                      )}
                       {a.feedback && (
                         <>
                           <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-ink-soft">

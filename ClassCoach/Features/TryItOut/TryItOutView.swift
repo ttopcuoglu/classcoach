@@ -206,15 +206,18 @@ struct TryItOutContent: View {
                 .font(.caption)
                 .foregroundStyle(AppTheme.textSecondary)
 
-            Text("How would you handle it?")
+            (Text("How would you handle it? ") + Text("(optional)").foregroundColor(AppTheme.textSecondary))
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(AppTheme.textPrimary)
                 .padding(.top, 4)
             editor($responseText, placeholder: "What you\u{2019}d say, word for word, and what you\u{2019}d do.")
+            Text("Not sure what to say yet? Leave it blank and your coach will walk you through it.")
+                .font(.caption)
+                .foregroundStyle(AppTheme.textSecondary)
 
             ProgressRing(active: submitting, estimatedSeconds: 8, label: "Reading your situation", hint: "Usually under ten seconds.")
 
-            let ready = trimmedSituation.count >= 15 && !trimmedResponse.isEmpty
+            let ready = trimmedSituation.count >= 15
             Button {
                 Task { await submitReal() }
             } label: {
@@ -369,13 +372,18 @@ struct TryItOutContent: View {
     @ViewBuilder
     private func feedbackView(_ attempt: ScenarioAttempt) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            labeledBlock(title: "YOUR RESPONSE", text: attempt.responseText, tint: AppTheme.textSecondary)
+            // A blank response on their own situation means "walk me through
+            // it": nothing of theirs to show, and the coaching is a way in.
+            let walkedThrough = attempt.scenario.source == "teacher" && attempt.responseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            if !walkedThrough {
+                labeledBlock(title: "YOUR RESPONSE", text: attempt.responseText, tint: AppTheme.textSecondary)
+            }
 
             if let feedback = attempt.feedback {
-                labeledBlock(title: "COACHING", text: feedback, tint: AppTheme.accent)
+                labeledBlock(title: walkedThrough ? "HOW TO APPROACH IT" : "COACHING", text: feedback, tint: AppTheme.accent)
             }
             if let modelResponse = attempt.modelResponse {
-                labeledBlock(title: "A MODEL RESPONSE TO COMPARE AGAINST", text: modelResponse, tint: AppTheme.primary)
+                labeledBlock(title: walkedThrough ? "WHAT YOU COULD SAY" : "A MODEL RESPONSE TO COMPARE AGAINST", text: modelResponse, tint: AppTheme.primary)
             }
 
             followUpChat(attempt)
@@ -427,7 +435,9 @@ struct TryItOutContent: View {
             draft: $chatDraft,
             sending: chatSending,
             error: chatError,
-            placeholder: "Ask a follow-up about this feedback..."
+            placeholder: attempt.responseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "Try saying it in your own words..."
+                : "Ask a follow-up about this feedback..."
         ) {
             Task { await sendChat(attempt) }
         }
@@ -519,7 +529,8 @@ struct TryItOutContent: View {
     private func submitReal() async {
         let situation = trimmedSituation
         let response = trimmedResponse
-        guard !situation.isEmpty, !response.isEmpty, !submitting else { return }
+        // The response is optional: left blank, the coach walks them through it.
+        guard !situation.isEmpty, !submitting else { return }
         submitting = true
         error = nil
         do {
@@ -608,8 +619,10 @@ private struct SavedAttemptRow: View {
 
             if expanded {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("YOUR RESPONSE").font(.caption2.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
-                    Text(attempt.responseText).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                    if !attempt.responseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("YOUR RESPONSE").font(.caption2.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
+                        Text(attempt.responseText).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                    }
                     if let feedback = attempt.feedback {
                         Text("COACHING").font(.caption2.weight(.bold)).foregroundStyle(AppTheme.accent)
                         Text(feedback).font(.subheadline).foregroundStyle(AppTheme.textPrimary)

@@ -78,9 +78,12 @@ export default function AskPracticeExport() {
           <Prose body={attempt.scenario.text} />
         </ReportSection>
 
-        <ReportSection n={++n} title="Your Response" blurb="What you actually said." accent={A.gold}>
-          <Prose body={attempt.responseText} />
-        </ReportSection>
+        {/* Blank when the teacher asked to be walked through their own situation. */}
+        {attempt.responseText.trim() && (
+          <ReportSection n={++n} title="Your Response" blurb="What you actually said." accent={A.gold}>
+            <Prose body={attempt.responseText} />
+          </ReportSection>
+        )}
 
         {attempt.feedback && (
           <ReportSection n={++n} title="Coaching" blurb="What worked, and the one thing worth changing." accent={A.mint}>

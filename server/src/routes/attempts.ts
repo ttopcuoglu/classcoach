@@ -19,7 +19,8 @@ export const attemptsRouter = Router()
 // an explanation, and answering an angry parent email, and the model response
 // has to come out in the right channel — words said out loud in a classroom, or
 // a sentence that can go in an email.
-function feedbackSystemPrompt(area: FocusArea | null, own: boolean, classify: boolean): string {
+function feedbackSystemPrompt(area: FocusArea | null, own: boolean, classify: boolean, walkThrough: boolean): string {
+  if (walkThrough) return walkThroughSystemPrompt(area, classify)
   return `${coachIdentity(area)} ${own ? OWN_SITUATION_FRAME : "You are reviewing how a teacher says they'd handle a practice scenario. Coach, don't grade."}
 
 Write in plain text only — no markdown (no **bold**, no # headings). Use a blank line between paragraphs and a leading "-" for list items.
@@ -38,6 +39,27 @@ A single integer 1-5 rating your honest private assessment of how well this resp
 ${CORE_COACHING_RULES}`
 }
 
+// "Something I'm facing" with nothing in the response box: the teacher does
+// not know what to say yet, so there is nothing to review and nothing to rate.
+// The coach walks them through it instead, and ends by inviting them to try
+// their own words in the chat — which is where the rehearsal then happens.
+function walkThroughSystemPrompt(area: FocusArea | null, classify: boolean): string {
+  return `${coachIdentity(area)} A teacher has described a real situation they are facing, in their own words, and does not yet know how to handle it — they left their response blank and asked you to walk them through it. Work only from what they told you — never invent details about the people involved — and where something that matters is missing, say briefly what you are assuming.
+
+Write in plain text only — no markdown (no **bold**, no # headings). Use a blank line between paragraphs and a leading "-" for list items.
+
+Respond with exactly these ${classify ? 'four' : 'two'} sections and nothing outside them:
+
+<feedback>
+Walk them through it. Start with one or two sentences on what is most likely going on and what matters most here. Then 2-4 concrete moves, in the order they would make them, grounded in ${ratingStandard(area)}. End with one short line inviting them to try saying it in their own words below, so you can coach the words. Keep it skimmable, warm, and practical — never academic or jargon-heavy.
+</feedback>
+<model_response>
+What the teacher could actually say, word for word. Match the channel the situation has: spoken words for a moment in front of students, a written reply for an email, an opening line for a conference or a conversation with a colleague, an explanation or question sequence for a teaching problem, a decision with its reasoning for a grading call.
+</model_response>
+${classify ? classificationBlock(null) : ''}
+${CORE_COACHING_RULES}`
+}
+
 // Practice's "Something real": the situation is the teacher's own, written by
 // them, so the coach works only from what it was told and says when it is
 // assuming — a generated scenario has no gaps worth naming, a real one does.
@@ -45,7 +67,7 @@ const OWN_SITUATION_FRAME =
   "You are helping a teacher rehearse a real situation they are facing, described in their own words, by reviewing how they say they would handle it. Coach, don't grade. Work only from what they told you — never invent details about the people involved — and where something that matters is missing, say briefly what you are assuming."
 
 function attemptChatSystemPrompt(area: FocusArea | null, own: boolean): string {
-  return `${coachIdentity(area)} You are continuing a conversation about ${own ? 'a real situation the teacher is facing, and how they plan to handle it,' : 'a practice scenario'} you already gave feedback on.${own ? ' If they try their words again, respond to the new version directly — what got stronger, and what to sharpen.' : ''} Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to try a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in the scenario and their response; never invent details that weren't given to you.
+  return `${coachIdentity(area)} You are continuing a conversation about ${own ? 'a real situation the teacher is facing, and how they plan to handle it,' : 'a practice scenario'} you already gave feedback on.${own ? ' When they try their own words — a first try or another one — respond to that version directly: what works, and what to sharpen.' : ''} Keep replying in 2-4 sentences, conversational, plain text only — no markdown. Build on what the teacher says: if they push back, ask a follow-up, or want to try a different angle, engage with that directly rather than repeating your first assessment. Stay grounded in the scenario and their response; never invent details that weren't given to you.
 ${CORE_COACHING_RULES}`
 }
 
@@ -83,6 +105,10 @@ attemptsRouter.post('/', async (req, res) => {
     res.status(404).json({ error: 'Scenario not found' })
     return
   }
+  if (scenario.source !== 'teacher' && !responseText.trim()) {
+    res.status(400).json({ error: 'Say how you would handle it, then get feedback.' })
+    return
+  }
 
   const denied = await checkAndLogUsage(req.user!.userId, 'attempt_feedback')
   if (denied) {
@@ -96,7 +122,12 @@ attemptsRouter.post('/', async (req, res) => {
     // A teacher's own situation is classified once, on its first coaching,
     // as tags on the reply already being written rather than a separate call.
     const classify = own && scenario.category === OWN_SITUATION
-    const context = `${own ? "The situation, in the teacher's own words" : 'Scenario'}: ${scenario.text}\n\nTeacher's response: ${responseText}`
+    // Only a teacher's own situation may come without a response — a generated
+    // scenario with nothing to review would be a blank attempt.
+    const walkThrough = own && !responseText.trim()
+    const context = `${own ? "The situation, in the teacher's own words" : 'Scenario'}: ${scenario.text}\n\n${
+      walkThrough ? "The teacher hasn't decided what to say yet — walk them through it." : `Teacher's response: ${responseText}`
+    }`
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       // The per-area prompts and the scenarios they produce are both longer
@@ -109,7 +140,7 @@ attemptsRouter.post('/', async (req, res) => {
       // zero text blocks, which stored a blank attempt and showed a teacher
       // empty coaching. Same trap already documented in lessonPlans.ts.
       thinking: { type: 'disabled' },
-      system: `${feedbackSystemPrompt(areaForScenario(scenario), own, classify)}${teachingContextBlock(scenario)}${buildExperienceContextBlock(user?.experienceLevel)}`,
+      system: `${feedbackSystemPrompt(areaForScenario(scenario), own, classify, walkThrough)}${teachingContextBlock(scenario)}${buildExperienceContextBlock(user?.experienceLevel)}`,
       messages: [{ role: 'user', content: context }],
     })
 

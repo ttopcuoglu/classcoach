@@ -54,8 +54,12 @@ export default function Shared() {
             </span>
             <p className="mt-3 text-sm text-ink">{content.scenario.text}</p>
 
-            <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-ink-soft">Response</p>
-            <p className="mt-1 text-sm text-ink">{content.responseText}</p>
+            {content.responseText.trim() && (
+              <>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-ink-soft">Response</p>
+                <p className="mt-1 text-sm text-ink">{content.responseText}</p>
+              </>
+            )}
 
             {content.feedback && (
               <>
