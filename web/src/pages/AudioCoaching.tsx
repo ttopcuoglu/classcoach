@@ -84,6 +84,7 @@ import {
   leadingSilenceNote,
   CONVERSATIONAL_WPM_RANGE,
   speechRateMetric,
+  LOW_CAPTURE_PCT,
 } from '../lib/reportConfidence'
 import { buildNextTimeItems, type NoticeCandidate } from '../lib/reportHighlights'
 import { focusLineKey } from '../lib/focusLine'
@@ -6077,7 +6078,7 @@ const sameMoment = (a: { timestampSec: number; quote: string }, b: { timestampSe
 /// Teacher-Anchored Wait Time, worked out once for the Summary tile and the
 /// Questioning & Checking card so the two never disagree: the questions left
 /// with students (a question you answered yourself is not one), the thinking
-/// ones among them (explain or reasoning), each one's pause until you spoke
+/// ones among them (above recall), each one's pause until you spoke
 /// again, and their average.
 function tawtOf(session: AudioSessionWithSegments) {
   const selfAnswered = (session.teachingMoves?.selfAnswered ?? []).map((q) => ({ timestampSec: q.timestampSec, quote: withoutAddressedNames(q.quote) }))
@@ -6140,6 +6141,27 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
     (q) => q.check && !checks.some((c) => Math.abs(c.timestampSec - q.timestampSec) <= 4),
   )
   const checkCount = checks.length + taggedChecks.length
+
+  // An empty level is hidden rather than shown as a zero, which is right — but
+  // hiding it still makes a claim, because a teacher reads what is left as the
+  // whole shape of their questioning. Two things have to be said out loud
+  // before that reading is fair.
+  //
+  // 1. The levels are only read where the finer read ran. Without it the mix
+  //    falls back to the recall / higher-order split, which can only ever
+  //    produce Recall and Understand — so Apply and Higher-order are missing
+  //    by construction, not by anything the teacher did.
+  // 2. Below LOW_CAPTURE_PCT the report is reading a minority of the room, and
+  //    a level it did not hear is not a level that was not asked. The same bar
+  //    the server uses before it will say a thing was absent.
+  const levelsRead = (session.teachingMoves?.questionKinds ?? []).length > 0
+  const capturedPct = getCoverage(session.durationSec, session.phases, session.metricsDetail).capturedSharePct
+  const thinCapture = capturedPct == null || capturedPct < LOW_CAPTURE_PCT
+  const mixCaveat = !levelsRead
+    ? 'The levels were not read for this lesson, so these come from a coarser split that can only tell recall from the rest — Apply and Higher-order could not appear either way.'
+    : thinCapture
+      ? `${capturedPct == null ? 'How much of this room came through as speech is unknown' : `About ${capturedPct}% of this room came through as speech`}, so this is the shape of the questions that were heard. A level missing here was not necessarily a level you did not ask.`
+      : null
 
   // Every mark's id says what it is: questions from 0, checks from 1000,
   // answered yourself from 2000, follow-ups from 3000.
@@ -6247,7 +6269,7 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
           ? 'No questions were left with students. '
           : beyond === 0
             ? `All ${questions.length} questions asked students to recall something. `
-            : `${beyond} of ${questions.length} were higher-order questions (explain or reasoning). `}
+            : `${beyond} of ${questions.length} asked for more than recall. `}
         {selfAnswered.length > 0 &&
           `${selfAnswered.length === 1 ? 'Once' : `${selfAnswered.length} times`} you answered your own question. `}
         {checks.length === 0
@@ -6331,6 +6353,8 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
             )
           })}
       </div>
+
+      {mixCaveat && <p className="-mt-1 text-xs text-ink-soft">{mixCaveat}</p>}
 
       {printAll ? pills.filter((pl) => pl.n > 0).map((pl) => <div key={pl.key}>{listBlock(pl.key)}</div>) : listBlock(pick)}
 
