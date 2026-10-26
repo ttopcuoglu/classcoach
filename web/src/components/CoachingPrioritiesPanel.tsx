@@ -438,9 +438,12 @@ function PriorityEditor({
             <li className="flex items-center gap-2">
               <CheckIcon className="h-4 w-4 text-forest" /> Talk It Through, when it fits what a teacher brings
             </li>
+            <li className="flex items-center gap-2">
+              <CheckIcon className="h-4 w-4 text-forest" /> Lesson Debrief, when a teacher asks for an idea from their lesson
+            </li>
           </ul>
           <p className="mt-2 text-xs text-ink">
-            Lesson Debrief comes later. Wivoza offers at most one idea at a time, only when it fits, and always labels it.
+            Wivoza offers at most one idea at a time, only when it fits, and always labels it.
           </p>
         </div>
       </section>

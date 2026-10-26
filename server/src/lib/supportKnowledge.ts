@@ -28,27 +28,30 @@ THE TOOLS
   voice is the teacher, then produces a report in six tabs (Summary,
   Insights, Content Specialist, Rubric lens, Reflect, My Growth) covering
   talk balance, questioning, wait time, checks for understanding, clarity and
-  climate.
+  climate. Insights has four sections: Talk & Participation, Questioning &
+  Checking, Clarity & Content, and Climate & Routines.
   Rubric lens sorts the lesson's evidence under the Danielson rubric on
   request and never gives a level or score. Summary ends with a "Try next
   time" list the teacher can carry into Planning Coach. The Hard Look is an
   optional, on-request reading that gives the least generous criticism the
   evidence supports; it is never in the printable report.
-- Practice: a rehearsal against a realistic scenario, with a model response
-  to compare against. Pick a section and Wivoza writes the scenario; the
-  Conversation section writes a moment with a parent, student, colleague or
-  administrator instead; the teacher replies once and gets a coaching report
-  (live back-and-forth rehearsal is in Communication Coach's Prepare for a
-  Conversation). Asking about something real is Talk It Through's job
-  now, and a conversation that is actually happening goes to Communication
-  Coach.
+- Practice: a rehearsal with a model response to compare against. Two ways
+  in: "Make one up for me" (pick a section and Wivoza writes a realistic
+  scenario; the Conversation section writes a moment with a parent, student,
+  colleague or administrator) or "Something I'm facing" (the teacher
+  describes a real situation and how they would handle it, with nothing to
+  classify). Either way the teacher replies once and gets a coaching report.
+  A teacher's own situation is never shown to anyone else. Live back-and-forth
+  rehearsal of a real meeting is in Communication Coach's Prepare for a
+  Conversation.
 - Planning Coach: build a lesson from a topic (quick ideas or a full
   lesson), strengthen a plan you wrote, review slides you built (.pptx or
   .pdf), or review an assignment. The assignment review, formerly called
   Assignment Coach, reports on grade fit, rigor, learning value, workload
   and AI-completion risk, or redesigns the task so students must show their
   own thinking. A built lesson can come out in the school's own lesson plan
-  form: a school admin uploads the form once (Admin, Lesson plan format), or
+  form: a school admin uploads the form once (School Admin, Settings, Lesson Plan
+  Format), or
   a teacher uploads their own from "Manage formats" on the lesson. Wivoza
   reads its sections; the lesson is laid out in them, ready to copy or
   download as Word. Sections about specific students are left blank for the
@@ -57,7 +60,8 @@ THE TOOLS
   to check, then fills in the whole week, in the school's weekly form when
   there is one. Any day can be opened as a full lesson. Weeks are on the
   web only, not in the iPhone app.
-- LMS: a school can put Wivoza in its Canvas under Admin, LMS. Teachers then
+- LMS: a school can put Wivoza in its Canvas under School Admin, Settings,
+  LMS Connections. Teachers then
   open Wivoza from their courses, in its own tab, signed in; students never
   see it and are turned away if they reach it. The first time, a teacher
   signs in to Wivoza once to connect their Canvas account. Wivoza can work
@@ -69,10 +73,44 @@ THE TOOLS
   conversation (including rehearsing it), or get a second read on a reply
   before sending it.
 
+FOR SCHOOL ADMINS
+- Admins (principals, coaches, district leaders) switch between My Coaching
+  (their own coaching tools) and School Admin at the top of the sidebar.
+- School Admin pages: Dashboard (opens with the school's focus, then usage
+  and what needs attention, filterable by dates, grade band and subject, with
+  a pilot report PDF and a data export); Usage & Engagement; Coaching
+  Insights (patterns from recorded lessons across the staff, in the same four
+  sections teachers see); Professional Learning (track a growth area as a
+  school and see whether it shows up in fewer lessons); Coaching Priorities;
+  People (the staff list); and Settings (Lesson Plan Format, LMS
+  Connections).
+- Group comparisons, by grade or subject, are only shown once at least 5
+  teachers contribute, so no one can be singled out.
+
+COACHING PRIORITIES (a school focus)
+- A school admin can share up to two coaching priorities, focus areas the
+  school is working on such as academic discussion, written in their own
+  words ("Help me write this" drafts it for them to edit).
+- Each teacher decides privately. It is off until the teacher turns it on
+  (they are asked once, on Home) and they can pause or turn it off any time
+  in Profile & Settings.
+- When it is on, Wivoza may offer one idea for it in Planning Coach and Talk
+  It Through, only when it fits what the teacher is working on, always
+  labelled "Connected to your selected school focus". In a Lesson Debrief
+  report (on the website) the teacher can ask for one: "Find an idea in this
+  lesson" quotes one of the teacher's own lines and suggests one move for
+  next time, or says there was nothing to build on. It never scores the
+  teacher or says the strategy didn't happen, and it is never in the
+  printable report.
+- The school's administrators never see who turned a priority on, paused it
+  or said no, how many did, or whether anyone used an idea.
+
 PRIVACY (the most common questions)
 - No administrator ever sees an individual teacher's recordings, transcripts,
-  answers, plans or ratings. School and district admins see only aggregate
-  trends across their staff. Every admin view says so on screen.
+  reports, conversations, answers, plans or ratings. Admins see school-wide
+  trends, plus a staff list with each teacher's name, account status and when
+  they last used Wivoza, and nothing about what anyone recorded, wrote or
+  practiced. Every admin view says so on screen.
 - Audio is never kept. Talk It Through and Lesson Debrief transcribe a
   recording and then immediately discard it; only text and metrics remain.
 - Wivoza never records video. A camera is used only when a teacher chooses

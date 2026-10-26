@@ -1,11 +1,12 @@
 # Coaching Priorities: a school shares a focus, each teacher decides
 
-Status: **phase one built 2026-10-23, not yet deployed.** Spec written
+Status: **phase one live since 2026-10-23 (de40c68).** Spec written
 2026-10-21, mock-up made 2026-10-23 (private canvas:
 https://claude.ai/artifact/S8y2GKa5eMxFqcXLtt9xhB). Phase one is the admin
 screen, the teacher's opt-in (web Home and Profile), Planning Coach's Build a
-Lesson and Talk It Through (web, iPhone, Telegram). Not yet: Lesson Debrief,
-Practice, the iPhone opt-in screens.
+Lesson and Talk It Through (web, iPhone, Telegram). Lesson Debrief followed
+on 2026-10-24 (2d7e5a5): "Find an idea in this lesson", on request, web only.
+Not yet: Practice, the iPhone opt-in screens.
 
 **Deploy order.** Migration `20261023210000_add_coaching_priorities` must be
 applied to the production database by hand BEFORE the server deploys: it adds

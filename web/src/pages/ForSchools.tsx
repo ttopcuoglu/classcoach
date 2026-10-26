@@ -507,7 +507,7 @@ export default function ForSchools() {
               <p className="text-sm text-ink-soft">
                 <span className="font-semibold text-forest">Coaching Priorities.</span> Share up to two focus areas your
                 school is working on, like academic discussion, in your own words. Each teacher decides privately
-                whether Wivoza offers ideas for it when they plan a lesson or talk a problem through. Every idea is
+                whether Wivoza offers ideas for it when they plan a lesson, talk a problem through, or look back at a recorded lesson. Every idea is
                 labelled, and you never see who turned it on.
               </p>
             </div>
