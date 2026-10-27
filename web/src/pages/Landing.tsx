@@ -150,7 +150,7 @@ const PLACES = [
     title: 'On your iPhone',
     description: 'Record a lesson from the phone in your pocket, with the same account.',
     href: 'https://apps.apple.com/us/app/wivoza/id6808223345',
-    cta: 'Get it on the App Store',
+    cta: 'Download on the App Store',
   },
   {
     icon: TelegramIcon,
@@ -739,15 +739,11 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               )}
               <h3 className="mt-5 font-heading text-xl font-bold text-forest">{title}</h3>
               <p className="mt-2 text-sm text-ink-soft">{description}</p>
+              {/* Apple's own badge, unaltered and at its minimum 40px height, as
+                  its marketing guidelines ask; it replaces a text link. */}
               {href && (
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-terracotta-600 hover:text-terracotta"
-                >
-                  {cta}
-                  <ArrowRightIcon className="h-4 w-4" />
+                <a href={href} target="_blank" rel="noreferrer" className="mt-4 inline-block self-start">
+                  <img src="/badges/app-store-badge.svg" alt={cta ?? ''} className="h-10 w-auto" />
                 </a>
               )}
             </div>
