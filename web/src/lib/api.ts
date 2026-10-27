@@ -50,12 +50,31 @@ export type ScenarioAttempt = {
 // Curated subset of Deepgram Aura-2's voice catalog for Talk It Through —
 // see server/src/lib/talkVoices.ts. Same flat per-character billing
 // regardless of voice, so this list is a UX choice, not a cost one.
-export type TalkVoice = 'apollo' | 'arcas' | 'andromeda'
+export type TalkVoice =
+  | 'apollo'
+  | 'arcas'
+  | 'andromeda'
+  | 'harmonia'
+  | 'hera'
+  | 'cordelia'
+  | 'vesta'
+  | 'luna'
+  | 'orion'
+  | 'pluto'
+  | 'odysseus'
 
 export const TALK_VOICES: { value: TalkVoice; label: string; description: string }[] = [
-  { value: 'apollo', label: 'Apollo', description: 'Calm and confident (default)' },
+{ value: 'apollo', label: 'Apollo', description: 'Calm and confident (default)' },
   { value: 'arcas', label: 'Arcas', description: 'Smooth and natural' },
   { value: 'andromeda', label: 'Andromeda', description: 'Casual and expressive' },
+  { value: 'harmonia', label: 'Harmonia', description: 'Empathetic and clear' },
+  { value: 'hera', label: 'Hera', description: 'Smooth, warm, professional' },
+  { value: 'cordelia', label: 'Cordelia', description: 'Approachable and warm' },
+  { value: 'vesta', label: 'Vesta', description: 'Patient and expressive' },
+  { value: 'luna', label: 'Luna', description: 'Friendly and engaging' },
+  { value: 'orion', label: 'Orion', description: 'Calm and polite' },
+  { value: 'pluto', label: 'Pluto', description: 'Deeper, smooth and calm' },
+  { value: 'odysseus', label: 'Odysseus', description: 'Calm and professional' },
 ]
 
 export const DEFAULT_TALK_VOICE: TalkVoice = 'apollo'

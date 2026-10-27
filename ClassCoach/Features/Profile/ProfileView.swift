@@ -10,9 +10,17 @@ enum TalkVoice {
     /// together.
     static let defaultId = "apollo"
     static let all: [(id: String, label: String, description: String)] = [
-        ("apollo", "Apollo", "Calm and confident (default)"),
+("apollo", "Apollo", "Calm and confident (default)"),
         ("arcas", "Arcas", "Smooth and natural"),
         ("andromeda", "Andromeda", "Casual and expressive"),
+        ("harmonia", "Harmonia", "Empathetic and clear"),
+        ("hera", "Hera", "Smooth, warm, professional"),
+        ("cordelia", "Cordelia", "Approachable and warm"),
+        ("vesta", "Vesta", "Patient and expressive"),
+        ("luna", "Luna", "Friendly and engaging"),
+        ("orion", "Orion", "Calm and polite"),
+        ("pluto", "Pluto", "Deeper, smooth and calm"),
+        ("odysseus", "Odysseus", "Calm and professional"),
     ]
 }
 

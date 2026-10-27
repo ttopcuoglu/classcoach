@@ -10,7 +10,19 @@
 // isValidTalkVoice guards every read, so nothing has to be migrated. The
 // web picker resolves an unlisted value to the default too, otherwise their
 // Profile would show no voice selected at all.
-export const TALK_VOICES = ['apollo', 'arcas', 'andromeda'] as const
+export const TALK_VOICES = [
+  'apollo',
+  'arcas',
+  'andromeda',
+  'harmonia',
+  'hera',
+  'cordelia',
+  'vesta',
+  'luna',
+  'orion',
+  'pluto',
+  'odysseus',
+] as const
 
 export type TalkVoice = (typeof TALK_VOICES)[number]
 
