@@ -424,3 +424,39 @@ export function GearIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function BrowserIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className} aria-hidden="true">
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <path strokeLinecap="round" d="M3 9h18" />
+      <circle cx="6" cy="6.75" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="8.25" cy="6.75" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="10.5" cy="6.75" r="0.6" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+export function PhoneIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className} aria-hidden="true">
+      <rect x="6.5" y="2.5" width="11" height="19" rx="2.75" />
+      <path strokeLinecap="round" d="M10.5 5h3" />
+      <path strokeLinecap="round" d="M11 18.5h2" />
+    </svg>
+  )
+}
+
+// Telegram's own mark, in its own blue, so the card reads as Telegram at a
+// glance. Drawn whole (circle and plane), not tinted like the app's icons.
+export function TelegramIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="12" fill="#2AABEE" />
+      <path
+        fill="#FFFFFF"
+        d="M5.43 11.87l11.3-4.36c.53-.19.98.13.81.92l-1.92 9.06c-.14.64-.52.8-1.06.5l-2.93-2.16-1.41 1.36c-.16.16-.29.29-.6.29l.21-2.98 5.43-4.9c.24-.21-.05-.32-.36-.12l-6.71 4.22-2.89-.9c-.63-.2-.64-.63.13-.93Z"
+      />
+    </svg>
+  )
+}

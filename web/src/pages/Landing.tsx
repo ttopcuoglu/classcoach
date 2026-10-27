@@ -6,6 +6,7 @@ import {
   ArrowRightIcon,
   BookIcon,
   BrainIcon,
+  BrowserIcon,
   ChartBarIcon,
   CheckIcon,
   ChatBubbleIcon,
@@ -16,11 +17,12 @@ import {
   LockIcon,
   MailIcon,
   MenuIcon,
-  MicIcon,
+  PhoneIcon,
   PlayIcon,
   QuoteIcon,
   SparkleIcon,
   TargetIcon,
+  TelegramIcon,
   YouTubeIcon,
 } from '../components/icons'
 import { introVideo, MEET_PLAYLIST_ID, VideoFacade } from '../components/TrainingVideos'
@@ -133,24 +135,28 @@ const COLUMN_BADGES = ['bg-gold text-forest', 'bg-terracotta text-cream', 'bg-fo
 // without the home page ever saying so.
 const PLACES = [
   {
-    icon: SparkleIcon,
+    icon: BrowserIcon,
     tint: 'bg-mint-tint text-forest',
+    brand: false,
     title: 'In your browser',
     description: 'Every tool, on a phone, tablet, or laptop. Nothing to install.',
     href: null,
     cta: null,
   },
   {
-    icon: MicIcon,
+    icon: PhoneIcon,
     tint: 'bg-peach-tint text-terracotta',
+    brand: false,
     title: 'On your iPhone',
     description: 'Record a lesson from the phone in your pocket, with the same account.',
     href: 'https://apps.apple.com/us/app/wivoza/id6808223345',
     cta: 'Get it on the App Store',
   },
   {
-    icon: ChatBubbleIcon,
+    icon: TelegramIcon,
     tint: 'bg-gold-tint text-terracotta-600',
+    // Telegram's own mark, shown whole instead of on a tinted badge.
+    brand: true,
     title: 'In Telegram',
     description: 'Text Coach, send a voice note on the way home, photograph the worksheet in front of you, or forward the email you need to answer. Connect it from your Profile.',
     href: null,
@@ -722,11 +728,15 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           </h2>
         </div>
         <div className="grid gap-6 sm:grid-cols-3">
-          {PLACES.map(({ icon: Icon, tint, title, description, href, cta }) => (
+          {PLACES.map(({ icon: Icon, tint, brand, title, description, href, cta }) => (
             <div key={title} className={`flex flex-col rounded-3xl p-7 ${TINT_STYLES[tint].card}`}>
-              <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${TINT_STYLES[tint].badge}`}>
-                <Icon className="h-6 w-6" />
-              </span>
+              {brand ? (
+                <Icon className="h-12 w-12" />
+              ) : (
+                <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${TINT_STYLES[tint].badge}`}>
+                  <Icon className="h-6 w-6" />
+                </span>
+              )}
               <h3 className="mt-5 font-heading text-xl font-bold text-forest">{title}</h3>
               <p className="mt-2 text-sm text-ink-soft">{description}</p>
               {href && (
