@@ -19,6 +19,7 @@ import GuideLessonDebrief from './pages/GuideLessonDebrief'
 import GuideLessonPlanning from './pages/GuideLessonPlanning'
 import GuideTalkItThrough from './pages/GuideTalkItThrough'
 import Landing from './pages/Landing'
+import Research from './pages/Research'
 import Terms from './pages/Terms'
 
 export { PUBLIC_PAGE_META } from './lib/pageMeta'
@@ -29,6 +30,7 @@ const PAGES: Record<string, () => React.ReactElement> = {
   '/faq': () => <Faq />,
   '/for-schools': () => <ForSchools />,
   '/terms': () => <Terms />,
+  '/research': () => <Research />,
   '/guide': () => <Guide />,
   '/guide/talk-it-through': () => <GuideTalkItThrough />,
   '/guide/lesson-debrief': () => <GuideLessonDebrief />,

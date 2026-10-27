@@ -4,6 +4,10 @@
 // carried the home page's canonical link — which tells Google that /guide,
 // /faq and the rest are duplicates of the home page and not worth indexing.
 // Keep this list and public/sitemap.xml in step.
+//
+// Canonical addresses end in a slash (/faq/) because that is the address the
+// host serves the prerendered page at (scripts/prerender.mjs); a bare /faq
+// falls through to the app's catch-all index.html.
 
 const SITE = 'https://www.wivoza.com'
 const DEFAULT_TITLE = 'Wivoza — AI coaching for K-12 teachers'
@@ -81,7 +85,7 @@ export function applyPageMeta(pathname: string) {
   const meta = PUBLIC_PAGE_META[path]
   const title = meta?.title ?? DEFAULT_TITLE
   const description = meta?.description ?? DEFAULT_DESCRIPTION
-  const url = `${SITE}${path === '/' ? '/' : path}`
+  const url = `${SITE}${path === '/' ? '/' : `${path}/`}`
 
   document.title = title
   setMeta('meta[name="description"]', 'content', description, () => {

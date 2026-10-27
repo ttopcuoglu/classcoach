@@ -42,7 +42,8 @@ function swap(html, pattern, replacement, what) {
 for (const path of ROUTES) {
   const meta = PUBLIC_PAGE_META[path]
   if (!meta) throw new Error(`prerender: no PUBLIC_PAGE_META entry for ${path}`)
-  const url = `${SITE}${path}`
+  // The trailing slash matches the address the host serves this file at.
+  const url = `${SITE}${path === '/' ? '/' : `${path}/`}`
   const title = escape(meta.title)
   const description = escape(meta.description)
 
@@ -54,7 +55,10 @@ for (const path of ROUTES) {
   html = swap(html, /(<meta\s+property="og:description"\s+content=")[^"]*(")/, (_, a, b) => `${a}${description}${b}`, 'og:description')
   html = swap(html, /(<meta name="twitter:title" content=")[^"]*(")/, (_, a, b) => `${a}${title}${b}`, 'twitter:title')
   html = swap(html, /(<meta\s+name="twitter:description"\s+content=")[^"]*(")/, (_, a, b) => `${a}${description}${b}`, 'twitter:description')
-  html = swap(html, /<\/head>/, `    <link rel="canonical" href="${url}" />\n  </head>`, '</head>')
+  // Not on the home page: dist/index.html is also what the host answers every
+  // other unknown address with (a bare /faq included), and a canonical there
+  // would claim all of them are the home page. The app sets it at runtime.
+  if (path !== '/') html = swap(html, /<\/head>/, `    <link rel="canonical" href="${url}" />\n  </head>`, '</head>')
   if (path === '/') {
     html = swap(
       html,
