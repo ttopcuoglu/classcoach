@@ -11,10 +11,10 @@
 // web picker resolves an unlisted value to the default too, otherwise their
 // Profile would show no voice selected at all.
 export const TALK_VOICES = [
+  'harmonia',
   'apollo',
   'arcas',
   'andromeda',
-  'harmonia',
   'hera',
   'cordelia',
   'vesta',
@@ -26,7 +26,7 @@ export const TALK_VOICES = [
 
 export type TalkVoice = (typeof TALK_VOICES)[number]
 
-export const DEFAULT_TALK_VOICE: TalkVoice = 'apollo'
+export const DEFAULT_TALK_VOICE: TalkVoice = 'harmonia'
 
 export function isValidTalkVoice(value: unknown): value is TalkVoice {
   return typeof value === 'string' && (TALK_VOICES as readonly string[]).includes(value)

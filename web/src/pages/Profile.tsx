@@ -152,8 +152,8 @@ export default function Profile() {
   const showCanvas = !!canvas && (canvas.linked === true || canvas.connected)
   const afterCanvas = showCanvas ? 1 : 0
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSave(e?: React.FormEvent) {
+    e?.preventDefault()
     setSaving(true)
     setSaveError(null)
     setSaved(false)
@@ -430,17 +430,11 @@ export default function Profile() {
           />
         </label>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="submit"
-            disabled={saving}
-            className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-          >
-            {saving ? 'Saving...' : 'Save changes'}
-          </button>
-          {saved && <span className="text-sm text-forest">Saved.</span>}
-          {saveError && <span className="text-sm text-terracotta-600">{saveError}</span>}
-        </div>
+        {/* Submitting from inside the form still works — pressing Return in a
+            field does it — but the control a teacher reaches for is the bar at
+            the foot of the page, which is in reach from every section this
+            form saves rather than only the first one. */}
+        <button type="submit" className="hidden" aria-hidden="true" tabIndex={-1} />
       </form>
 
       <div className="rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
@@ -473,7 +467,6 @@ export default function Profile() {
           />
           Let Coach remember things between conversations
         </label>
-        <p className="mt-1 text-xs text-ink-soft">Use "Save changes" above to apply this.</p>
 
         {coachMemory && (
           <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -521,7 +514,6 @@ export default function Profile() {
                 />
                 Let Coach use what my recordings measured
               </label>
-              <p className="mt-1 text-xs text-ink-soft">Use "Save changes" above to apply this.</p>
             </>
           ) : (
             <p className="mt-4 text-sm text-ink-soft">
@@ -580,7 +572,6 @@ export default function Profile() {
             </button>
           ))}
         </div>
-        <p className="mt-2 text-xs text-ink-soft">Use "Save changes" above to apply this.</p>
       </div>
 
       {/* Anchored so Home's "connect your phone" lands on the section
@@ -673,7 +664,7 @@ export default function Profile() {
             <option value="90">Delete after 90 days</option>
           </select>
           <span className="text-xs text-ink-soft">
-            Applies to new Lesson Debrief transcripts and reports. Use "Save changes" above to apply this.
+            Applies to new Lesson Debrief transcripts and reports.
           </span>
         </label>
 
@@ -704,6 +695,33 @@ export default function Profile() {
         {resetDone && <p className="mt-2 text-sm text-forest">Your data has been cleared.</p>}
         {resetError && <p className="mt-2 text-sm text-terracotta-600">{resetError}</p>}
         {deleteAccountError && <p className="mt-2 text-sm text-terracotta-600">{deleteAccountError}</p>}
+      </div>
+
+      {/* One Save, reachable from anywhere on the page.
+          It used to sit inside the first section, which is also the only
+          section it visually belonged to — and yet it saves the room, the
+          voice, the transcript language and the rest, all of which are below
+          it. The page had grown four separate notes reading "Use Save changes
+          above to apply this", which is a design telling on itself: if the
+          control has to explain where it is, it is in the wrong place.
+          Sticky rather than merely last, because this page is long enough
+          that the foot of it is its own scroll. */}
+      {/* Clear of the fixed tab bar on a phone (Layout's bottom nav is
+          md:hidden), and close to the edge once that bar is gone. */}
+      <div className="sticky bottom-20 z-10 flex flex-wrap items-center gap-3 rounded-full border border-hairline bg-cream-card/95 px-5 py-3 shadow-sm backdrop-blur md:bottom-4">
+        <button
+          type="button"
+          onClick={() => void handleSave()}
+          disabled={saving}
+          className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+        >
+          {saving ? 'Saving...' : 'Save changes'}
+        </button>
+        {saved && <span className="text-sm text-forest">Saved.</span>}
+        {saveError && <span className="text-sm text-terracotta-600">{saveError}</span>}
+        {!saved && !saveError && !saving && (
+          <span className="text-sm text-ink-soft">Saves everything on this page.</span>
+        )}
       </div>
     </div>
   )

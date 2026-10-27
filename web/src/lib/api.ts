@@ -51,10 +51,10 @@ export type ScenarioAttempt = {
 // see server/src/lib/talkVoices.ts. Same flat per-character billing
 // regardless of voice, so this list is a UX choice, not a cost one.
 export type TalkVoice =
+  | 'harmonia'
   | 'apollo'
   | 'arcas'
   | 'andromeda'
-  | 'harmonia'
   | 'hera'
   | 'cordelia'
   | 'vesta'
@@ -64,10 +64,10 @@ export type TalkVoice =
   | 'odysseus'
 
 export const TALK_VOICES: { value: TalkVoice; label: string; description: string }[] = [
-{ value: 'apollo', label: 'Apollo', description: 'Calm and confident (default)' },
+  { value: 'harmonia', label: 'Harmonia', description: 'Empathetic and clear (default)' },
+  { value: 'apollo', label: 'Apollo', description: 'Calm and confident' },
   { value: 'arcas', label: 'Arcas', description: 'Smooth and natural' },
   { value: 'andromeda', label: 'Andromeda', description: 'Casual and expressive' },
-  { value: 'harmonia', label: 'Harmonia', description: 'Empathetic and clear' },
   { value: 'hera', label: 'Hera', description: 'Smooth, warm, professional' },
   { value: 'cordelia', label: 'Cordelia', description: 'Approachable and warm' },
   { value: 'vesta', label: 'Vesta', description: 'Patient and expressive' },
@@ -77,7 +77,7 @@ export const TALK_VOICES: { value: TalkVoice; label: string; description: string
   { value: 'odysseus', label: 'Odysseus', description: 'Calm and professional' },
 ]
 
-export const DEFAULT_TALK_VOICE: TalkVoice = 'apollo'
+export const DEFAULT_TALK_VOICE: TalkVoice = 'harmonia'
 
 /// A voice the teacher chose before the list was narrowed is still in their
 /// column; the server serves the default for it, so the picker has to show

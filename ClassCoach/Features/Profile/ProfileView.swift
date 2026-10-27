@@ -8,12 +8,12 @@ enum TalkVoice {
     /// labelled the wrong voice as the default and showed it as selected for
     /// every teacher who had never chosen one — the two are only ever right
     /// together.
-    static let defaultId = "apollo"
+    static let defaultId = "harmonia"
     static let all: [(id: String, label: String, description: String)] = [
-("apollo", "Apollo", "Calm and confident (default)"),
+        ("harmonia", "Harmonia", "Empathetic and clear (default)"),
+        ("apollo", "Apollo", "Calm and confident"),
         ("arcas", "Arcas", "Smooth and natural"),
         ("andromeda", "Andromeda", "Casual and expressive"),
-        ("harmonia", "Harmonia", "Empathetic and clear"),
         ("hera", "Hera", "Smooth, warm, professional"),
         ("cordelia", "Cordelia", "Approachable and warm"),
         ("vesta", "Vesta", "Patient and expressive"),
