@@ -26,8 +26,10 @@
 // deleted. What it returns is one character a second, and nothing that
 // sounds like anyone can be rebuilt from it.
 
+import { spawn } from 'node:child_process'
 import { createReadStream } from 'node:fs'
 import { open } from 'node:fs/promises'
+import ffmpegPath from 'ffmpeg-static'
 
 /// One character per second: v one voice, m many voices, o other sound,
 /// q quiet, - too little audio to say.
@@ -303,11 +305,15 @@ export function classifyVoices(samples: Float32Array, sampleRate: number): Voice
   return smoothVoices(secondFeatures(frameFeatures(samples, sampleRate)).map(classifySecond).join(''))
 }
 
-/// The whole step as the upload route runs it: the file is read a megabyte
-/// at a time, and other requests are served between pieces. When the file is
-/// not audio this can read, the reason why, so a browser recording is "not
-/// measured" rather than an error — and says so.
-export async function classifyVoicesInFile(path: string): Promise<{ trace: VoiceTrace } | { unread: string }> {
+type Classified = { trace: VoiceTrace } | { unread: string }
+
+/// The whole step as the upload route runs it. A WAV is read straight off
+/// disk; anything else — the iPhone's upload is AAC, compressed after Stop to
+/// spare a teacher a 115 MB upload, and a browser's is WebM — is decoded by
+/// ffmpeg on the way in. Either way the audio arrives in pieces and other
+/// requests are served between them. When the file cannot be read, the
+/// reason why, so a lesson without classes says what went wrong.
+export async function classifyVoicesInFile(path: string): Promise<Classified> {
   const file = await open(path)
   let fmt: WavFormat | string
   try {
@@ -318,14 +324,48 @@ export async function classifyVoicesInFile(path: string): Promise<{ trace: Voice
   } finally {
     await file.close()
   }
-  if (typeof fmt === 'string') return { unread: fmt }
-  const bytesPerSec = fmt.sampleRate * fmt.channels * (fmt.float ? 4 : 2)
-  if (fmt.dataEnd - fmt.dataStart < bytesPerSec) return { unread: `under a second of audio (${fmt.dataEnd - fmt.dataStart} bytes)` }
+  if (typeof fmt === 'string') {
+    const decoded = await classifyDecoded(path)
+    return 'unread' in decoded ? { unread: `${fmt}; ${decoded.unread}` } : decoded
+  }
+  if (fmt.dataEnd - fmt.dataStart < bytesPerSec(fmt)) return { unread: `under a second of audio (${fmt.dataEnd - fmt.dataStart} bytes)` }
+  return measure(createReadStream(path, { start: fmt.dataStart, end: fmt.dataEnd - 1, highWaterMark: 1 << 20 }), fmt)
+}
+
+/// What ffmpeg is asked to decode to: the same 16 kHz mono 16-bit samples the
+/// iPhone records, so a decoded upload is measured exactly as a WAV one is.
+const DECODED: WavFormat = { float: false, channels: 1, sampleRate: 16000, dataStart: 0, dataEnd: 0 }
+
+async function classifyDecoded(path: string): Promise<Classified> {
+  if (!ffmpegPath) return { unread: 'no ffmpeg for this platform' }
+  const child = spawn(ffmpegPath, ['-nostdin', '-v', 'error', '-i', path, '-vn', '-ac', '1', '-ar', String(DECODED.sampleRate), '-f', 's16le', 'pipe:1'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let stderr = ''
+  child.stderr.on('data', (d: Buffer) => (stderr = (stderr + d.toString()).slice(-300)))
+  // Resolves rather than rejects: the process exits on an unhandled rejection
+  // (see index.ts), and a failed spawn is only a lesson without classes.
+  const exited = new Promise<string | null>((resolve) => {
+    child.on('error', (error) => resolve(`ffmpeg did not start: ${error.message}`))
+    child.on('close', (code) => resolve(code === 0 ? null : `ffmpeg exited ${code}: ${stderr.trim()}`))
+  })
+  const result = await measure(child.stdout, DECODED)
+  const failed = await exited
+  return failed ? { unread: failed } : result
+}
+
+function bytesPerSec(fmt: WavFormat): number {
+  return fmt.sampleRate * fmt.channels * (fmt.float ? 4 : 2)
+}
+
+async function measure(chunks: AsyncIterable<Buffer>, fmt: WavFormat): Promise<Classified> {
   const meter = new FrameMeter(fmt.sampleRate)
   const frameBytes = fmt.channels * (fmt.float ? 4 : 2)
   let carry = Buffer.alloc(0)
-  for await (const chunk of createReadStream(path, { start: fmt.dataStart, end: fmt.dataEnd - 1, highWaterMark: 1 << 20 })) {
-    const bytes = carry.length ? Buffer.concat([carry, chunk as Buffer]) : (chunk as Buffer)
+  let total = 0
+  for await (const chunk of chunks) {
+    total += chunk.length
+    const bytes = carry.length ? Buffer.concat([carry, chunk]) : chunk
     const whole = bytes.length - (bytes.length % frameBytes)
     meter.push(toSamples(bytes.subarray(0, whole), fmt))
     carry = Buffer.from(bytes.subarray(whole))
@@ -333,8 +373,9 @@ export async function classifyVoicesInFile(path: string): Promise<{ trace: Voice
     // the event loop a turn between pieces keeps the server answering.
     await new Promise((resolve) => setImmediate(resolve))
   }
+  if (total < bytesPerSec(fmt)) return { unread: `under a second of audio (${total} bytes)` }
   const trace = smoothVoices(secondFeatures(meter.finish()).map(classifySecond).join(''))
-  return trace ? { trace } : { unread: `no frames from ${fmt.dataEnd - fmt.dataStart} bytes at ${fmt.sampleRate} Hz` }
+  return trace ? { trace } : { unread: `no frames from ${total} bytes at ${fmt.sampleRate} Hz` }
 }
 
 /// Named apart from `quietSec` and `unresolvedSec`, which the level-trace

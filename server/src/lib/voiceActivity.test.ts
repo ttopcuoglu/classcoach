@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { test } from 'node:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import ffmpegPath from 'ffmpeg-static'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { classifyVoices, classifyVoicesInFile, decodeWav, keepVoiceClasses, smoothVoices, voiceShares } from './voiceActivity.ts'
@@ -168,12 +170,50 @@ test('reading a file in pieces gives the same answer as reading it whole', async
   }
 })
 
-test('a file that is not WAV has no classes, and says why', async () => {
+/// The fraction of seconds two traces agree on.
+function agreement(a: string, b: string): number {
+  let same = 0
+  for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] === b[i]) same++
+  return same / Math.max(a.length, b.length)
+}
+
+// The iPhone uploads AAC at 32 kbps (AudioCompressor.swift) and a browser
+// uploads WebM/Opus. Compression must not change what the room sounded like.
+for (const [name, codec] of [
+  ['an iPhone upload (AAC)', ['-c:a', 'aac', '-b:a', '32k', 'lesson.m4a']],
+  ['a browser upload (WebM)', ['-c:a', 'libopus', '-b:a', '32k', 'lesson.webm']],
+] as const) {
+  test(`${name} is decoded and reads like the recording it came from`, async () => {
+    const lesson = new Float32Array(60 * SR)
+    lesson.set(voice(20, 150), 0)
+    lesson.set(crowd(20, 6), 20 * SR)
+    const audio = mix(lesson, noise(60, 0.0005))
+    const dir = await mkdtemp(join(tmpdir(), 'voices-'))
+    try {
+      const source = join(dir, 'lesson.wav')
+      await writeFile(source, wav(audio))
+      const target = join(dir, codec[codec.length - 1])
+      execFileSync(ffmpegPath!, ['-v', 'error', '-i', source, ...codec.slice(0, -1), target])
+      const fromWav = await classifyVoicesInFile(source)
+      const decoded = await classifyVoicesInFile(target)
+      assert.ok('trace' in fromWav && 'trace' in decoded, JSON.stringify(decoded))
+      // Encoders pad a few milliseconds at the start, so a second can shift.
+      assert.ok(Math.abs(decoded.trace.length - fromWav.trace.length) <= 1, `${decoded.trace}\n${fromWav.trace}`)
+      assert.ok(agreement(decoded.trace, fromWav.trace) >= 0.9, `${decoded.trace}\n${fromWav.trace}`)
+    } finally {
+      await rm(dir, { recursive: true })
+    }
+  })
+}
+
+test('a file that is neither WAV nor anything ffmpeg can decode has no classes, and says why', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'voices-'))
   try {
     const path = join(dir, 'lesson.webm')
     await writeFile(path, Buffer.alloc(4096, 1))
-    assert.deepEqual(await classifyVoicesInFile(path), { unread: 'not WAV: starts 010101010101010101010101' })
+    const result = await classifyVoicesInFile(path)
+    assert.ok('unread' in result)
+    assert.match(result.unread, /^not WAV: starts 010101010101010101010101; ffmpeg exited \d+: /)
   } finally {
     await rm(dir, { recursive: true })
   }
