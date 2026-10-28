@@ -77,14 +77,17 @@ export type SecondFeatures = {
 type WavFormat = { float: boolean; channels: number; sampleRate: number; dataStart: number; dataEnd: number }
 
 /// Where the samples are in a 16-bit or 32-bit float PCM WAV, from its first
-/// bytes. Null for anything else, including the compressed audio browsers
-/// record: that path has no classes, and the report treats it as not measured.
+/// bytes. For anything else — including the compressed audio browsers record —
+/// a short reason instead, stored with the lesson, because a lesson that came
+/// back without classes and no word why could not be diagnosed.
 ///
 /// `fileSize` is the whole file's: a recording cut off mid-lesson never had
 /// its header finished, so the stated size can be zero or past the end, and
 /// the file holds what it holds.
-function readWavFormat(head: Buffer, fileSize: number): WavFormat | null {
-  if (head.length < 12 || head.toString('ascii', 0, 4) !== 'RIFF' || head.toString('ascii', 8, 12) !== 'WAVE') return null
+function readWavFormat(head: Buffer, fileSize: number): WavFormat | string {
+  if (head.length < 12 || head.toString('ascii', 0, 4) !== 'RIFF' || head.toString('ascii', 8, 12) !== 'WAVE') {
+    return `not WAV: starts ${head.subarray(0, 12).toString('hex')}`
+  }
   let format = 0
   let channels = 0
   let sampleRate = 0
@@ -102,15 +105,15 @@ function readWavFormat(head: Buffer, fileSize: number): WavFormat | null {
       // WAVE_FORMAT_EXTENSIBLE carries the real format in its sub-format GUID.
       if (format === 0xfffe && size >= 26) format = head.readUInt16LE(body + 24)
     } else if (id === 'data') {
-      if (!channels || !sampleRate) return null
-      if (!((format === 1 && bits === 16) || (format === 3 && bits === 32))) return null
+      if (!channels || !sampleRate) return 'no fmt chunk before data'
+      if (!((format === 1 && bits === 16) || (format === 3 && bits === 32))) return `unsupported format ${format}, ${bits}-bit`
       const dataEnd = size > 0 && body + size <= fileSize ? body + size : fileSize
       return { float: format === 3, channels, sampleRate, dataStart: body, dataEnd }
     }
     // Chunks are padded to an even length.
     offset = body + size + (size % 2)
   }
-  return null
+  return `no data chunk in the first ${head.length} bytes`
 }
 
 /// Mono samples from whole sample frames of `bytes`, which starts on a frame.
@@ -131,7 +134,7 @@ function toSamples(bytes: Buffer, fmt: WavFormat): Float32Array {
 
 export function decodeWav(buf: Buffer): { samples: Float32Array; sampleRate: number } | null {
   const fmt = readWavFormat(buf, buf.length)
-  if (!fmt) return null
+  if (typeof fmt === 'string') return null
   return { samples: toSamples(buf.subarray(fmt.dataStart, fmt.dataEnd), fmt), sampleRate: fmt.sampleRate }
 }
 
@@ -301,12 +304,12 @@ export function classifyVoices(samples: Float32Array, sampleRate: number): Voice
 }
 
 /// The whole step as the upload route runs it: the file is read a megabyte
-/// at a time, and other requests are served between pieces. Null when the
-/// file is not audio this can read, so a browser recording is "not measured"
-/// rather than an error.
-export async function classifyVoicesInFile(path: string): Promise<VoiceTrace | null> {
+/// at a time, and other requests are served between pieces. When the file is
+/// not audio this can read, the reason why, so a browser recording is "not
+/// measured" rather than an error — and says so.
+export async function classifyVoicesInFile(path: string): Promise<{ trace: VoiceTrace } | { unread: string }> {
   const file = await open(path)
-  let fmt: WavFormat | null
+  let fmt: WavFormat | string
   try {
     const { size } = await file.stat()
     const head = Buffer.alloc(Math.min(size, 64 * 1024))
@@ -315,7 +318,9 @@ export async function classifyVoicesInFile(path: string): Promise<VoiceTrace | n
   } finally {
     await file.close()
   }
-  if (!fmt || fmt.dataEnd - fmt.dataStart < fmt.sampleRate * fmt.channels * (fmt.float ? 4 : 2)) return null
+  if (typeof fmt === 'string') return { unread: fmt }
+  const bytesPerSec = fmt.sampleRate * fmt.channels * (fmt.float ? 4 : 2)
+  if (fmt.dataEnd - fmt.dataStart < bytesPerSec) return { unread: `under a second of audio (${fmt.dataEnd - fmt.dataStart} bytes)` }
   const meter = new FrameMeter(fmt.sampleRate)
   const frameBytes = fmt.channels * (fmt.float ? 4 : 2)
   let carry = Buffer.alloc(0)
@@ -328,7 +333,8 @@ export async function classifyVoicesInFile(path: string): Promise<VoiceTrace | n
     // the event loop a turn between pieces keeps the server answering.
     await new Promise((resolve) => setImmediate(resolve))
   }
-  return smoothVoices(secondFeatures(meter.finish()).map(classifySecond).join(''))
+  const trace = smoothVoices(secondFeatures(meter.finish()).map(classifySecond).join(''))
+  return trace ? { trace } : { unread: `no frames from ${fmt.dataEnd - fmt.dataStart} bytes at ${fmt.sampleRate} Hz` }
 }
 
 /// Named apart from `quietSec` and `unresolvedSec`, which the level-trace
@@ -341,9 +347,13 @@ export function voiceShares(trace: VoiceTrace): VoiceShares {
 }
 
 /// The voice classes already stored in a lesson's metricsDetail, to carry
-/// into a rewrite of it.
-export function keepVoiceClasses(metricsDetail: unknown): ({ voiceTrace: VoiceTrace } & VoiceShares) | Record<string, never> {
-  const trace = (metricsDetail as { voiceTrace?: unknown } | null)?.voiceTrace
-  if (typeof trace !== 'string' || !/^[vmoq-]*$/.test(trace)) return {}
-  return { voiceTrace: trace, ...voiceShares(trace) }
+/// into a rewrite of it — or the reason there are none.
+export function keepVoiceClasses(
+  metricsDetail: unknown,
+): ({ voiceTrace: VoiceTrace } & VoiceShares) | { voiceTraceUnread: string } | Record<string, never> {
+  const stored = metricsDetail as { voiceTrace?: unknown; voiceTraceUnread?: unknown } | null
+  const trace = stored?.voiceTrace
+  if (typeof trace === 'string' && /^[vmoq-]+$/.test(trace)) return { voiceTrace: trace, ...voiceShares(trace) }
+  if (typeof stored?.voiceTraceUnread === 'string') return { voiceTraceUnread: stored.voiceTraceUnread }
+  return {}
 }

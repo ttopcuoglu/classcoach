@@ -511,14 +511,16 @@ function speakerSamplesFrom(segments: { rawSpeakerTag: string; text: string; sta
 async function runTranscription(sessionId: string, audioPath: string, mimetype: string) {
   // What kind of sound each second was, read from the scratch copy while
   // Deepgram has it — this is the last moment the audio exists. Best-effort:
-  // a lesson without it is "not measured", never a failed transcription.
-  const [utterances, voiceTrace] = await Promise.all([
+  // a lesson without it is "not measured", never a failed transcription, and
+  // the reason is kept with the lesson.
+  const [utterances, voices] = await Promise.all([
     transcribeAudioFile(audioPath, mimetype),
-    classifyVoicesInFile(audioPath).catch((error) => {
+    classifyVoicesInFile(audioPath).catch((error: unknown) => {
       console.error('[audio-sessions] voice classes failed:', error)
-      return null
+      return { unread: `error: ${error instanceof Error ? error.message : String(error)}`.slice(0, 300) }
     }),
   ])
+  if ('unread' in voices) console.log(`[audio-sessions] no voice classes for ${sessionId}: ${voices.unread}`)
   if (utterances.length === 0) {
     const error = new Error('No speech was detected in this recording.')
     ;(error as Error & { code?: string }).code = 'NO_SPEECH'
@@ -542,18 +544,20 @@ async function runTranscription(sessionId: string, audioPath: string, mimetype: 
   )
 
   const durationSec = Math.round(Math.max(...utterances.map((u) => u.end)))
-  const before = voiceTrace
-    ? await prisma.audioSession.findUnique({ where: { id: sessionId }, select: { metricsDetail: true } })
-    : null
+  const before = await prisma.audioSession.findUnique({ where: { id: sessionId }, select: { metricsDetail: true } })
+  const kept = { ...(before?.metricsDetail as Prisma.JsonObject | null) }
+  delete kept.voiceTrace
+  delete kept.voiceTraceUnread
   await prisma.audioSession.update({
     where: { id: sessionId },
     data: {
       status: 'tagging',
       durationSec,
       failureReason: null,
-      ...(voiceTrace
-        ? { metricsDetail: { ...(before?.metricsDetail as Prisma.JsonObject | null), voiceTrace, ...voiceShares(voiceTrace) } }
-        : {}),
+      metricsDetail: {
+        ...kept,
+        ...('trace' in voices ? { voiceTrace: voices.trace, ...voiceShares(voices.trace) } : { voiceTraceUnread: voices.unread }),
+      },
     },
   })
   return speakerSamplesFrom(segments)

@@ -9,11 +9,12 @@ if (!path) {
   process.exit(1)
 }
 const started = Date.now()
-const trace = await classifyVoicesInFile(path)
-if (!trace) {
-  console.error('Not a 16-bit or float PCM WAV of at least a second.')
+const result = await classifyVoicesInFile(path)
+if ('unread' in result) {
+  console.error(`No voice classes: ${result.unread}`)
   process.exit(1)
 }
+const { trace } = result
 const pct = (n: number) => `${Math.round((n / trace.length) * 100)}%`
 const s = voiceShares(trace)
 console.log(`${trace.length}s analysed in ${Date.now() - started} ms`)

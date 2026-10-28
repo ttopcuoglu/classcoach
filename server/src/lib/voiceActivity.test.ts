@@ -108,6 +108,7 @@ test('stored classes carry over a re-analysis, and nothing else passes as them',
     voiceTrace: 'vvm', voiceOneSec: 2, voiceManySec: 1, voiceOtherSec: 0, voiceQuietSec: 0,
   })
   assert.deepEqual(keepVoiceClasses({ voiceTrace: 'not a trace' }), {})
+  assert.deepEqual(keepVoiceClasses({ voiceTraceUnread: 'not WAV' }), { voiceTraceUnread: 'not WAV' })
   assert.deepEqual(keepVoiceClasses(null), {})
 })
 
@@ -161,18 +162,29 @@ test('reading a file in pieces gives the same answer as reading it whole', async
     const path = join(dir, 'lesson.wav')
     await writeFile(path, wav(audio))
     // Quantised to 16 bits on the way into the file, as a real recording is.
-    assert.equal(await classifyVoicesInFile(path), classifyVoices(decodeWav(wav(audio))!.samples, SR))
+    assert.deepEqual(await classifyVoicesInFile(path), { trace: classifyVoices(decodeWav(wav(audio))!.samples, SR) })
   } finally {
     await rm(dir, { recursive: true })
   }
 })
 
-test('a file that is not WAV has no classes', async () => {
+test('a file that is not WAV has no classes, and says why', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'voices-'))
   try {
     const path = join(dir, 'lesson.webm')
     await writeFile(path, Buffer.alloc(4096, 1))
-    assert.equal(await classifyVoicesInFile(path), null)
+    assert.deepEqual(await classifyVoicesInFile(path), { unread: 'not WAV: starts 010101010101010101010101' })
+  } finally {
+    await rm(dir, { recursive: true })
+  }
+})
+
+test('a WAV too short to measure says so', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'voices-'))
+  try {
+    const path = join(dir, 'lesson.wav')
+    await writeFile(path, wav(new Float32Array(100)))
+    assert.deepEqual(await classifyVoicesInFile(path), { unread: 'under a second of audio (200 bytes)' })
   } finally {
     await rm(dir, { recursive: true })
   }
