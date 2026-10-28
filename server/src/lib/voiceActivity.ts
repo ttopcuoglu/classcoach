@@ -63,6 +63,8 @@ export type FrameFeatures = {
   db: Float32Array
   /// How periodic each frame is in the speaking-pitch range, 0...1.
   pitch: Float32Array
+  /// The period that periodicity was found at, in 8 kHz samples; 0 for none.
+  lag: Float32Array
 }
 
 export type SecondFeatures = {
@@ -74,6 +76,12 @@ export type SecondFeatures = {
   clearPitch: number
   /// Share of frames with any pitch.
   somePitch: number
+  /// The voice's pitch over this second, Hz — the middle of its clearly
+  /// pitched frames — or null when none was clear. With `levelDb`, what tells
+  /// one speaker from another; see roomTrace.ts.
+  pitchHz: number | null
+  /// How loud this second was at its loudest, dB (90th percentile of frames).
+  levelDb: number
 }
 
 type WavFormat = { float: boolean; channels: number; sampleRate: number; dataStart: number; dataEnd: number }
@@ -141,7 +149,7 @@ export function decodeWav(buf: Buffer): { samples: Float32Array; sampleRate: num
 }
 
 /// Level and pitch of one 40 ms frame of 8 kHz audio starting at `start`.
-function measureFrame(x: Float32Array, start: number): [db: number, pitch: number] {
+function measureFrame(x: Float32Array, start: number): [db: number, pitch: number, lag: number] {
   let mean = 0
   for (let n = 0; n < WINDOW; n++) mean += x[start + n]
   mean /= WINDOW
@@ -152,8 +160,9 @@ function measureFrame(x: Float32Array, start: number): [db: number, pitch: numbe
   }
   const db = 10 * Math.log10(energy / WINDOW + 1e-12)
   // A frame at the floor has no pitch worth the work of looking for one.
-  if (db < ABSOLUTE_FLOOR_DB) return [db, 0]
+  if (db < ABSOLUTE_FLOOR_DB) return [db, 0, 0]
   let best = 0
+  let bestLag = 0
   for (let lag = MIN_LAG; lag <= MAX_LAG; lag++) {
     let r = 0
     let e0 = 0
@@ -166,9 +175,12 @@ function measureFrame(x: Float32Array, start: number): [db: number, pitch: numbe
       e1 += b * b
     }
     const norm = Math.sqrt(e0 * e1)
-    if (norm > 0 && r / norm > best) best = r / norm
+    if (norm > 0 && r / norm > best) {
+      best = r / norm
+      bestLag = lag
+    }
   }
-  return [db, best]
+  return [db, best, bestLag]
 }
 
 /// Takes audio a piece at a time and keeps only what each frame measured, so
@@ -182,6 +194,7 @@ class FrameMeter {
   private pending = new Float32Array(0)
   private readonly db: number[] = []
   private readonly pitch: number[] = []
+  private readonly lag: number[] = []
 
   constructor(sampleRate: number) {
     // Brings audio down to the analysis rate by averaging blocks of samples.
@@ -203,15 +216,16 @@ class FrameMeter {
     }
     let start = 0
     for (; start + WINDOW <= x.length; start += HOP) {
-      const [db, pitch] = measureFrame(x, start)
+      const [db, pitch, lag] = measureFrame(x, start)
       this.db.push(db)
       this.pitch.push(pitch)
+      this.lag.push(lag)
     }
     this.pending = x.slice(start)
   }
 
   finish(): FrameFeatures {
-    return { db: Float32Array.from(this.db), pitch: Float32Array.from(this.pitch) }
+    return { db: Float32Array.from(this.db), pitch: Float32Array.from(this.pitch), lag: Float32Array.from(this.lag) }
   }
 }
 
@@ -227,7 +241,11 @@ function percentile(values: number[], p: number): number {
   return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))]
 }
 
-export function secondFeatures({ db, pitch }: FrameFeatures): SecondFeatures[] {
+/// A fifth of a second of clear pitch before a second is given one: fewer is
+/// a stray periodic noise as often as a voice.
+const MIN_PITCHED_FRAMES = 10
+
+export function secondFeatures({ db, pitch, lag }: FrameFeatures): SecondFeatures[] {
   const seconds = Math.ceil(db.length / FRAMES_PER_SEC)
   // The recording's own floor: its quietest moments. Calibrating to the
   // recording rather than to a number survives a different phone and a
@@ -247,11 +265,19 @@ export function secondFeatures({ db, pitch }: FrameFeatures): SecondFeatures[] {
     // Only frames with sound in them say anything about pitch: counting the
     // quiet ones would read a voice with long pauses as no voice.
     const loud = pitches.filter((_, i) => around[i] >= activeAt)
+    // Pitch from this second's own frames only, unlike the shares above: it
+    // names who was speaking in THIS second.
+    const hz: number[] = []
+    for (let f = s * FRAMES_PER_SEC; f < Math.min(db.length, (s + 1) * FRAMES_PER_SEC); f++) {
+      if (db[f] >= activeAt && pitch[f] >= CLEAR_PITCH && lag[f] > 0) hz.push(ANALYSIS_RATE / lag[f])
+    }
     out.push({
       active: percentile(own, 0.9) >= activeAt,
       depthDb: percentile(around, 0.95) - percentile(around, 0.1),
       clearPitch: loud.length ? loud.filter((p) => p >= CLEAR_PITCH).length / loud.length : 0,
       somePitch: loud.length ? loud.filter((p) => p >= SOME_PITCH).length / loud.length : 0,
+      pitchHz: hz.length >= MIN_PITCHED_FRAMES ? percentile(hz, 0.5) : null,
+      levelDb: percentile(own, 0.9),
     })
   }
   return out
@@ -305,7 +331,42 @@ export function classifyVoices(samples: Float32Array, sampleRate: number): Voice
   return smoothVoices(secondFeatures(frameFeatures(samples, sampleRate)).map(classifySecond).join(''))
 }
 
-type Classified = { trace: VoiceTrace } | { unread: string }
+/// What each second sounded like, besides its class: `pitch` and `level`, one
+/// character a second each, in the code below. Kept so that once the teacher
+/// has said which speaker is them, a second of talk with no words can be put
+/// down to them or to a student (roomTrace.ts). Like the trace, nothing that
+/// sounds like anyone can be rebuilt from two numbers a second.
+export type VoiceSeconds = { trace: VoiceTrace; pitch: string; level: string }
+
+type Classified = VoiceSeconds | { unread: string }
+
+/// 64 steps, one character each. Pitch is in semitones above 55 Hz, so a
+/// step is the same heard difference at any pitch, with '-' for none; level
+/// is in 1.5 dB steps down from full scale.
+const CODE = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_~'
+const PITCH_BASE_HZ = 55
+const LEVEL_STEP_DB = 1.5
+
+const toCode = (n: number) => CODE[Math.max(0, Math.min(CODE.length - 1, Math.round(n)))]
+
+export function encodeSeconds(seconds: SecondFeatures[]): { pitch: string; level: string } {
+  return {
+    pitch: seconds.map((f) => (f.pitchHz == null ? '-' : toCode(12 * Math.log2(f.pitchHz / PITCH_BASE_HZ)))).join(''),
+    level: seconds.map((f) => toCode(-f.levelDb / LEVEL_STEP_DB)).join(''),
+  }
+}
+
+/// Semitones above 55 Hz, or null for a second with no clear pitch.
+export function pitchAt(pitch: string, sec: number): number | null {
+  const i = CODE.indexOf(pitch[sec] ?? '-')
+  return i < 0 ? null : i
+}
+
+/// dB relative to full scale, or null past the end.
+export function levelAt(level: string, sec: number): number | null {
+  const i = CODE.indexOf(level[sec] ?? '')
+  return i < 0 ? null : -i * LEVEL_STEP_DB
+}
 
 /// The whole step as the upload route runs it. A WAV is read straight off
 /// disk; anything else — the iPhone's upload is AAC, compressed after Stop to
@@ -374,8 +435,9 @@ async function measure(chunks: AsyncIterable<Buffer>, fmt: WavFormat): Promise<C
     await new Promise((resolve) => setImmediate(resolve))
   }
   if (total < bytesPerSec(fmt)) return { unread: `under a second of audio (${total} bytes)` }
-  const trace = smoothVoices(secondFeatures(meter.finish()).map(classifySecond).join(''))
-  return trace ? { trace } : { unread: `no frames from ${total} bytes at ${fmt.sampleRate} Hz` }
+  const seconds = secondFeatures(meter.finish())
+  const trace = smoothVoices(seconds.map(classifySecond).join(''))
+  return trace ? { trace, ...encodeSeconds(seconds) } : { unread: `no frames from ${total} bytes at ${fmt.sampleRate} Hz` }
 }
 
 /// Named apart from `quietSec` and `unresolvedSec`, which the level-trace
@@ -391,10 +453,21 @@ export function voiceShares(trace: VoiceTrace): VoiceShares {
 /// into a rewrite of it — or the reason there are none.
 export function keepVoiceClasses(
   metricsDetail: unknown,
-): ({ voiceTrace: VoiceTrace } & VoiceShares) | { voiceTraceUnread: string } | Record<string, never> {
-  const stored = metricsDetail as { voiceTrace?: unknown; voiceTraceUnread?: unknown } | null
+):
+  | ({ voiceTrace: VoiceTrace; voicePitch?: string; voiceLevel?: string } & VoiceShares)
+  | { voiceTraceUnread: string; voiceTrace?: undefined }
+  | { voiceTrace?: undefined } {
+  const stored = metricsDetail as { voiceTrace?: unknown; voicePitch?: unknown; voiceLevel?: unknown; voiceTraceUnread?: unknown } | null
   const trace = stored?.voiceTrace
-  if (typeof trace === 'string' && /^[vmoq-]+$/.test(trace)) return { voiceTrace: trace, ...voiceShares(trace) }
+  if (typeof trace === 'string' && /^[vmoq-]+$/.test(trace)) {
+    // Lessons classified before pitch and level were kept have only the trace.
+    const coded = (v: unknown) => typeof v === 'string' && v.length === trace.length && /^[0-9A-Za-z_~-]*$/.test(v)
+    return {
+      voiceTrace: trace,
+      ...(coded(stored?.voicePitch) && coded(stored?.voiceLevel) ? { voicePitch: stored!.voicePitch as string, voiceLevel: stored!.voiceLevel as string } : {}),
+      ...voiceShares(trace),
+    }
+  }
   if (typeof stored?.voiceTraceUnread === 'string') return { voiceTraceUnread: stored.voiceTraceUnread }
   return {}
 }

@@ -12,6 +12,7 @@ import { enrichClassroomMoves } from '../lib/classroomMoves.ts'
 import { readEscalation } from '../lib/escalation.ts'
 import { readTeachingMoves } from '../lib/teachingMoves.ts'
 import { parseLevelTrace, splitNonSpeech, teacherIntervals } from '../lib/settleTime.ts'
+import { buildRoomTrace, roomShares } from '../lib/roomTrace.ts'
 import { buildSoundTimeline } from '../lib/soundTimeline.ts'
 import { enrichLessonContent } from '../lib/lessonObjective.ts'
 import { checkFeatureAccess, hasActivePlan, startOfCurrentMonth } from '../lib/billing.ts'
@@ -548,6 +549,8 @@ async function runTranscription(sessionId: string, audioPath: string, mimetype: 
   const kept = { ...(before?.metricsDetail as Prisma.JsonObject | null) }
   delete kept.voiceTrace
   delete kept.voiceTraceUnread
+  delete kept.voicePitch
+  delete kept.voiceLevel
   await prisma.audioSession.update({
     where: { id: sessionId },
     data: {
@@ -556,7 +559,7 @@ async function runTranscription(sessionId: string, audioPath: string, mimetype: 
       failureReason: null,
       metricsDetail: {
         ...kept,
-        ...('trace' in voices ? { voiceTrace: voices.trace, ...voiceShares(voices.trace) } : { voiceTraceUnread: voices.unread }),
+        ...('trace' in voices ? { voiceTrace: voices.trace, voicePitch: voices.pitch, voiceLevel: voices.level, ...voiceShares(voices.trace) } : { voiceTraceUnread: voices.unread }),
       },
     },
   })
@@ -912,6 +915,9 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
   // Measured from the audio at upload, which is gone now: re-analysing must
   // carry it over, because nothing could measure it again.
   const voiceClasses = keepVoiceClasses(stored?.metricsDetail)
+  // Teacher, student, group, other or quiet for every second: the voice
+  // classes read against who the transcript now says is the teacher.
+  const roomTrace = voiceClasses.voiceTrace !== undefined ? buildRoomTrace(voiceClasses, segments) : null
   const nonSpeech = trace
     ? splitNonSpeech(
         trace,
@@ -951,6 +957,7 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
         ...analysis.metricsDetail,
         ...(nonSpeech ? { quietSec: nonSpeech.quietSec, unresolvedSec: nonSpeech.unresolvedSec } : {}),
         ...voiceClasses,
+        ...(roomTrace ? { roomTrace, ...roomShares(roomTrace) } : {}),
       },
       highlights: analysis.highlights,
       phases: analysis.phases,

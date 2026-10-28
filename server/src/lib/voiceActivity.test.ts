@@ -5,7 +5,16 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import ffmpegPath from 'ffmpeg-static'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { classifyVoices, classifyVoicesInFile, decodeWav, keepVoiceClasses, smoothVoices, voiceShares } from './voiceActivity.ts'
+import {
+  classifyVoices,
+  classifyVoicesInFile,
+  decodeWav,
+  frameFeatures,
+  keepVoiceClasses,
+  secondFeatures,
+  smoothVoices,
+  voiceShares,
+} from './voiceActivity.ts'
 
 // No real classroom recording reaches this code yet, so these signals are
 // built by hand: a "voice" is a pitched buzz switched on and off at syllable
@@ -23,14 +32,18 @@ const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647
 /// between them and a longer pause every couple of seconds.
 function voice(sec: number, pitchHz: number, offsetSec = 0, level = 0.2): Float32Array {
   const out = new Float32Array(sec * SR)
+  // Phase is accumulated so the pitch wobbles ±5% and no more: sin(2π·p(t)·t)
+  // with a moving p drifts further from p the longer the clip runs.
+  let phase = 0
   for (let n = 0; n < out.length; n++) {
     const t = n / SR + offsetSec
+    const p = pitchHz * (1 + 0.05 * Math.sin(2 * Math.PI * 0.7 * t))
+    phase += (2 * Math.PI * p) / SR
     const syllable = t % 0.25 < 0.15
     const breath = t % 2.3 < 2.0
     if (!syllable || !breath) continue
-    const p = pitchHz * (1 + 0.05 * Math.sin(2 * Math.PI * 0.7 * t))
     let v = 0
-    for (let h = 1; h <= 6; h++) v += Math.sin(2 * Math.PI * p * h * (n / SR)) / h
+    for (let h = 1; h <= 6; h++) v += Math.sin(phase * h) / h
     out[n] = level * v * Math.sin((Math.PI * (t % 0.25)) / 0.15)
   }
   return out
@@ -55,6 +68,14 @@ function share(trace: string, c: string): number {
   const inner = trace.slice(1, -1)
   return (inner.split(c).length - 1) / inner.length
 }
+
+test('one voice is heard at its own pitch', () => {
+  const features = secondFeatures(frameFeatures(mix(voice(10, 140), noise(10, 0.001)), SR))
+  const pitched = features.slice(1, -1).filter((f) => f.pitchHz != null)
+  assert.ok(pitched.length >= 6, JSON.stringify(features.map((f) => f.pitchHz)))
+  // The synthetic voice wobbles ±5% around 140 Hz.
+  for (const f of pitched) assert.ok(Math.abs(f.pitchHz! - 140) < 12, String(f.pitchHz))
+})
 
 test('one person talking is one voice', () => {
   const trace = classifyVoices(mix(voice(20, 140), noise(20, 0.001)), SR)
@@ -110,6 +131,11 @@ test('stored classes carry over a re-analysis, and nothing else passes as them',
     voiceTrace: 'vvm', voiceOneSec: 2, voiceManySec: 1, voiceOtherSec: 0, voiceQuietSec: 0,
   })
   assert.deepEqual(keepVoiceClasses({ voiceTrace: 'not a trace' }), {})
+  assert.deepEqual(keepVoiceClasses({ voiceTrace: 'vm', voicePitch: 'H-', voiceLevel: 'CD' }), {
+    voiceTrace: 'vm', voicePitch: 'H-', voiceLevel: 'CD', voiceOneSec: 1, voiceManySec: 1, voiceOtherSec: 0, voiceQuietSec: 0,
+  })
+  // Pitch that does not line up with the trace is dropped, not trusted.
+  assert.equal('voicePitch' in keepVoiceClasses({ voiceTrace: 'vm', voicePitch: 'H', voiceLevel: 'CD' }), false)
   assert.deepEqual(keepVoiceClasses({ voiceTraceUnread: 'not WAV' }), { voiceTraceUnread: 'not WAV' })
   assert.deepEqual(keepVoiceClasses(null), {})
 })
@@ -164,7 +190,12 @@ test('reading a file in pieces gives the same answer as reading it whole', async
     const path = join(dir, 'lesson.wav')
     await writeFile(path, wav(audio))
     // Quantised to 16 bits on the way into the file, as a real recording is.
-    assert.deepEqual(await classifyVoicesInFile(path), { trace: classifyVoices(decodeWav(wav(audio))!.samples, SR) })
+    const result = await classifyVoicesInFile(path)
+    assert.ok('trace' in result)
+    assert.equal(result.trace, classifyVoices(decodeWav(wav(audio))!.samples, SR))
+    // Pitch and level come with it, a character a second.
+    assert.equal(result.pitch.length, result.trace.length)
+    assert.equal(result.level.length, result.trace.length)
   } finally {
     await rm(dir, { recursive: true })
   }
