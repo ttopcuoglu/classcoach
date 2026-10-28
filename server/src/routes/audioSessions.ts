@@ -28,6 +28,7 @@ import { buildExperienceContextBlock } from '../lib/experience.ts'
 import { CORE_COACHING_RULES, firstNameOf, TRANSCRIPT_RELIABILITY_NOTICE } from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudioFile } from '../lib/deepgram.ts'
+import { classifyVoicesInFile, keepVoiceClasses, voiceShares } from '../lib/voiceActivity.ts'
 import { unlink } from 'node:fs/promises'
 import { extractTag, stripTag } from '../lib/extractTag.ts'
 import { Prisma } from '../generated/prisma/client.ts'
@@ -508,7 +509,16 @@ function speakerSamplesFrom(segments: { rawSpeakerTag: string; text: string; sta
 /// Deepgram call and is then unreferenced. Moving when the response is sent
 /// did not move where the audio goes.
 async function runTranscription(sessionId: string, audioPath: string, mimetype: string) {
-  const utterances = await transcribeAudioFile(audioPath, mimetype)
+  // What kind of sound each second was, read from the scratch copy while
+  // Deepgram has it — this is the last moment the audio exists. Best-effort:
+  // a lesson without it is "not measured", never a failed transcription.
+  const [utterances, voiceTrace] = await Promise.all([
+    transcribeAudioFile(audioPath, mimetype),
+    classifyVoicesInFile(audioPath).catch((error) => {
+      console.error('[audio-sessions] voice classes failed:', error)
+      return null
+    }),
+  ])
   if (utterances.length === 0) {
     const error = new Error('No speech was detected in this recording.')
     ;(error as Error & { code?: string }).code = 'NO_SPEECH'
@@ -532,9 +542,19 @@ async function runTranscription(sessionId: string, audioPath: string, mimetype: 
   )
 
   const durationSec = Math.round(Math.max(...utterances.map((u) => u.end)))
+  const before = voiceTrace
+    ? await prisma.audioSession.findUnique({ where: { id: sessionId }, select: { metricsDetail: true } })
+    : null
   await prisma.audioSession.update({
     where: { id: sessionId },
-    data: { status: 'tagging', durationSec, failureReason: null },
+    data: {
+      status: 'tagging',
+      durationSec,
+      failureReason: null,
+      ...(voiceTrace
+        ? { metricsDetail: { ...(before?.metricsDetail as Prisma.JsonObject | null), voiceTrace, ...voiceShares(voiceTrace) } }
+        : {}),
+    },
   })
   return speakerSamplesFrom(segments)
 }
@@ -882,9 +902,12 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
   // the honest answer when there is nothing to split it with.
   const stored = await prisma.audioSession.findUnique({
     where: { id: sessionId },
-    select: { levelTrace: true, durationSec: true },
+    select: { levelTrace: true, durationSec: true, metricsDetail: true },
   })
   const trace = parseLevelTrace(stored?.levelTrace)
+  // Measured from the audio at upload, which is gone now: re-analysing must
+  // carry it over, because nothing could measure it again.
+  const voiceClasses = keepVoiceClasses(stored?.metricsDetail)
   const nonSpeech = trace
     ? splitNonSpeech(
         trace,
@@ -923,6 +946,7 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
       metricsDetail: {
         ...analysis.metricsDetail,
         ...(nonSpeech ? { quietSec: nonSpeech.quietSec, unresolvedSec: nonSpeech.unresolvedSec } : {}),
+        ...voiceClasses,
       },
       highlights: analysis.highlights,
       phases: analysis.phases,
