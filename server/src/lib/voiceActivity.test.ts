@@ -134,8 +134,11 @@ test('stored classes carry over a re-analysis, and nothing else passes as them',
   assert.deepEqual(keepVoiceClasses({ voiceTrace: 'vm', voicePitch: 'H-', voiceLevel: 'CD' }), {
     voiceTrace: 'vm', voicePitch: 'H-', voiceLevel: 'CD', voiceOneSec: 1, voiceManySec: 1, voiceOtherSec: 0, voiceQuietSec: 0,
   })
-  // Pitch that does not line up with the trace is dropped, not trusted.
-  assert.equal('voicePitch' in keepVoiceClasses({ voiceTrace: 'vm', voicePitch: 'H', voiceLevel: 'CD' }), false)
+  // A measure that does not line up with the trace is dropped, not trusted;
+  // the others still carry.
+  assert.deepEqual(keepVoiceClasses({ voiceTrace: 'vm', voicePitch: 'H', voiceLevel: 'CD', voiceDepth: 'Ab', voiceClarity: '0~' }), {
+    voiceTrace: 'vm', voiceLevel: 'CD', voiceDepth: 'Ab', voiceClarity: '0~', voiceOneSec: 1, voiceManySec: 1, voiceOtherSec: 0, voiceQuietSec: 0,
+  })
   assert.deepEqual(keepVoiceClasses({ voiceTraceUnread: 'not WAV' }), { voiceTraceUnread: 'not WAV' })
   assert.deepEqual(keepVoiceClasses(null), {})
 })
@@ -194,8 +197,7 @@ test('reading a file in pieces gives the same answer as reading it whole', async
     assert.ok('trace' in result)
     assert.equal(result.trace, classifyVoices(decodeWav(wav(audio))!.samples, SR))
     // Pitch and level come with it, a character a second.
-    assert.equal(result.pitch.length, result.trace.length)
-    assert.equal(result.level.length, result.trace.length)
+    for (const measure of [result.pitch, result.level, result.depth, result.clarity]) assert.equal(measure.length, result.trace.length)
   } finally {
     await rm(dir, { recursive: true })
   }
