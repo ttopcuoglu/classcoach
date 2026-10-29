@@ -1,7 +1,8 @@
 // The moments behind one share of the lesson, opened from its tile or from a
 // block of the strip, so every number can be checked against what was said.
 //
-// Teacher Voice and Student Voice are their lines. Group Voice, Quiet Time
+// Teacher Voice is its lines. Student Voice is the conversation: each time
+// students were heard, between what the teacher said before and after. Group Voice, Quiet Time
 // and Video/Audio have no lines of the lesson's own — a video's are left out
 // of every read of it, and the others had no words — so they are where they
 // happened, each with the last thing said before it, which is how a teacher
@@ -9,6 +10,7 @@
 
 import { roomRuns, type RoomBreakdown, type RoomKind } from '../lib/roomBreakdown'
 import type { TranscriptSegment } from '../lib/api'
+import { exchanges } from '../lib/exchanges'
 import { ROOM_COLOR, ROOM_LABEL } from './TalkFlowStrip'
 
 export type RoomPick = { kind: RoomKind } | { startSec: number; endSec: number }
@@ -25,11 +27,16 @@ function length(sec: number): string {
 
 const spoken = (segments: TranscriptSegment[]) => segments.filter((s) => s.text.trim())
 
-function Line({ s }: { s: TranscriptSegment }) {
+function Line({ s, who }: { s: TranscriptSegment; who?: boolean }) {
+  const teacher = s.speakerLabel === 'Teacher'
   return (
-    <p className="text-sm text-ink">
+    <p className={`text-sm ${who && teacher ? 'text-ink-soft' : 'text-ink'}`}>
       <span className="mr-2 font-mono text-xs text-ink-soft">{mmss(s.startSec)}</span>
-      {s.speakerLabel !== 'Teacher' && <span className="mr-1 text-xs font-semibold text-ink-soft">Student:</span>}
+      {(who || !teacher) && (
+        <span className="mr-1 text-xs font-semibold" style={{ color: ROOM_COLOR[teacher ? 'teacher' : 'student'] }}>
+          {teacher ? 'You:' : 'Student:'}
+        </span>
+      )}
       {s.text.trim()}
     </p>
   )
@@ -52,11 +59,28 @@ export default function RoomMoments({
   let title: string
   let color: string | undefined
   let body: React.ReactNode
-  if ('kind' in pick && (pick.kind === 'teacher' || pick.kind === 'student')) {
-    const own = lines.filter((s) => (s.speakerLabel === 'Teacher') === (pick.kind === 'teacher'))
-    title = `${ROOM_LABEL[pick.kind]} · ${own.length} line${own.length === 1 ? '' : 's'}`
-    color = ROOM_COLOR[pick.kind]
+  if ('kind' in pick && pick.kind === 'teacher') {
+    const own = lines.filter((s) => s.speakerLabel === 'Teacher')
+    title = `${ROOM_LABEL.teacher} · ${own.length} line${own.length === 1 ? '' : 's'}`
+    color = ROOM_COLOR.teacher
     body = own.length ? own.map((s) => <Line key={s.id} s={s} />) : <p className="text-sm text-ink-soft">None were transcribed.</p>
+  } else if ('kind' in pick && pick.kind === 'student') {
+    const talk = exchanges(segments)
+    title = `${ROOM_LABEL.student} · ${talk.length} exchange${talk.length === 1 ? '' : 's'}`
+    color = ROOM_COLOR.student
+    body = talk.length ? (
+      talk.map((x) => (
+        <div key={x.students[0].id} className="flex flex-col gap-1 border-b border-hairline pb-2 last:border-b-0">
+          {x.before && <Line s={x.before} who />}
+          {x.students.map((s) => (
+            <Line key={s.id} s={s} who />
+          ))}
+          {x.after && <Line s={x.after} who />}
+        </div>
+      ))
+    ) : (
+      <p className="text-sm text-ink-soft">No student words were transcribed.</p>
+    )
   } else if ('kind' in pick) {
     const runs = roomRuns(room, pick.kind, pick.kind === 'video' ? 10 : 15)
     title = `${ROOM_LABEL[pick.kind]} · ${runs.length} stretch${runs.length === 1 ? '' : 'es'}`
@@ -81,7 +105,7 @@ export default function RoomMoments({
     const prior = before(pick.startSec)
     title = `${mmss(pick.startSec)}–${mmss(pick.endSec)}`
     body = inside.length ? (
-      inside.map((s) => <Line key={s.id} s={s} />)
+      inside.map((s) => <Line key={s.id} s={s} who />)
     ) : (
       <p className="text-sm text-ink-soft">
         No words were transcribed here.{prior ? ` Just before: “${prior.text.trim()}”` : ''}
