@@ -128,16 +128,13 @@ struct TagSpeakersView: View {
     let onTagged: (AudioSessionWithSegments) -> Void
 
     @State private var selected: Set<String> = []
-    /// Voices that were a video playing. A voice is the teacher, a video, or
-    /// neither; choosing one clears the other.
-    @State private var videos: Set<String> = []
     @State private var tagging = false
     @State private var error: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Which voice is the teacher?").font(.title3.bold()).foregroundStyle(AppTheme.textPrimary)
-            Text("Automatic diarization can tell voices apart, but it can't reliably tell who's the teacher — and it sometimes splits one teacher into two voices. Select every voice that's you; everyone else will be grouped as Student. If you played a video, mark its voice as a video so it isn't counted as a student.")
+            Text("Automatic diarization can tell voices apart, but it can't reliably tell who's the teacher — and it sometimes splits one teacher into two voices. Select every voice that's you; everyone else will be grouped as Student.")
                 .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
 
             if speakers.isEmpty {
@@ -149,7 +146,6 @@ struct TagSpeakersView: View {
 
                 ForEach(speakers, id: \.rawSpeakerTag) { speaker in
                     let isTeacher = selected.contains(speaker.rawSpeakerTag)
-                    let isVideo = videos.contains(speaker.rawSpeakerTag)
                     VStack(alignment: .leading, spacing: 8) {
                         Text(speaker.rawSpeakerTag.uppercased())
                             .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
@@ -159,42 +155,18 @@ struct TagSpeakersView: View {
                         }
                         Text("\"\(speaker.sample)\"")
                             .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                        HStack(spacing: 10) {
-                            Button {
-                                if isTeacher {
-                                    selected.remove(speaker.rawSpeakerTag)
-                                } else {
-                                    selected.insert(speaker.rawSpeakerTag)
-                                    videos.remove(speaker.rawSpeakerTag)
-                                }
-                            } label: {
-                                Label(isTeacher ? "Teacher" : "This is the Teacher", systemImage: isTeacher ? "checkmark" : "person")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(isTeacher ? .white : AppTheme.primary)
-                                    .padding(.horizontal, 16).padding(.vertical, 9)
-                                    .background(isTeacher ? AppTheme.primary : Color.clear, in: Capsule())
-                                    .overlay(Capsule().stroke(AppTheme.primary, lineWidth: 1.5))
-                            }
-                            .disabled(tagging)
-                            .accessibilityAddTraits(isTeacher ? .isSelected : [])
-
-                            Button {
-                                if isVideo {
-                                    videos.remove(speaker.rawSpeakerTag)
-                                } else {
-                                    videos.insert(speaker.rawSpeakerTag)
-                                    selected.remove(speaker.rawSpeakerTag)
-                                }
-                            } label: {
-                                Label(isVideo ? "Video" : "This is a video", systemImage: isVideo ? "checkmark" : "play.rectangle")
-                                    .font(.footnote.weight(.semibold))
-                                    .foregroundStyle(isVideo ? .white : AppTheme.textSecondary)
-                                    .padding(.horizontal, 12).padding(.vertical, 7)
-                                    .background(isVideo ? AppTheme.textPrimary : Color.clear, in: Capsule())
-                            }
-                            .disabled(tagging)
-                            .accessibilityAddTraits(isVideo ? .isSelected : [])
+                        Button {
+                            if isTeacher { selected.remove(speaker.rawSpeakerTag) } else { selected.insert(speaker.rawSpeakerTag) }
+                        } label: {
+                            Label(isTeacher ? "Teacher" : "This is the Teacher", systemImage: isTeacher ? "checkmark" : "person")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(isTeacher ? .white : AppTheme.primary)
+                                .padding(.horizontal, 16).padding(.vertical, 9)
+                                .background(isTeacher ? AppTheme.primary : Color.clear, in: Capsule())
+                                .overlay(Capsule().stroke(AppTheme.primary, lineWidth: 1.5))
                         }
+                        .disabled(tagging)
+                        .accessibilityAddTraits(isTeacher ? .isSelected : [])
                     }
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -232,14 +204,8 @@ struct TagSpeakersView: View {
     /// 35-second voice was as likely a pick as the seven-minute one.
     private func preselect() {
         guard selected.isEmpty else { return }
-        // What each voice is tagged as now, from servers that say so: a
-        // re-tag opens on the earlier choice, the video included.
-        let taggedTeacher = Set(speakers.filter { $0.role == "teacher" }.map(\.rawSpeakerTag))
-        videos = Set(speakers.filter { $0.role == "video" }.map(\.rawSpeakerTag))
         if !preselected.isEmpty {
             selected = preselected
-        } else if !taggedTeacher.isEmpty {
-            selected = taggedTeacher
         } else if let loudest = speakers.first {
             selected = [loudest.rawSpeakerTag]
         }
@@ -249,7 +215,7 @@ struct TagSpeakersView: View {
         tagging = true
         error = nil
         do {
-            try await AudioCoachingService.tagSpeakers(sessionId: session.id, rawSpeakerTags: Array(selected), videoSpeakerTags: Array(videos))
+            try await AudioCoachingService.tagSpeakers(sessionId: session.id, rawSpeakerTags: Array(selected))
             // The 202 carries no session and the waiting panel is chosen by
             // status, so read the row back — the server has already set it to
             // "analyzing" by the time it answers.

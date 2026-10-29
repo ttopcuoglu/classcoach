@@ -988,44 +988,27 @@ function TagSpeakersPanel({
   // most — nearly always the teacher. Preselecting it turns the common case
   // into a confirmation; a teacher who tagged the 35-second voice instead of
   // the 7-minute one got a report with their talk shares swapped.
-  // A re-tag opens on what was chosen before.
-  const [selected, setSelected] = useState<Set<string>>(() => {
-    const tagged = speakers.filter((s) => s.role === 'teacher').map((s) => s.rawSpeakerTag)
-    return new Set(tagged.length ? tagged : speakers[0] ? [speakers[0].rawSpeakerTag] : [])
-  })
-  // Voices that were a video playing: left out of the lesson rather than
-  // counted as students.
-  const [videos, setVideos] = useState<Set<string>>(
-    () => new Set(speakers.filter((s) => s.role === 'video').map((s) => s.rawSpeakerTag)),
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(speakers[0] ? [speakers[0].rawSpeakerTag] : []),
   )
   const [tagging, setTagging] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  // A voice is the teacher, a video, or neither; choosing one clears the other.
-  function toggle(rawSpeakerTag: string, as: 'teacher' | 'video') {
-    const [mine, setMine, setOther] = as === 'teacher' ? [selected, setSelected, setVideos] : [videos, setVideos, setSelected]
-    const adding = !mine.has(rawSpeakerTag)
-    setMine((prev) => {
+  function toggle(rawSpeakerTag: string) {
+    setSelected((prev) => {
       const next = new Set(prev)
-      if (adding) next.add(rawSpeakerTag)
-      else next.delete(rawSpeakerTag)
+      if (next.has(rawSpeakerTag)) next.delete(rawSpeakerTag)
+      else next.add(rawSpeakerTag)
       return next
     })
-    if (adding) {
-      setOther((prev) => {
-        const next = new Set(prev)
-        next.delete(rawSpeakerTag)
-        return next
-      })
-    }
   }
 
   async function handleAnalyze() {
     setTagging(true)
     setError(null)
     try {
-      await tagSpeakers(session.id, Array.from(selected), Array.from(videos))
+      await tagSpeakers(session.id, Array.from(selected))
       // Straight into the analyzing panel, which polls. The request only
       // starts the work now, so there is nothing left to wait for here.
       onUpdate({ ...session, status: 'analyzing', failureReason: null })
@@ -1069,8 +1052,7 @@ function TagSpeakersPanel({
         Automatic diarization can tell voices apart, but it can't reliably tell who's the teacher — and it
         sometimes splits one teacher into two voices. The voice that spoke the most is picked for you, since
         that's usually the teacher. Change it if that's not you, and select every voice that is; everyone else
-        will be grouped as Student. If you played a video, mark its voice as a video so it isn't counted as a
-        student.
+        will be grouped as Student.
       </p>
       <div className="mt-4 flex flex-col gap-3">
         {speakers.length === 0 ? (
@@ -1090,12 +1072,11 @@ function TagSpeakersPanel({
         ) : (
           speakers.map((s) => {
             const isTeacher = selected.has(s.rawSpeakerTag)
-            const isVideo = videos.has(s.rawSpeakerTag)
             return (
               <div
                 key={s.rawSpeakerTag}
                 className={`flex items-center justify-between gap-4 rounded-xl border-2 p-4 transition-colors ${
-                  isTeacher ? 'border-terracotta bg-peach-tint' : isVideo ? 'border-ink-soft/40 bg-lavender-tint' : 'border-transparent bg-mint-tint/50'
+                  isTeacher ? 'border-terracotta bg-peach-tint' : 'border-transparent bg-mint-tint/50'
                 }`}
               >
                 <div>
@@ -1105,32 +1086,19 @@ function TagSpeakersPanel({
                   </p>
                   <p className="mt-1 text-sm text-ink">"{s.sample}"</p>
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => toggle(s.rawSpeakerTag, 'teacher')}
-                    disabled={tagging}
-                    aria-pressed={isTeacher}
-                    className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
-                      isTeacher
-                        ? 'border-terracotta bg-terracotta text-cream hover:bg-terracotta/90'
-                        : 'border-terracotta text-terracotta-600 hover:bg-peach-tint'
-                    }`}
-                  >
-                    {isTeacher ? '✓ Teacher' : 'This is the Teacher'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => toggle(s.rawSpeakerTag, 'video')}
-                    disabled={tagging}
-                    aria-pressed={isVideo}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors disabled:opacity-60 ${
-                      isVideo ? 'bg-ink text-cream hover:bg-ink/90' : 'text-ink-soft hover:bg-lavender-tint hover:text-ink'
-                    }`}
-                  >
-                    {isVideo ? '✓ Video' : 'This is a video'}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => toggle(s.rawSpeakerTag)}
+                  disabled={tagging}
+                  aria-pressed={isTeacher}
+                  className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
+                    isTeacher
+                      ? 'border-terracotta bg-terracotta text-cream hover:bg-terracotta/90'
+                      : 'border-terracotta text-terracotta-600 hover:bg-peach-tint'
+                  }`}
+                >
+                  {isTeacher ? '✓ Teacher' : 'This is the Teacher'}
+                </button>
               </div>
             )
           })

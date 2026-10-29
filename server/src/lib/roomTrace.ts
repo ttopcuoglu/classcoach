@@ -8,10 +8,9 @@
 // Two sources, and the transcript wins where it has anything:
 //
 //   - Words. The transcript says who spoke them, once the teacher has said
-//     which speaker is them and which, if any, was a video. A student's words
-//     in a second the audio heard many voices in are group talk: one voice
-//     the transcript happened to catch out of several. A video's words are
-//     other sound — it is not anyone in the room.
+//     which speaker is them. A student's words in a second the audio heard
+//     many voices in are group talk: one voice the transcript happened to
+//     catch out of several.
 //   - The audio, for seconds with no words. Quiet and other sound are what
 //     they say. A voice, or voices, are read against this lesson's own
 //     seconds that had words in them.
@@ -20,8 +19,8 @@
 // first real lesson broke them: the teacher, close to the phone, read as
 // "many voices" for most of the time they spoke. A teacher, a room and a
 // phone each sound different, but every lesson labels its own examples —
-// the transcript says when the teacher spoke, when a student did, and when
-// the video played. So each speaker's pitch, loudness, rise and fall, and
+// the transcript says when the teacher spoke and when a student did. So
+// each speaker's pitch, loudness, rise and fall, and
 // clarity are measured from those seconds, and a second with no words goes
 // to the speaker it is within the usual spread of. A second of several voices
 // that is like no one speaker on their own is group talk.
@@ -45,9 +44,6 @@ export type RoomShares = {
 
 type Segment = { speakerLabel: string; startSec: number; endSec: number }
 
-/// The speaker label for a video playing; see VIDEO_SPEAKER in the route.
-const VIDEO = 'Video'
-
 /// Seconds of a speaker with words before what they sound like is trusted.
 const MIN_REFERENCE_SEC = 10
 
@@ -63,7 +59,7 @@ const SAME_SPEAKER_SPREADS = 2
 /// seconds each side, so a single second does not flip a stretch of talk.
 const SMOOTH_HALF_WINDOW = 2
 
-type Who = 't' | 's' | 'v'
+type Who = 't' | 's'
 type Profile = { [K in keyof VoiceAt]: { mid: number; spread: number } | null }
 
 function median(values: number[]): number {
@@ -99,38 +95,36 @@ function distance(v: VoiceAt, p: Profile): number | null {
   return count ? total / count : null
 }
 
-/// Who spoke in each second according to the transcript: 't', 's', 'v' for a
-/// video, or '' for no words. A shared second goes to whoever spoke more of it.
+/// Who spoke in each second according to the transcript: 't', 's', or ''
+/// for no words. A shared second goes to whoever spoke more of it.
 function wordsBySecond(segments: Segment[], seconds: number): string[] {
-  const time = { t: new Float32Array(seconds), s: new Float32Array(seconds), v: new Float32Array(seconds) }
+  const time = { t: new Float32Array(seconds), s: new Float32Array(seconds) }
   for (const seg of segments) {
-    const into = time[seg.speakerLabel === 'Teacher' ? 't' : seg.speakerLabel === VIDEO ? 'v' : 's']
+    const into = time[seg.speakerLabel === 'Teacher' ? 't' : 's']
     for (let sec = Math.max(0, Math.floor(seg.startSec)); sec < Math.min(seconds, Math.ceil(seg.endSec)); sec++) {
       into[sec] += Math.min(sec + 1, seg.endSec) - Math.max(sec, seg.startSec)
     }
   }
   return Array.from({ length: seconds }, (_, sec) => {
-    const best = (['t', 's', 'v'] as const).reduce((a, b) => (time[b][sec] > time[a][sec] ? b : a))
+    const best = time.s[sec] > time.t[sec] ? 's' : 't'
     return time[best][sec] > 0 ? best : ''
   })
 }
-
-const AS_ROOM: Record<Who, string> = { t: 't', s: 's', v: 'o' }
 
 export function buildRoomTrace(voices: StoredVoices, segments: Segment[]): RoomTrace {
   const trace = voices.voiceTrace
   const words = wordsBySecond(segments, trace.length)
   const at = (sec: number) => voiceAt(voices, sec)
 
-  // What each speaker sounds like in this lesson. The teacher's and the
-  // video's from every second of theirs with sound in it; a student's only
+  // What each speaker sounds like in this lesson. The teacher's from every
+  // second of theirs with sound in it; a student's only
   // from seconds the audio heard one voice in, because a student's words in
   // a crowd are a crowd.
   const secondsOf = (who: Who) =>
     Array.from(trace, (c, sec) => (words[sec] === who && (c === 'v' || (c === 'm' && who !== 's')) ? at(sec) : null)).filter(
       (v): v is VoiceAt => v != null,
     )
-  const profiles = (['t', 's', 'v'] as const).flatMap((who) => {
+  const profiles = (['t', 's'] as const).flatMap((who) => {
     const p = profileOf(secondsOf(who))
     return p ? [{ who, p }] : []
   })
@@ -148,16 +142,15 @@ export function buildRoomTrace(voices: StoredVoices, segments: Segment[]): RoomT
 
   const out = Array.from(trace, (c, sec): string => {
     if (words[sec] === 't') return 't'
-    if (words[sec] === 'v') return 'o'
     if (words[sec] === 's') return c === 'm' ? 'g' : 's'
     if (c !== 'v' && c !== 'm') return c
     const near = nearest(at(sec))
     // One voice is always someone's. With no one to compare it to — every
     // word lost, as with a phone face down — it is the teacher's: the phone
     // is theirs, and a lone voice nearest it is theirs far more often than not.
-    if (c === 'v') return near ? AS_ROOM[near.who] : 't'
+    if (c === 'v') return near ? near.who : 't'
     // Several voices are one speaker only if they sound like that speaker.
-    return near && near.d <= SAME_SPEAKER_SPREADS ? AS_ROOM[near.who] : 'g'
+    return near && near.d <= SAME_SPEAKER_SPREADS ? near.who : 'g'
   })
 
   // Smooth what wordless voices were put down to, among those seconds only.

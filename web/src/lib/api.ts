@@ -1194,8 +1194,6 @@ export type SpeakerSample = {
   /** How long this voice speaks in total, and in how many turns — the clearest clue to which one is the teacher. */
   totalSec?: number
   utteranceCount?: number
-  /** What this voice is tagged as now — every voice is 'student' before tagging. */
-  role?: 'teacher' | 'video' | 'student'
 }
 
 // Exported so the live-transcription socket can derive its own ws:// origin
@@ -2807,12 +2805,11 @@ export function getSpeakerSamples(id: string): Promise<{ speakers: SpeakerSample
 /// Tags the speakers and leaves the analysis running server-side: the row
 /// goes to `analyzing` and this answers 202, because the two transcript reads
 /// behind it are long enough on a full class period to outlast the request.
-/// Poll `getAudioSession` until the status moves off `analyzing`. Voices in
-/// `videoSpeakerTags` were a video playing, and are left out of the lesson.
-export function tagSpeakers(id: string, rawSpeakerTags: string[], videoSpeakerTags: string[] = []): Promise<{ status: string }> {
+/// Poll `getAudioSession` until the status moves off `analyzing`.
+export function tagSpeakers(id: string, rawSpeakerTags: string[]): Promise<{ status: string }> {
   return request(`/api/audio-sessions/${id}/tag-speaker`, {
     method: 'POST',
-    body: JSON.stringify({ rawSpeakerTags, videoSpeakerTags, mode: 'async' }),
+    body: JSON.stringify({ rawSpeakerTags, mode: 'async' }),
   })
 }
 
