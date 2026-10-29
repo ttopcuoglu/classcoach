@@ -5604,6 +5604,7 @@ function TalkParticipationTab({
   // one of the measured facts beside the shares.
   const room = roomBreakdown(session.metricsLogs)
   const [pick, setPick] = useState<RoomPick | null>(null)
+  const [pauseOpen, setPauseOpen] = useState(false)
   const hasRoom = room != null
   const stretch = useMemo(() => {
     const longest = longestTeacherStretch(session.segments)
@@ -5672,7 +5673,15 @@ function TalkParticipationTab({
           pause={room ? tawtOf(session) : null}
           room={room}
           picked={pick && 'kind' in pick ? pick.kind : null}
-          onPick={(kind) => setPick(pick && 'kind' in pick && pick.kind === kind ? null : { kind })}
+          onPick={(kind) => {
+            setPauseOpen(false)
+            setPick(pick && 'kind' in pick && pick.kind === kind ? null : { kind })
+          }}
+          pauseOpen={pauseOpen}
+          onPause={() => {
+            setPick(null)
+            setPauseOpen((v) => !v)
+          }}
         />
         <TalkFlowStrip
           segments={session.segments}
@@ -5682,9 +5691,17 @@ function TalkParticipationTab({
           marks={[]}
           shares={recordingShares(session.teacherTalkPct, session.studentTalkPct, nonSpeech)}
           room={room}
-          onPick={room ? setPick : undefined}
+          onPick={
+            room
+              ? (p) => {
+                  setPauseOpen(false)
+                  setPick(p)
+                }
+              : undefined
+          }
         />
         {room && pick && <RoomMoments segments={session.segments} pick={pick} onClose={() => setPick(null)} />}
+        {room && pauseOpen && <PauseMoments pause={tawtOf(session)} segments={session.segments} onClose={() => setPauseOpen(false)} />}
       </div>
 
       {/* How you brought students in: your moves and the answers heard, on
@@ -5810,6 +5827,62 @@ function KeepAndTry({ keep, tryNext, tryGoal }: { keep: KeepLine | null; tryNext
 }
 
 /// The three numbers Talk & Participation leads with.
+/// The thinking questions behind Teacher pause: each with how long you waited
+/// before speaking again, whether a student answered first, and what was said
+/// next, so the average can be checked line by line.
+function PauseMoments({
+  pause,
+  segments,
+  onClose,
+}: {
+  pause: ReturnType<typeof tawtOf>
+  segments: TranscriptSegment[]
+  onClose: () => void
+}) {
+  const lines = segments.filter((s) => s.text.trim()).sort((a, b) => a.startSec - b.startSec)
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-hairline bg-cream-card p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-heading text-base font-bold text-forest">
+          Teacher pause · {pause.thinking.length} thinking question{pause.thinking.length === 1 ? '' : 's'}
+        </p>
+        <button type="button" onClick={onClose} className="text-sm font-medium text-ink-soft hover:text-ink">
+          Close
+        </button>
+      </div>
+      <div className="flex max-h-80 flex-col gap-2 overflow-y-auto">
+        {pause.thinking.map((q, i) => {
+          const p = pause.pauses[i]
+          // The question's own line, then the first line said after it.
+          const own = lines.find((l) => l.endSec > q.timestampSec)
+          const next = own ? lines.find((l) => l.startSec >= own.endSec - 0.01 && l !== own) : undefined
+          const waited =
+            p == null ? 'could not be timed' : p.keptTalking ? 'you kept talking' : `${p.sec.toFixed(1)} s${p.answered ? ' · a student answered' : ''}`
+          return (
+            <div key={`${q.timestampSec}-${i}`} className="flex flex-col gap-1 border-b border-hairline pb-2 last:border-b-0">
+              <p className="text-sm text-ink">
+                <span className="mr-2 font-mono text-xs text-ink-soft">{formatTime(q.timestampSec)}</span>
+                <span className="mr-1 text-xs font-semibold" style={{ color: ROOM_COLOR.teacher }}>You:</span>
+                {q.quote}
+              </p>
+              <p className="pl-12 text-xs font-semibold text-ink-soft">Pause: {waited}</p>
+              {next && (
+                <p className="text-sm text-ink-soft">
+                  <span className="mr-2 font-mono text-xs">{formatTime(next.startSec)}</span>
+                  <span className="mr-1 text-xs font-semibold" style={{ color: ROOM_COLOR[next.speakerLabel === 'Teacher' ? 'teacher' : 'student'] }}>
+                    {next.speakerLabel === 'Teacher' ? 'You:' : 'Student:'}
+                  </span>
+                  {next.text.trim()}
+                </p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function TalkNumbers({
   teacherPct,
   studentPct,
@@ -5818,6 +5891,8 @@ function TalkNumbers({
   room,
   picked,
   onPick,
+  pauseOpen,
+  onPause,
 }: {
   teacherPct: number | null
   studentPct: number | null
@@ -5827,6 +5902,8 @@ function TalkNumbers({
   room: RoomBreakdown | null
   picked: RoomKind | null
   onPick: (kind: 'teacher' | 'student') => void
+  pauseOpen: boolean
+  onPause: () => void
 }) {
   const tile = (label: string, value: string, sub: string, color: string | undefined) => (
     <div className="rounded-xl border border-hairline bg-cream-card px-4 py-3">
@@ -5889,20 +5966,35 @@ function TalkNumbers({
           )
         })}
         {pace}
-        {pause &&
-          tile(
-            'Teacher pause',
-            pause.average != null ? `${pause.average.toFixed(1)} s` : '—',
+        {pause && (() => {
+          const timed = pause.pauses.filter((p) => p != null).length
+          const sub =
             pause.average != null
-              ? (() => {
-                  const n = pause.pauses.filter((p) => p != null).length
-                  return `average after ${n} thinking question${n === 1 ? '' : 's'}`
-                })()
+              ? `average after ${timed} thinking question${timed === 1 ? '' : 's'}`
               : pause.thinking.length === 0
                 ? 'no question asked students to explain or reason'
-                : 'no pause after a thinking question could be timed',
-            undefined,
-          )}
+                : 'no pause after a thinking question could be timed'
+          const inner = (
+            <>
+              <p className="text-xs font-semibold text-ink-soft">Teacher pause</p>
+              <p className="font-heading text-2xl font-extrabold leading-tight text-ink">{pause.average != null ? `${pause.average.toFixed(1)} s` : '—'}</p>
+              <p className="text-xs text-ink-soft">{sub}</p>
+              {pause.thinking.length > 0 && <p className="mt-1 text-xs font-semibold text-terracotta-600">See the questions</p>}
+            </>
+          )
+          return pause.thinking.length > 0 ? (
+            <button
+              type="button"
+              onClick={onPause}
+              aria-expanded={pauseOpen}
+              className={`rounded-xl border bg-cream-card px-4 py-3 text-left transition-colors hover:border-forest ${pauseOpen ? 'border-forest' : 'border-hairline'}`}
+            >
+              {inner}
+            </button>
+          ) : (
+            <div className="rounded-xl border border-hairline bg-cream-card px-4 py-3">{inner}</div>
+          )
+        })()}
       </div>
     )
   }
