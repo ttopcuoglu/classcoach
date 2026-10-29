@@ -5669,6 +5669,7 @@ function TalkParticipationTab({
           teacherPct={session.teacherTalkPct}
           studentPct={session.studentTalkPct}
           wpm={wpm}
+          pause={room ? tawtOf(session) : null}
           room={room}
           picked={pick && 'kind' in pick ? pick.kind : null}
           onPick={(kind) => setPick(pick && 'kind' in pick && pick.kind === kind ? null : { kind })}
@@ -5683,7 +5684,7 @@ function TalkParticipationTab({
           room={room}
           onPick={room ? setPick : undefined}
         />
-        {room && pick && <RoomMoments room={room} segments={session.segments} pick={pick} onClose={() => setPick(null)} />}
+        {room && pick && <RoomMoments segments={session.segments} pick={pick} onClose={() => setPick(null)} />}
       </div>
 
       {/* How you brought students in: your moves and the answers heard, on
@@ -5813,6 +5814,7 @@ function TalkNumbers({
   teacherPct,
   studentPct,
   wpm,
+  pause,
   room,
   picked,
   onPick,
@@ -5820,9 +5822,11 @@ function TalkNumbers({
   teacherPct: number | null
   studentPct: number | null
   wpm: number | null
+  /// Teacher pause, as Summary and Questioning & Checking show it.
+  pause: ReturnType<typeof tawtOf> | null
   room: RoomBreakdown | null
   picked: RoomKind | null
-  onPick: (kind: RoomKind) => void
+  onPick: (kind: 'teacher' | 'student') => void
 }) {
   const tile = (label: string, value: string, sub: string, color: string | undefined) => (
     <div className="rounded-xl border border-hairline bg-cream-card px-4 py-3">
@@ -5852,25 +5856,53 @@ function TalkNumbers({
     ]
     return (
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {kinds.map(({ kind, sub }) => (
-          <button
-            key={kind}
-            type="button"
-            onClick={() => onPick(kind)}
-            aria-expanded={picked === kind}
-            className={`rounded-xl border bg-cream-card px-4 py-3 text-left transition-colors hover:border-forest ${picked === kind ? 'border-forest' : 'border-hairline'}`}
-          >
-            <p className="text-xs font-semibold text-ink-soft">{ROOM_LABEL[kind]}</p>
-            <p className="font-heading text-2xl font-extrabold leading-tight" style={{ color: ROOM_COLOR[kind] }}>
-              {kind === 'student' ? 'at least ' : ''}
-              {minutes(room.pct[kind])}
-            </p>
-            <p className="text-xs text-ink-soft">
-              {Math.round(room.pct[kind])}% · {sub}
-            </p>
-          </button>
-        ))}
+        {kinds.map(({ kind, sub }) => {
+          // Only voices with words open: the rest had none to show.
+          const opens = kind === 'teacher' || kind === 'student' ? kind : null
+          const inner = (
+            <>
+              <p className="text-xs font-semibold text-ink-soft">{ROOM_LABEL[kind]}</p>
+              <p className="font-heading text-2xl font-extrabold leading-tight" style={{ color: ROOM_COLOR[kind] }}>
+                {kind === 'student' ? 'at least ' : ''}
+                {minutes(room.pct[kind])}
+              </p>
+              <p className="text-xs text-ink-soft">
+                {Math.round(room.pct[kind])}% · {sub}
+              </p>
+              {opens && <p className="mt-1 text-xs font-semibold text-terracotta-600">{kind === 'student' ? 'See the conversation' : 'See your lines'}</p>}
+            </>
+          )
+          return opens ? (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => onPick(opens)}
+              aria-expanded={picked === kind}
+              className={`rounded-xl border bg-cream-card px-4 py-3 text-left transition-colors hover:border-forest ${picked === kind ? 'border-forest' : 'border-hairline'}`}
+            >
+              {inner}
+            </button>
+          ) : (
+            <div key={kind} className="rounded-xl border border-hairline bg-cream-card px-4 py-3">
+              {inner}
+            </div>
+          )
+        })}
         {pace}
+        {pause &&
+          tile(
+            'Teacher pause',
+            pause.average != null ? `${pause.average.toFixed(1)} s` : '—',
+            pause.average != null
+              ? (() => {
+                  const n = pause.pauses.filter((p) => p != null).length
+                  return `average after ${n} thinking question${n === 1 ? '' : 's'}`
+                })()
+              : pause.thinking.length === 0
+                ? 'no question asked students to explain or reason'
+                : 'no pause after a thinking question could be timed',
+            undefined,
+          )}
       </div>
     )
   }

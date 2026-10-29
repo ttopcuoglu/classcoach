@@ -44,24 +44,3 @@ export function roomBreakdown(metricsLogs: AudioSessionWithSegments['metricsLogs
     unclearSec: Array.from(trace).filter((c) => c === 'u').length,
   }
 }
-
-export type RoomRun = { startSec: number; endSec: number }
-
-/// Where in the lesson one kind was, as stretches: gaps of up to `bridgeSec`
-/// of something else are bridged, and stretches shorter than `minSec` left
-/// out — a breath between two lines is not a moment a teacher can place.
-export function roomRuns(room: RoomBreakdown, kind: RoomKind, minSec = 5, bridgeSec = 2): RoomRun[] {
-  const runs: RoomRun[] = []
-  let start = -1
-  let last = -1
-  for (let sec = 0; sec <= room.seconds.length; sec++) {
-    if (sec < room.seconds.length && room.seconds[sec] === kind) {
-      if (start < 0) start = sec
-      last = sec
-    } else if (start >= 0 && (sec - last > bridgeSec || sec === room.seconds.length)) {
-      if (last + 1 - start >= minSec) runs.push({ startSec: start, endSec: last + 1 })
-      start = -1
-    }
-  }
-  return runs
-}

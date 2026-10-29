@@ -137,8 +137,9 @@ export default function TalkFlowStrip({
   shares: ShareSlice[]
   /// The server's per-second breakdown, when the lesson has one.
   room?: RoomBreakdown | null
-  /// A block or legend entry was clicked: show what was said there.
-  onPick?: (pick: { kind: RoomKind } | { startSec: number; endSec: number }) => void
+  /// A Teacher Voice or Student Voice block or legend entry was clicked: show
+  /// what was said there. The others had no words to show.
+  onPick?: (pick: { kind: 'teacher' | 'student' } | { startSec: number; endSec: number }) => void
 }) {
   const [hover, setHover] = useState<number | null>(null)
   const flow = durationSec ? buildFlow(segments, durationSec, seconds ?? null) : null
@@ -179,8 +180,8 @@ export default function TalkFlowStrip({
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-ink">
         {slices.map((s) => {
           const swatch = view.hatched(s.key) ? <HatchedSwatch className="h-2.5 w-2.5 rounded-sm" /> : <i className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: view.color(s.key) }} />
-          return room && onPick ? (
-            <button key={s.key} type="button" onClick={() => onPick({ kind: s.key as RoomKind })} className="flex items-center gap-1.5 hover:underline">
+          return room && onPick && (s.key === 'teacher' || s.key === 'student') ? (
+            <button key={s.key} type="button" onClick={() => onPick({ kind: s.key as 'teacher' | 'student' })} className="flex items-center gap-1.5 hover:underline">
               {swatch}
               {label(s.key)} <b>{Math.round(s.pct)}%</b>
             </button>
@@ -209,8 +210,8 @@ export default function TalkFlowStrip({
             fill={view.hatched(k) ? 'url(#flow-strip-hatch)' : view.color(k)}
             opacity={hover == null || hover === i ? 1 : 0.55}
             onMouseEnter={() => setHover(i)}
-            onClick={onPick ? () => onPick({ startSec: i * view.binSec, endSec: (i + 1) * view.binSec }) : undefined}
-            style={onPick ? { cursor: 'pointer' } : undefined}
+            onClick={room && onPick && (k === 'teacher' || k === 'student') ? () => onPick({ startSec: i * view.binSec, endSec: (i + 1) * view.binSec }) : undefined}
+            style={room && onPick && (k === 'teacher' || k === 'student') ? { cursor: 'pointer' } : undefined}
           />
         ))}
         {marks.map((m, i) => (
