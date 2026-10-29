@@ -26,8 +26,10 @@ export type RoomBreakdown = {
 
 const KIND: Record<string, RoomKind> = { t: 'teacher', s: 'student', g: 'student', x: 'video', u: 'other', o: 'other', q: 'quiet' }
 
-export function roomBreakdown(metricsDetail: AudioSessionWithSegments['metricsDetail']): RoomBreakdown | null {
-  const trace = (metricsDetail as Record<string, unknown> | null)?.roomTrace
+/// Read from metricsLogs: the server sends metricsDetail as numbers only, and
+/// the trace is text.
+export function roomBreakdown(metricsLogs: AudioSessionWithSegments['metricsLogs']): RoomBreakdown | null {
+  const trace = metricsLogs?.roomTrace
   if (typeof trace !== 'string' || trace.length === 0) return null
   const seconds = Array.from(trace, (c) => KIND[c] ?? null)
   const count: Record<RoomKind, number> = { teacher: 0, student: 0, video: 0, other: 0, quiet: 0 }

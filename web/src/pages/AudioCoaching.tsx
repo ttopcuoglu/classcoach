@@ -2797,7 +2797,7 @@ function SummaryTab({
   const quietPct = split && soundPct != null ? Math.max(0, Math.round((silencePct! - soundPct) * 10) / 10) : null
   // A lesson with the per-second breakdown shows that instead, the same five
   // Talk & Participation shows.
-  const room = roomBreakdown(session.metricsDetail)
+  const room = roomBreakdown(session.metricsLogs)
   const roomPct = (n: number) => getPresenceMetric(Math.round(n * 10) / 10)
   const wpm = session.metricsDetail?.teacherWordsPerMinute ?? null
   const tawt = tawtOf(session)
@@ -5571,7 +5571,7 @@ function TalkParticipationTab({
   }, [session.segments])
 
   const nonSpeech = nonSpeechSplit(session.metricsDetail, session.durationSec)
-  const room = roomBreakdown(session.metricsDetail)
+  const room = roomBreakdown(session.metricsLogs)
   const moves = session.teachingMoves
   const p = moves?.participation
   const invitations = (p?.invitations ?? moves?.invitations ?? []).map((q) => ({

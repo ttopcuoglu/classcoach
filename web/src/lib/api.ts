@@ -1140,11 +1140,13 @@ export type AudioSession = {
   /// Absent on every report analyzed before this existed; re-analyzing fills
   /// it. Each category is independently absent when the read found none.
   teachingMoves?: AudioTeachingMoves | null
-  /// metricsDetail's lists (answerLog, followUpLog), sent beside it so
-  /// metricsDetail stays numbers-only for the iPhone app.
+  /// metricsDetail's lists and text (answerLog, followUpLog, roomTrace),
+  /// sent beside it so metricsDetail stays numbers-only for the iPhone app.
   metricsLogs?: {
     answerLog?: { timestampSec: number; followed: boolean }[]
     followUpLog?: { timestampSec: number; text: string }[]
+    /// What each second was; see lib/roomBreakdown.ts.
+    roomTrace?: string
   } | null
   /// The one focus for next lesson the teacher picked from Try next time.
   /// `lines`: the focus said simply, one per item made the focus, keyed by
