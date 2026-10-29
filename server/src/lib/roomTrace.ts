@@ -1,5 +1,5 @@
 // Who or what each second of a lesson was: the teacher, a student, a group
-// of students at once, a voice with no words, other sound, or quiet. Every
+// of students at once, a video, a voice with no words, other sound, or quiet. Every
 // second gets one; there is no "can't tell".
 //
 // PROTOTYPE, like the voice classes it is built from (voiceActivity.ts):
@@ -12,7 +12,7 @@
 //   - Words. The teacher's are the teacher's. A student's are a student's,
 //     or group talk when the audio heard many voices in that second: one
 //     voice the transcript happened to catch out of several. A video's
-//     words are other sound — it is not anyone in the room.
+//     words are the video — it is not anyone in the room.
 //   - A short pause inside one speaker's talk, with their words either side,
 //     is still them: a breath, a word too quiet to transcribe.
 //   - Any other voice with no words is just that, and goes to no one.
@@ -27,15 +27,16 @@
 
 import type { StoredVoices } from './voiceActivity.ts'
 
-/// One character per second: t teacher, s student, g group, u a voice with
-/// no words, o other sound (a video among it), q quiet, - too little audio to
-/// say.
+/// One character per second: t teacher, s student, g group, x a video the
+/// teacher tagged, u a voice with no words, o other sound, q quiet, - too
+/// little audio to say.
 export type RoomTrace = string
 
 export type RoomShares = {
   roomTeacherSec: number
   roomStudentSec: number
   roomGroupSec: number
+  roomVideoSec: number
   roomUnclearSec: number
   roomOtherSec: number
   roomQuietSec: number
@@ -68,9 +69,9 @@ function wordsBySecond(segments: Segment[], seconds: number): (Who | '')[] {
 }
 
 /// A second as the speaker it is put down to: a student's in a crowd is
-/// group talk, and a video's is other sound.
+/// group talk.
 function asRoom(who: Who, voiceClass: string): string {
-  if (who === 'v') return 'o'
+  if (who === 'v') return 'x'
   if (who === 's') return voiceClass === 'm' ? 'g' : 's'
   return 't'
 }
@@ -108,6 +109,7 @@ export function roomShares(trace: RoomTrace): RoomShares {
     roomTeacherSec: count('t'),
     roomStudentSec: count('s'),
     roomGroupSec: count('g'),
+    roomVideoSec: count('x'),
     roomUnclearSec: count('u'),
     roomOtherSec: count('o'),
     roomQuietSec: count('q'),

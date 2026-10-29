@@ -6,10 +6,15 @@
 // the tiles state them; the rest divided into quiet and sound with no words
 // by the envelope), so the chart and the tiles never disagree. The strip
 // below is the same recording slice by slice.
+//
+// A lesson that carries the server's per-second breakdown (roomBreakdown.ts)
+// is drawn from that instead: teacher, student voice, a tagged video, other
+// sounds and quiet, for the bar, the strip and the tiles alike.
 
 import { useState } from 'react'
 import { buildFlow, type FlowKind } from '../lib/talkFlow'
 import type { TranscriptSegment } from '../lib/api'
+import type { RoomBreakdown, RoomKind } from '../lib/roomBreakdown'
 import { HATCH_STYLE } from '../lib/chartPatterns'
 import { HatchedBar, HatchedSwatch } from './unavailableChart'
 
@@ -24,6 +29,60 @@ export const FLOW_COLOR: Record<Exclude<FlowKind, 'unknown'>, string> = {
   other: '#8B7BC2',
   sound: '#D08A2A',
   quiet: '#3F8FD8',
+}
+
+export const ROOM_COLOR: Record<RoomKind, string> = {
+  teacher: FLOW_COLOR.you,
+  student: FLOW_COLOR.other,
+  video: '#C2577F',
+  other: FLOW_COLOR.sound,
+  quiet: FLOW_COLOR.quiet,
+}
+
+export const ROOM_LABEL: Record<RoomKind, string> = {
+  teacher: 'Teacher',
+  student: 'Student voice',
+  video: 'Video',
+  other: 'Other sounds',
+  quiet: 'Quiet',
+}
+
+const ROOM_ORDER: RoomKind[] = ['teacher', 'student', 'video', 'other', 'quiet']
+
+/// What the bar, legend and strip draw, from whichever split the lesson has.
+type View = {
+  slices: { key: string; pct: number }[]
+  bins: (string | null)[]
+  binSec: number
+  color: (key: string | null) => string | undefined
+  label: (key: string | null) => string
+  hatched: (key: string | null) => boolean
+}
+
+const MAX_BINS = 120
+
+function roomView(room: RoomBreakdown): View {
+  const total = room.seconds.length
+  const binCount = Math.min(MAX_BINS, total)
+  const binSec = total / binCount
+  const bins: (RoomKind | null)[] = []
+  for (let b = 0; b < binCount; b++) {
+    const tally = new Map<RoomKind, number>()
+    for (let sec = Math.floor(b * binSec); sec < Math.min(total, Math.floor((b + 1) * binSec) || 1); sec++) {
+      const k = room.seconds[sec]
+      if (k) tally.set(k, (tally.get(k) ?? 0) + 1)
+    }
+    // The teacher's and students' words win a tie, as on the older strip.
+    bins.push(ROOM_ORDER.reduce<RoomKind | null>((best, k) => ((tally.get(k) ?? 0) > (best ? (tally.get(best) ?? 0) : 0) ? k : best), null))
+  }
+  return {
+    slices: ROOM_ORDER.map((k) => ({ key: k, pct: room.pct[k] })),
+    bins,
+    binSec,
+    color: (k) => (k ? ROOM_COLOR[k as RoomKind] : undefined),
+    label: (k) => (k ? ROOM_LABEL[k as RoomKind] : 'No reading'),
+    hatched: (k) => k == null,
+  }
 }
 
 const LABEL: Record<FlowKind, string> = {
@@ -66,6 +125,7 @@ export default function TalkFlowStrip({
   seconds,
   marks,
   shares,
+  room,
 }: {
   segments: TranscriptSegment[]
   durationSec: number | null
@@ -74,36 +134,50 @@ export default function TalkFlowStrip({
   marks: StripMark[]
   /// The whole recording's split, as the report states it.
   shares: ShareSlice[]
+  /// The server's per-second breakdown, when the lesson has one.
+  room?: RoomBreakdown | null
 }) {
   const [hover, setHover] = useState<number | null>(null)
   const flow = durationSec ? buildFlow(segments, durationSec, seconds ?? null) : null
-  if (!flow || segments.length === 0) return <HatchedBar label="Talk flow unavailable this session." className="h-6 rounded-lg" />
-  const duration = flow.bins.length * flow.binSec
+  const view: View | null = room
+    ? roomView(room)
+    : flow
+      ? {
+          slices: shares.map((s) => ({ key: s.kind, pct: s.pct })),
+          bins: flow.bins,
+          binSec: flow.binSec,
+          color: (k) => (k == null || k === 'unknown' ? undefined : FLOW_COLOR[k as Exclude<FlowKind, 'unknown'>]),
+          label: (k) => (k === 'unknown' && !flow.hasEnvelope ? 'No words' : LABEL[(k ?? 'unknown') as FlowKind]),
+          hatched: (k) => k == null || k === 'unknown',
+        }
+      : null
+  if (!view || segments.length === 0) return <HatchedBar label="Talk flow unavailable this session." className="h-6 rounded-lg" />
+  const duration = view.bins.length * view.binSec
   const x = (sec: number) => Math.min(W, Math.max(0, (sec / duration) * W))
-  const binW = W / flow.bins.length
-  const label = (k: FlowKind) => (k === 'unknown' && !flow.hasEnvelope ? 'No words' : LABEL[k])
-  const slices = shares.filter((s) => s.pct >= 0.5)
+  const binW = W / view.bins.length
+  const label = view.label
+  const slices = view.slices.filter((s) => s.pct >= 0.5)
   return (
     <div className="flex flex-col gap-2 rounded-2xl bg-cream px-4 py-3.5">
       <div className="flex justify-between text-xs font-bold text-ink-soft">
         <span>Your recording, minute by minute</span>
         <span>{mmss(duration)}</span>
       </div>
-      <div className="flex h-4 w-full gap-[2px] overflow-hidden rounded-full" role="img" aria-label={slices.map((s) => `${label(s.kind)} ${Math.round(s.pct)}%`).join(', ')}>
+      <div className="flex h-4 w-full gap-[2px] overflow-hidden rounded-full" role="img" aria-label={slices.map((s) => `${label(s.key)} ${Math.round(s.pct)}%`).join(', ')}>
         {slices.map((s) => (
           <div
-            key={s.kind}
-            title={`${label(s.kind)}: ${Math.round(s.pct)}%`}
+            key={s.key}
+            title={`${label(s.key)}: ${Math.round(s.pct)}%`}
             className="h-full"
-            style={{ width: `${s.pct}%`, background: s.kind === 'unknown' ? undefined : FLOW_COLOR[s.kind], ...(s.kind === 'unknown' ? HATCH_STYLE : {}) }}
+            style={{ width: `${s.pct}%`, background: view.color(s.key), ...(view.hatched(s.key) ? HATCH_STYLE : {}) }}
           />
         ))}
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-ink">
         {slices.map((s) => (
-          <span key={s.kind} className="flex items-center gap-1.5">
-            {s.kind === 'unknown' ? <HatchedSwatch className="h-2.5 w-2.5 rounded-sm" /> : <i className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: FLOW_COLOR[s.kind] }} />}
-            {label(s.kind)} <b>{Math.round(s.pct)}%</b>
+          <span key={s.key} className="flex items-center gap-1.5">
+            {view.hatched(s.key) ? <HatchedSwatch className="h-2.5 w-2.5 rounded-sm" /> : <i className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: view.color(s.key) }} />}
+            {label(s.key)} <b>{Math.round(s.pct)}%</b>
           </span>
         ))}
       </div>
@@ -114,14 +188,14 @@ export default function TalkFlowStrip({
             <rect width="2" height="6" fill="var(--color-hairline)" />
           </pattern>
         </defs>
-        {flow.bins.map((k, i) => (
+        {view.bins.map((k, i) => (
           <rect
             key={i}
             x={i * binW}
             y="18"
             width={Math.max(0.5, binW - 1)}
             height="40"
-            fill={k === 'unknown' ? 'url(#flow-strip-hatch)' : FLOW_COLOR[k]}
+            fill={view.hatched(k) ? 'url(#flow-strip-hatch)' : view.color(k)}
             opacity={hover == null || hover === i ? 1 : 0.55}
             onMouseEnter={() => setHover(i)}
           />
@@ -136,7 +210,7 @@ export default function TalkFlowStrip({
         <text x={W} y="76" fontSize="11" textAnchor="end" fill="var(--color-ink-soft)">{mmss(duration)}</text>
       </svg>
       <p className="m-0 h-4 text-xs text-ink-soft" aria-live="polite">
-        {hover != null && `${mmss(hover * flow.binSec)}–${mmss((hover + 1) * flow.binSec)} · mostly ${label(flow.bins[hover]).toLowerCase()}`}
+        {hover != null && `${mmss(hover * view.binSec)}–${mmss((hover + 1) * view.binSec)} · mostly ${label(view.bins[hover]).toLowerCase()}`}
       </p>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-soft">
         {(['invite', 'probe', 'voices', 'check'] as const)
@@ -150,10 +224,19 @@ export default function TalkFlowStrip({
             </span>
           ))}
       </div>
-      <p className="text-xs text-ink-soft">
-        {flow.hasEnvelope && '“Sound, no words” is sound the microphone caught but couldn’t turn into words. '}
-        “Students” is speech the transcript didn’t attribute to you — a student close to you can be heard as you, and you as them.
-      </p>
+      {room ? (
+        <p className="text-xs text-ink-soft">
+          “Teacher” and “Student voice” are only seconds with words the transcript gave to you or to a student, and the
+          short pauses between them. “Other sounds” is everything else that wasn’t quiet
+          {room.unclearSec >= 60 ? `, including ${Math.round(room.unclearSec / 60)} min of voices too unclear to transcribe` : ''}.
+          {room.videoSec > 0 ? ' “Video” is the voice you marked as a video.' : ''}
+        </p>
+      ) : (
+        <p className="text-xs text-ink-soft">
+          {flow?.hasEnvelope && '“Sound, no words” is sound the microphone caught but couldn’t turn into words. '}
+          “Students” is speech the transcript didn’t attribute to you — a student close to you can be heard as you, and you as them.
+        </p>
+      )}
     </div>
   )
 }

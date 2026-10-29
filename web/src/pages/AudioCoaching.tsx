@@ -2,7 +2,8 @@ import { cloneElement, createContext, isValidElement, useEffect, useMemo, useRef
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
 import BroughtStudentsIn from '../components/BroughtStudentsIn'
-import TalkFlowStrip, { FLOW_COLOR, type ShareSlice } from '../components/TalkFlowStrip'
+import TalkFlowStrip, { FLOW_COLOR, ROOM_COLOR, type ShareSlice } from '../components/TalkFlowStrip'
+import { roomBreakdown, type RoomBreakdown } from '../lib/roomBreakdown'
 import { DashedLinePoint, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { ProgressRing, ThinkingIndicator, WorkingRing } from '../components/ProgressRing'
@@ -2794,15 +2795,31 @@ function SummaryTab({
   const split = silencePct != null && nonSpeech && nonSpeech.quietPct + nonSpeech.unresolvedPct > 0 ? nonSpeech : null
   const soundPct = split ? Math.round(((silencePct! * split.unresolvedPct) / (split.quietPct + split.unresolvedPct)) * 10) / 10 : null
   const quietPct = split && soundPct != null ? Math.max(0, Math.round((silencePct! - soundPct) * 10) / 10) : null
+  // A lesson with the per-second breakdown shows that instead, the same five
+  // Talk & Participation shows.
+  const room = roomBreakdown(session.metricsDetail)
+  const roomPct = (n: number) => getPresenceMetric(Math.round(n * 10) / 10)
   const wpm = session.metricsDetail?.teacherWordsPerMinute ?? null
   const tawt = tawtOf(session)
   // How many questions the average rests on: 0.0 s from one question and
   // from eight are different findings.
   const tawtCount = tawt.pauses.filter((p) => p != null).length
   const tiles: { label: string; metric: ConfidentMetric; unit?: string; note?: string; accent: Accent }[] = [
-    { label: 'You spoke', metric: getPresenceMetric(teacherPct), unit: '%', accent: ACCENTS.terracotta },
-    { label: 'Students spoke', metric: getPresenceMetric(studentPct), unit: '%', accent: ACCENTS.gold },
-    ...(split
+    ...(room
+      ? [
+          { label: 'Teacher', metric: roomPct(room.pct.teacher), unit: '%', accent: ACCENTS.terracotta },
+          { label: 'Student voice', metric: roomPct(room.pct.student), unit: '%', accent: ACCENTS.gold },
+          ...(room.videoSec > 0 ? [{ label: 'Video', metric: roomPct(room.pct.video), unit: '%', accent: ACCENTS.teal }] : []),
+          { label: 'Other sounds', metric: roomPct(room.pct.other), unit: '%', accent: ACCENTS.lavender },
+          { label: 'Quiet', metric: roomPct(room.pct.quiet), unit: '%', accent: ACCENTS.sky },
+        ]
+      : [
+          { label: 'You spoke', metric: getPresenceMetric(teacherPct), unit: '%', accent: ACCENTS.terracotta },
+          { label: 'Students spoke', metric: getPresenceMetric(studentPct), unit: '%', accent: ACCENTS.gold },
+        ]),
+    ...(room
+      ? []
+      : split
       ? [
           { label: 'Sound, no words', metric: getPresenceMetric(soundPct), unit: '%', accent: ACCENTS.lavender },
           { label: 'Quiet', metric: getPresenceMetric(quietPct), unit: '%', accent: ACCENTS.sky },
@@ -5554,6 +5571,7 @@ function TalkParticipationTab({
   }, [session.segments])
 
   const nonSpeech = nonSpeechSplit(session.metricsDetail, session.durationSec)
+  const room = roomBreakdown(session.metricsDetail)
   const moves = session.teachingMoves
   const p = moves?.participation
   const invitations = (p?.invitations ?? moves?.invitations ?? []).map((q) => ({
@@ -5580,12 +5598,20 @@ function TalkParticipationTab({
             Talk time describes the recording, not the room: it doesn't show how many students took part or whether
             they were engaged, and a microphone near you hears you far better than it hears them.
           </p>
+          {room ? (
+            <p className="text-sm text-ink-soft">
+              "Teacher" and "Student voice" count only seconds with words the transcript gave to you or to a student,
+              and the short pauses between them, so they can be lower than what you remember. A voice with no words
+              could be anyone, and is counted with "Other sounds"; so is noise. "Video" is a voice you marked as one.
+            </p>
+          ) : (
           <p className="text-sm text-ink-soft">
             "Sound, no words" and "Quiet" are everything that was neither clearly you nor clearly a student
             {nonSpeech
               ? '. In a classroom, sound with no words is usually voices the microphone could not make out; a video or noise from outside reads the same way.'
               : ': quiet work, several voices at once, and audio too faint to place.'}
           </p>
+          )}
           {silenceNote && <p className="text-sm text-ink-soft">{silenceNote}</p>}
           {wpm != null && (
             <p className="text-sm text-ink-soft">
@@ -5598,7 +5624,7 @@ function TalkParticipationTab({
     >
       {/* Who was heard and how fast, then the lesson minute by minute. */}
       <div id="stat-talkRatio" className="flex flex-col gap-3">
-        <TalkNumbers teacherPct={session.teacherTalkPct} studentPct={session.studentTalkPct} wpm={wpm} />
+        <TalkNumbers teacherPct={session.teacherTalkPct} studentPct={session.studentTalkPct} wpm={wpm} room={room} />
         <TalkFlowStrip
           segments={session.segments}
           durationSec={session.durationSec}
@@ -5606,6 +5632,7 @@ function TalkParticipationTab({
           // Your moves are drawn once, on "When it happened" below.
           marks={[]}
           shares={recordingShares(session.teacherTalkPct, session.studentTalkPct, nonSpeech)}
+          room={room}
         />
       </div>
 
@@ -5732,7 +5759,17 @@ function KeepAndTry({ keep, tryNext, tryGoal }: { keep: KeepLine | null; tryNext
 }
 
 /// The three numbers Talk & Participation leads with.
-function TalkNumbers({ teacherPct, studentPct, wpm }: { teacherPct: number | null; studentPct: number | null; wpm: number | null }) {
+function TalkNumbers({
+  teacherPct,
+  studentPct,
+  wpm,
+  room,
+}: {
+  teacherPct: number | null
+  studentPct: number | null
+  wpm: number | null
+  room: RoomBreakdown | null
+}) {
   const tile = (label: string, value: string, sub: string, color: string | undefined) => (
     <div className="rounded-xl border border-hairline bg-cream-card px-4 py-3">
       <p className="text-xs font-semibold text-ink-soft">{label}</p>
@@ -5742,11 +5779,23 @@ function TalkNumbers({ teacherPct, studentPct, wpm }: { teacherPct: number | nul
       <p className="text-xs text-ink-soft">{sub}</p>
     </div>
   )
+  const pace = tile('Your pace', wpm != null ? String(Math.round(wpm)) : '—', wpm != null ? `words a minute · conversation usually runs ${CONVERSATIONAL_WPM_RANGE}` : 'unavailable', undefined)
+  if (room) {
+    const pct = (n: number) => `${Math.round(n)}%`
+    return (
+      <div className={`grid grid-cols-1 gap-3 ${room.videoSec > 0 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+        {tile('Teacher', pct(room.pct.teacher), 'your words, and pauses between them', ROOM_COLOR.teacher)}
+        {tile('Student voice', pct(room.pct.student), 'students’ words, one or several', ROOM_COLOR.student)}
+        {room.videoSec > 0 && tile('Video', pct(room.pct.video), `${Math.round(room.videoSec / 60)} min you marked as a video`, ROOM_COLOR.video)}
+        {pace}
+      </div>
+    )
+  }
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       {tile('You', teacherPct != null ? `${Math.round(teacherPct)}%` : '—', teacherPct != null ? 'of the recording' : 'unavailable', FLOW_COLOR.you)}
       {tile('Students', studentPct != null ? `${Math.round(studentPct)}%` : '—', studentPct != null ? 'that came through as words' : 'unavailable', FLOW_COLOR.other)}
-      {tile('Your pace', wpm != null ? String(Math.round(wpm)) : '—', wpm != null ? `words a minute · conversation usually runs ${CONVERSATIONAL_WPM_RANGE}` : 'unavailable', undefined)}
+      {pace}
     </div>
   )
 }

@@ -15,8 +15,8 @@ test("a student's words while many voices were going is group talk", () => {
   assert.equal(buildRoomTrace(voices('mmmm'), [said('Student 1', 0, 4)]), 'gggg')
 })
 
-test("a video's words are other sound, not a student", () => {
-  assert.equal(buildRoomTrace(voices('mmmm'), [said('Video', 0, 4)]), 'oooo')
+test("a video's words are the video, not a student", () => {
+  assert.equal(buildRoomTrace(voices('mmmm'), [said('Video', 0, 4)]), 'xxxx')
 })
 
 test('a voice with no words goes to no one', () => {
@@ -44,19 +44,20 @@ test('voice before the first words and after the last goes to no one', () => {
   assert.equal(buildRoomTrace(voices('vvvvv'), [said('Teacher', 2, 3)]), 'uutuu')
 })
 
-test('a pause in a video is other sound', () => {
-  assert.equal(buildRoomTrace(voices('mmmmm'), [said('Video', 0, 2), said('Video', 3, 5)]), 'ooooo')
+test('a pause in a video is the video', () => {
+  assert.equal(buildRoomTrace(voices('mmmmm'), [said('Video', 0, 2), said('Video', 3, 5)]), 'xxxxx')
 })
 
 test('with no words, other sound and quiet are what they are', () => {
   assert.equal(buildRoomTrace(voices('oq-'), []), 'oq-')
 })
 
-test('shares count each of the six', () => {
-  assert.deepEqual(roomShares('ttsguoq-'), {
+test('shares count each of the seven', () => {
+  assert.deepEqual(roomShares('ttsgxuoq-'), {
     roomTeacherSec: 2,
     roomStudentSec: 1,
     roomGroupSec: 1,
+    roomVideoSec: 1,
     roomUnclearSec: 1,
     roomOtherSec: 1,
     roomQuietSec: 1,
