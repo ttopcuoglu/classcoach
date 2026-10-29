@@ -77,8 +77,8 @@ export type SecondFeatures = {
   /// Share of frames with any pitch.
   somePitch: number
   /// The voice's pitch over this second, Hz — the middle of its clearly
-  /// pitched frames — or null when none was clear. With `levelDb`, what tells
-  /// one speaker from another; see roomTrace.ts.
+  /// pitched frames — or null when none was clear. With `levelDb`, what may
+  /// tell one speaker from another.
   pitchHz: number | null
   /// How loud this second was at its loudest, dB (90th percentile of frames).
   levelDb: number
@@ -334,10 +334,10 @@ export function classifyVoices(samples: Float32Array, sampleRate: number): Voice
 /// What each second sounded like, besides its class, one character a second
 /// each in the code below: its pitch and loudness, which tell one speaker
 /// from another, and its rise and fall and how clear its pitch was, which
-/// tell one voice from several. Kept so that once the teacher has said which
-/// speaker is them, a second with no words can be read against the seconds
-/// that had them (roomTrace.ts). Like the trace, nothing that sounds like
-/// anyone can be rebuilt from four numbers a second.
+/// tell one voice from several. Kept so that a second with no words might one
+/// day be read against the seconds that had them — tried, and not yet
+/// trusted (roomTrace.ts). Like the trace, nothing that sounds like anyone
+/// can be rebuilt from four numbers a second.
 export type VoiceSeconds = { trace: VoiceTrace; pitch: string; level: string; depth: string; clarity: string }
 
 type Classified = VoiceSeconds | { unread: string }
@@ -345,9 +345,6 @@ type Classified = VoiceSeconds | { unread: string }
 /// The same, as stored in metricsDetail. A lesson classified before a measure
 /// was kept has no string for it.
 export type StoredVoices = { voiceTrace: VoiceTrace; voicePitch?: string; voiceLevel?: string; voiceDepth?: string; voiceClarity?: string }
-
-/// One second's measures, null where not measured.
-export type VoiceAt = { pitch: number | null; level: number | null; depth: number | null; clarity: number | null }
 
 /// 64 steps, one character each. Pitch is in semitones above 55 Hz, so a
 /// step is the same heard difference at any pitch, with '-' for none; level
@@ -371,25 +368,6 @@ export function encodeSeconds(seconds: SecondFeatures[]): Omit<VoiceSeconds, 'tr
 
 export function storedVoices(v: VoiceSeconds): Required<StoredVoices> {
   return { voiceTrace: v.trace, voicePitch: v.pitch, voiceLevel: v.level, voiceDepth: v.depth, voiceClarity: v.clarity }
-}
-
-function codeAt(coded: string | undefined, sec: number): number | null {
-  const i = coded ? CODE.indexOf(coded[sec] ?? '-') : -1
-  return i < 0 ? null : i
-}
-
-/// Pitch in semitones above 55 Hz, level in dB from full scale, rise and fall
-/// in dB, clarity 0...1.
-export function voiceAt(v: StoredVoices, sec: number): VoiceAt {
-  const pitch = codeAt(v.voicePitch, sec)
-  const level = codeAt(v.voiceLevel, sec)
-  const clarity = codeAt(v.voiceClarity, sec)
-  return {
-    pitch,
-    level: level == null ? null : -level * LEVEL_STEP_DB,
-    depth: codeAt(v.voiceDepth, sec),
-    clarity: clarity == null ? null : clarity / CLARITY_STEPS,
-  }
 }
 
 /// The whole step as the upload route runs it. A WAV is read straight off

@@ -941,10 +941,10 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
   // Measured from the audio at upload, which is gone now: re-analysing must
   // carry it over, because nothing could measure it again.
   const voiceClasses = keepVoiceClasses(stored?.metricsDetail)
-  // Teacher, student, group, other or quiet for every second: the voice
-  // classes read against who the transcript now says is the teacher.
-  // The video's lines are left out of `segments`, as from every read of the
-  // lesson, but here they are what the video sounds like.
+  // Teacher, student, group, a voice with no words, other or quiet for
+  // every second: the voice classes read against who the transcript now
+  // says spoke. The video's lines are left out of `segments`, as from every
+  // read of the lesson, but here they say when the video played.
   const videoLines =
     voiceClasses.voiceTrace !== undefined
       ? await prisma.transcriptSegment.findMany({
