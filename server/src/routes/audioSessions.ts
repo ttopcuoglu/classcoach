@@ -90,6 +90,16 @@ audioSessionsRouter.use((_req, res, next) => {
 // deleted as soon as transcription finishes or fails, on every path out of the
 // route. Nothing writes it to a permanent location, logs it, or attaches it to
 // a row — "audio is never saved" stays true.
+/// The speaker label for a voice the teacher said was a video playing.
+export const VIDEO_SPEAKER = 'Video'
+
+/// A video is not part of the lesson: its lines stay stored, so the tag can
+/// be undone, but no read of the lesson sees them — not the analyses, not the
+/// clients, including builds already in teachers' hands that count every
+/// voice but the teacher's as a student. The two reads that pick speakers are
+/// the only ones without it.
+const LESSON_LINES = { where: { speakerLabel: { not: VIDEO_SPEAKER } }, orderBy: { startSec: 'asc' as const } }
+
 const upload = multer({ storage: multer.diskStorage({}), limits: { fileSize: 200 * 1024 * 1024 } })
 
 /// Best-effort: a scratch file that outlives its request is a privacy problem,
@@ -357,7 +367,7 @@ audioSessionsRouter.get('/', async (req, res) => {
 audioSessionsRouter.get('/:id', async (req, res) => {
   const session = await prisma.audioSession.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
-    include: { segments: { orderBy: { startSec: 'asc' } } },
+    include: { segments: LESSON_LINES },
   })
   if (!session) {
     res.status(404).json({ error: 'Session not found' })
@@ -478,10 +488,15 @@ audioSessionsRouter.patch('/:id', async (req, res) => {
 /// totalSec/utteranceCount travel with it because how much a voice spoke is
 /// the strongest clue of all — a teacher tagged the 35-second voice instead
 /// of the 7-minute one and got a report with the two shares swapped.
-function speakerSamplesFrom(segments: { rawSpeakerTag: string; text: string; startSec: number; endSec: number }[]) {
-  const byTag = new Map<string, { sample: string; totalSec: number; utteranceCount: number }>()
+/// `role` is what the voice is tagged as now — before any tagging, every voice
+/// is 'student' — so a re-tag can open on the teacher's earlier choice.
+function speakerSamplesFrom(
+  segments: { rawSpeakerTag: string; speakerLabel?: string; text: string; startSec: number; endSec: number }[],
+) {
+  const byTag = new Map<string, { sample: string; totalSec: number; utteranceCount: number; role: 'teacher' | 'video' | 'student' }>()
   for (const segment of segments) {
-    const entry = byTag.get(segment.rawSpeakerTag) ?? { sample: '', totalSec: 0, utteranceCount: 0 }
+    const role = segment.speakerLabel === 'Teacher' ? 'teacher' : segment.speakerLabel === VIDEO_SPEAKER ? 'video' : 'student'
+    const entry = byTag.get(segment.rawSpeakerTag) ?? { sample: '', totalSec: 0, utteranceCount: 0, role }
     const text = segment.text.trim()
     if (text.length > entry.sample.length) entry.sample = text
     entry.totalSec += Math.max(0, segment.endSec - segment.startSec)
@@ -494,6 +509,7 @@ function speakerSamplesFrom(segments: { rawSpeakerTag: string; text: string; sta
       sample: e.sample || '(no clear words captured)',
       totalSec: Math.round(e.totalSec),
       utteranceCount: e.utteranceCount,
+      role: e.role,
     }))
     // Most talk first: the teacher is usually at the top, and the clients
     // preselect that first card.
@@ -653,7 +669,7 @@ audioSessionsRouter.get('/:id/speakers', async (req, res) => {
   const segments = await prisma.transcriptSegment.findMany({
     where: { sessionId: session.id },
     orderBy: { startSec: 'asc' },
-    select: { rawSpeakerTag: true, text: true, startSec: true, endSec: true },
+    select: { rawSpeakerTag: true, speakerLabel: true, text: true, startSec: true, endSec: true },
   })
   res.json({ speakers: speakerSamplesFrom(segments) })
 })
@@ -767,19 +783,26 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
   // projecting vs. conversational), so more than one raw tag can be the
   // teacher. `rawSpeakerTag` (a single string) is still accepted for iOS
   // builds that predate multi-select.
-  const { rawSpeakerTags, rawSpeakerTag } = req.body ?? {}
+  // `videoSpeakerTags` are voices the teacher said were a video playing; see
+  // VIDEO_SPEAKER. Absent from builds that predate it, which tag none.
+  const { rawSpeakerTags, rawSpeakerTag, videoSpeakerTags } = req.body ?? {}
   const requested: unknown[] = Array.isArray(rawSpeakerTags) ? rawSpeakerTags : [rawSpeakerTag]
-  const teacherTags = Array.from(
-    new Set(requested.filter((t): t is string => typeof t === 'string' && t.trim().length > 0)),
-  )
+  const tagsIn = (list: unknown[]) =>
+    Array.from(new Set(list.filter((t): t is string => typeof t === 'string' && t.trim().length > 0)))
+  const teacherTags = tagsIn(requested)
+  const videoTags = tagsIn(Array.isArray(videoSpeakerTags) ? videoSpeakerTags : [])
   if (teacherTags.length === 0) {
     res.status(400).json({ error: 'Pick at least one teacher voice.' })
+    return
+  }
+  if (videoTags.some((t) => teacherTags.includes(t))) {
+    res.status(400).json({ error: 'A voice can be you or a video, not both.' })
     return
   }
 
   const session = await prisma.audioSession.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
-    include: { segments: true },
+    include: { segments: { select: { rawSpeakerTag: true } } },
   })
   if (!session) {
     res.status(404).json({ error: 'Session not found' })
@@ -795,7 +818,7 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
   }
 
   const knownTags = new Set(session.segments.map((s) => s.rawSpeakerTag))
-  if (teacherTags.some((t) => !knownTags.has(t))) {
+  if ([...teacherTags, ...videoTags].some((t) => !knownTags.has(t))) {
     res.status(400).json({ error: 'Unknown speaker for this session.' })
     return
   }
@@ -805,13 +828,17 @@ audioSessionsRouter.post('/:id/tag-speaker', async (req, res) => {
     data: { speakerLabel: 'Teacher' },
   })
   await prisma.transcriptSegment.updateMany({
-    where: { sessionId: session.id, rawSpeakerTag: { notIn: teacherTags } },
+    where: { sessionId: session.id, rawSpeakerTag: { in: videoTags } },
+    data: { speakerLabel: VIDEO_SPEAKER },
+  })
+  await prisma.transcriptSegment.updateMany({
+    where: { sessionId: session.id, rawSpeakerTag: { notIn: [...teacherTags, ...videoTags] } },
     data: { speakerLabel: 'Student' },
   })
 
   const segments: Segment[] = (
     await prisma.transcriptSegment.findMany({
-      where: { sessionId: session.id },
+      where: { sessionId: session.id, ...LESSON_LINES.where },
       orderBy: { startSec: 'asc' },
     })
   ).map((s) => ({ speakerLabel: s.speakerLabel, startSec: s.startSec, endSec: s.endSec, text: s.text }))
@@ -916,7 +943,16 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
   const voiceClasses = keepVoiceClasses(stored?.metricsDetail)
   // Teacher, student, group, other or quiet for every second: the voice
   // classes read against who the transcript now says is the teacher.
-  const roomTrace = voiceClasses.voiceTrace !== undefined ? buildRoomTrace(voiceClasses, segments) : null
+  // The video's lines are left out of `segments`, as from every read of the
+  // lesson, but here they are what the video sounds like.
+  const videoLines =
+    voiceClasses.voiceTrace !== undefined
+      ? await prisma.transcriptSegment.findMany({
+          where: { sessionId, speakerLabel: VIDEO_SPEAKER },
+          select: { speakerLabel: true, startSec: true, endSec: true },
+        })
+      : []
+  const roomTrace = voiceClasses.voiceTrace !== undefined ? buildRoomTrace(voiceClasses, [...segments, ...videoLines]) : null
   const nonSpeech = trace
     ? splitNonSpeech(
         trace,
@@ -986,7 +1022,7 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
           } as unknown as Prisma.InputJsonValue)
         : Prisma.DbNull,
     },
-    include: { segments: { orderBy: { startSec: 'asc' } } },
+    include: { segments: LESSON_LINES },
   })
 
   // The report is complete without the prose: it is one 5000-token call, and
@@ -1287,7 +1323,7 @@ audioSessionsRouter.post('/:id/reflect-summary', async (req, res) => {
 audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
   const session = await prisma.audioSession.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
-    include: { segments: true },
+    include: { segments: LESSON_LINES },
   })
   if (!session) {
     res.status(404).json({ error: 'Session not found' })
@@ -1348,7 +1384,7 @@ audioSessionsRouter.post('/:id/content-notes', async (req, res) => {
           misconceptions: parseMisconceptions(text),
         },
       },
-      include: { segments: { orderBy: { startSec: 'asc' } } },
+      include: { segments: LESSON_LINES },
     })
     res.json(updated)
   } catch (error) {
@@ -1367,7 +1403,7 @@ const NOT_ENOUGH_RUBRIC_EVIDENCE_ERROR =
 audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
   const session = await prisma.audioSession.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
-    include: { segments: true },
+    include: { segments: LESSON_LINES },
   })
   if (!session) {
     res.status(404).json({ error: 'Session not found' })
@@ -1382,7 +1418,7 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
   if (session.rubricLens) {
     res.json(await prisma.audioSession.findFirst({
       where: { id: session.id },
-      include: { segments: { orderBy: { startSec: 'asc' } } },
+      include: { segments: LESSON_LINES },
     }))
     return
   }
@@ -1443,7 +1479,7 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
     const updated = await prisma.audioSession.update({
       where: { id: session.id },
       data: { rubricLens },
-      include: { segments: { orderBy: { startSec: 'asc' } } },
+      include: { segments: LESSON_LINES },
     })
     res.json(updated)
   } catch (error) {
@@ -1458,7 +1494,7 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
 // Rubric Lens; only from the teacher's own words (lib/debriefSchoolFocus.ts).
 audioSessionsRouter.post('/:id/school-focus-idea', async (req, res) => {
   const userId = req.user!.userId
-  const session = await prisma.audioSession.findFirst({ where: { id: String(req.params.id), userId }, include: { segments: true } })
+  const session = await prisma.audioSession.findFirst({ where: { id: String(req.params.id), userId }, include: { segments: LESSON_LINES } })
   if (!session) {
     res.status(404).json({ error: 'Session not found' })
     return
@@ -1468,7 +1504,7 @@ audioSessionsRouter.post('/:id/school-focus-idea', async (req, res) => {
     return
   }
   const stored = session.schoolFocusIdea as DebriefSchoolFocusIdea | null
-  const withSegments = () => prisma.audioSession.findFirst({ where: { id: session.id }, include: { segments: { orderBy: { startSec: 'asc' } } } })
+  const withSegments = () => prisma.audioSession.findFirst({ where: { id: session.id }, include: { segments: LESSON_LINES } })
   if (stored && !stored.dismissed) {
     res.json(await withSegments())
     return
@@ -1554,7 +1590,7 @@ const NOT_ENOUGH_HARD_LOOK_EVIDENCE_ERROR =
 audioSessionsRouter.post('/:id/hard-look', async (req, res) => {
   const session = await prisma.audioSession.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
-    include: { segments: true },
+    include: { segments: LESSON_LINES },
   })
   if (!session) {
     res.status(404).json({ error: 'Session not found' })
@@ -1571,7 +1607,7 @@ audioSessionsRouter.post('/:id/hard-look', async (req, res) => {
   if (session.hardLook) {
     res.json(await prisma.audioSession.findFirst({
       where: { id: session.id },
-      include: { segments: { orderBy: { startSec: 'asc' } } },
+      include: { segments: LESSON_LINES },
     }))
     return
   }
@@ -1681,7 +1717,7 @@ audioSessionsRouter.post('/:id/hard-look', async (req, res) => {
     const updated = await prisma.audioSession.update({
       where: { id: session.id },
       data: { hardLook },
-      include: { segments: { orderBy: { startSec: 'asc' } } },
+      include: { segments: LESSON_LINES },
     })
     res.json(updated)
   } catch (error) {
@@ -2086,7 +2122,7 @@ async function writeClassSummary(
     return prisma.audioSession.update({
       where: { id: session.id },
       data: { classSummary: "This recording didn't capture enough clear speech to summarize what the class covered." },
-      include: { segments: { orderBy: { startSec: 'asc' } } },
+      include: { segments: LESSON_LINES },
     })
   }
 
@@ -2125,14 +2161,14 @@ async function writeClassSummary(
       // answer, and null is what tells the report to ask (/:id/next-steps).
       nextSteps,
     },
-    include: { segments: { orderBy: { startSec: 'asc' } } },
+    include: { segments: LESSON_LINES },
   })
 }
 
 audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
   const session = await prisma.audioSession.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
-    include: { segments: true },
+    include: { segments: LESSON_LINES },
   })
   if (!session) {
     res.status(404).json({ error: 'Session not found' })
@@ -2182,7 +2218,7 @@ audioSessionsRouter.post('/:id/class-summary', async (req, res) => {
 audioSessionsRouter.post('/:id/moment-to-revisit', async (req, res) => {
   const session = await prisma.audioSession.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
-    include: { segments: { orderBy: { startSec: 'asc' } } },
+    include: { segments: LESSON_LINES },
   })
   if (!session) {
     res.status(404).json({ error: 'Session not found' })
@@ -2207,7 +2243,7 @@ audioSessionsRouter.post('/:id/moment-to-revisit', async (req, res) => {
   const updated = await prisma.audioSession.update({
     where: { id: session.id },
     data: { momentToRevisit: moment },
-    include: { segments: { orderBy: { startSec: 'asc' } } },
+    include: { segments: LESSON_LINES },
   })
   res.json(updated)
 })
@@ -2263,7 +2299,7 @@ audioSessionsRouter.post('/:id/focus-line', async (req, res) => {
 audioSessionsRouter.post('/:id/next-steps', async (req, res) => {
   const session = await prisma.audioSession.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
-    include: { segments: { orderBy: { startSec: 'asc' } } },
+    include: { segments: LESSON_LINES },
   })
   if (!session) {
     res.status(404).json({ error: 'Session not found' })
@@ -2290,7 +2326,7 @@ audioSessionsRouter.post('/:id/next-steps', async (req, res) => {
   const updated = await prisma.audioSession.update({
     where: { id: session.id },
     data: { nextSteps },
-    include: { segments: { orderBy: { startSec: 'asc' } } },
+    include: { segments: LESSON_LINES },
   })
   res.json(updated)
 })

@@ -116,6 +116,9 @@ enum AudioCoachingService {
 
     private struct TagSpeakersBody: Encodable {
         let rawSpeakerTags: [String]
+        /// Voices that were a video playing, left out of the lesson rather
+        /// than counted as students.
+        let videoSpeakerTags: [String]
         /// Omitted, the server runs the analysis inside the request and
         /// answers with the finished session — which is what builds already
         /// in teachers' hands still do.
@@ -133,12 +136,12 @@ enum AudioCoachingService {
     /// session here to decode — the report arrives by polling
     /// `getSession(id:)` instead. Same `startTranscription` shape, where the
     /// upload stopped waiting for the transcript.
-    static func tagSpeakers(sessionId: String, rawSpeakerTags: [String]) async throws {
+    static func tagSpeakers(sessionId: String, rawSpeakerTags: [String], videoSpeakerTags: [String] = []) async throws {
         struct EmptyResponse: Decodable {}
         let _: EmptyResponse = try await APIClient.shared.request(
             "/api/audio-sessions/\(sessionId)/tag-speaker",
             method: "POST",
-            body: TagSpeakersBody(rawSpeakerTags: rawSpeakerTags, mode: "async")
+            body: TagSpeakersBody(rawSpeakerTags: rawSpeakerTags, videoSpeakerTags: videoSpeakerTags, mode: "async")
         )
     }
 

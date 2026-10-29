@@ -11,6 +11,7 @@ type Sec = { c: string; hz?: number | null; db?: number; depth?: number; clarity
 // rules as several voices: little rise and fall, unclear pitch.
 const TEACHER = { c: 'm', hz: 120, db: -20, depth: 10, clarity: 0.2 }
 const STUDENT = { c: 'v', hz: 230, db: -32, depth: 22, clarity: 0.6 }
+const VIDEO = { c: 'm', hz: 160, db: -28, depth: 6, clarity: 0.5 }
 // Pair work: no one voice, a steady murmur at no pitch in particular.
 const CROWD = { c: 'm', hz: null, db: -30, depth: 4, clarity: 0.05 }
 
@@ -45,6 +46,10 @@ test("a student's words while many voices were going is group talk", () => {
   assert.equal(buildRoomTrace(voices(repeat(4, CROWD)), [said('Student 1', 0, 4)]), 'gggg')
 })
 
+test("a video's words are other sound, not a student", () => {
+  assert.equal(buildRoomTrace(voices(repeat(4, VIDEO)), [said('Video', 0, 4)]), 'oooo')
+})
+
 test('with no words, other sound and quiet are what they are', () => {
   assert.equal(buildRoomTrace(voices([...KNOWN, { c: 'o' }, { c: 'q' }, { c: '-' }]), KNOWN_WORDS).slice(24), 'oq-')
 })
@@ -65,6 +70,11 @@ test('a teacher the audio reads as several voices is still the teacher when the 
 test('several voices that sound like no one speaker are group talk', () => {
   const v = voices([...KNOWN, ...repeat(6, CROWD)])
   assert.equal(buildRoomTrace(v, KNOWN_WORDS).slice(24), 'gggggg')
+})
+
+test('sound like the video, with no words, is other sound', () => {
+  const v = voices([...KNOWN, ...repeat(12, VIDEO), ...repeat(5, { ...VIDEO, db: -29 })])
+  assert.equal(buildRoomTrace(v, [...KNOWN_WORDS, said('Video', 24, 36)]).slice(24), 'o'.repeat(17))
 })
 
 test('a lesson with every word lost puts a lone voice down to the teacher, and several to a group', () => {

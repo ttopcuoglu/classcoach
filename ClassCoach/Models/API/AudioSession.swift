@@ -947,9 +947,12 @@ struct SpeakerSample: Decodable {
     let sample: String
     let totalSec: Double?
     let utteranceCount: Int?
+    /// What this voice is tagged as now: "teacher", "video" or "student".
+    /// nil from a server that predates it.
+    let role: String?
 
     private enum CodingKeys: String, CodingKey {
-        case rawSpeakerTag, sample, totalSec, utteranceCount
+        case rawSpeakerTag, sample, totalSec, utteranceCount, role
     }
 
     init(from decoder: Decoder) throws {
@@ -958,6 +961,7 @@ struct SpeakerSample: Decodable {
         sample = (try? container.decode(String.self, forKey: .sample)) ?? ""
         totalSec = try? container.decodeIfPresent(Double.self, forKey: .totalSec)
         utteranceCount = try? container.decodeIfPresent(Int.self, forKey: .utteranceCount)
+        role = try? container.decodeIfPresent(String.self, forKey: .role)
     }
 }
 
