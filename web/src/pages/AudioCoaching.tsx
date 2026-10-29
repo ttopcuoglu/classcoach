@@ -2,8 +2,9 @@ import { cloneElement, createContext, isValidElement, useEffect, useMemo, useRef
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
 import BroughtStudentsIn from '../components/BroughtStudentsIn'
-import TalkFlowStrip, { FLOW_COLOR, ROOM_COLOR, type ShareSlice } from '../components/TalkFlowStrip'
-import { roomBreakdown, type RoomBreakdown } from '../lib/roomBreakdown'
+import TalkFlowStrip, { FLOW_COLOR, ROOM_COLOR, ROOM_LABEL, type ShareSlice } from '../components/TalkFlowStrip'
+import { roomBreakdown, type RoomBreakdown, type RoomKind } from '../lib/roomBreakdown'
+import RoomMoments, { type RoomPick } from '../components/RoomMoments'
 import { DashedLinePoint, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
 import { ProgressRing, ThinkingIndicator, WorkingRing } from '../components/ProgressRing'
@@ -971,13 +972,11 @@ function speakerActivity(speaker: SpeakerSample): string | null {
   return `${spoken} · ${speaker.utteranceCount} turn${speaker.utteranceCount === 1 ? '' : 's'}`
 }
 
-type SpeakerRole = NonNullable<SpeakerSample['role']>
-
-const SPEAKER_ROLES: { role: SpeakerRole; label: string }[] = [
-  { role: 'teacher', label: 'Teacher' },
-  { role: 'student', label: 'Student' },
-  { role: 'video', label: 'Video' },
-]
+/// A voice that isn't the teacher's and talked this long is asked about
+/// before it counts as a student: a student rarely talks for minutes as one
+/// voice, and a video or audiobook nobody marked would otherwise be counted
+/// as student talk.
+const LONG_VOICE_SEC = 120
 
 function TagSpeakersPanel({
   session,
@@ -1011,21 +1010,32 @@ function TagSpeakersPanel({
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  // Every voice is one of the three, shown as chosen, so a voice left alone is
-  // seen to count as a student rather than assumed to.
-  function roleOf(rawSpeakerTag: string): SpeakerRole {
-    return selected.has(rawSpeakerTag) ? 'teacher' : videos.has(rawSpeakerTag) ? 'video' : 'student'
-  }
+  // Long voices the teacher has said are students. A re-tag opens with the
+  // earlier answer standing: those were decided when the lesson was tagged.
+  const [confirmedStudents, setConfirmedStudents] = useState<Set<string>>(() =>
+    speakers.some((s) => s.role === 'teacher')
+      ? new Set(speakers.filter((s) => s.role === 'student').map((s) => s.rawSpeakerTag))
+      : new Set(),
+  )
+  const isLong = (s: SpeakerSample) => (s.totalSec ?? 0) >= LONG_VOICE_SEC
+  const unanswered = speakers.filter(
+    (s) => isLong(s) && !selected.has(s.rawSpeakerTag) && !videos.has(s.rawSpeakerTag) && !confirmedStudents.has(s.rawSpeakerTag),
+  )
 
-  function choose(rawSpeakerTag: string, role: SpeakerRole) {
+  // A voice is the teacher, a video or audio, or a student; choosing one
+  // clears the others, and choosing it again goes back to student.
+  function toggle(rawSpeakerTag: string, as: 'teacher' | 'video' | 'student') {
     const set = (keep: boolean) => (prev: Set<string>) => {
       const next = new Set(prev)
       if (keep) next.add(rawSpeakerTag)
       else next.delete(rawSpeakerTag)
       return next
     }
-    setSelected(set(role === 'teacher'))
-    setVideos(set(role === 'video'))
+    const was = selected.has(rawSpeakerTag) ? 'teacher' : videos.has(rawSpeakerTag) ? 'video' : 'student'
+    const to = as === was && as !== 'student' ? 'student' : as
+    setSelected(set(to === 'teacher'))
+    setVideos(set(to === 'video'))
+    setConfirmedStudents(set(to === 'student'))
   }
 
   async function handleAnalyze() {
@@ -1074,9 +1084,9 @@ function TagSpeakersPanel({
       {session.failureReason && <p className="mt-2 text-sm text-terracotta-600">{session.failureReason}</p>}
       <p className="mt-1 text-sm text-ink-soft">
         Automatic diarization can tell voices apart, but it can't reliably tell who's the teacher — and it
-        sometimes splits one teacher into two voices. The voice that spoke the most is picked as Teacher for
-        you, since that's usually you; mark every voice that is. If you played a video, mark its voice as Video
-        so it isn't counted as a student.
+        sometimes splits one teacher into two voices. The voice that spoke the most is picked for you, since
+        that's usually you; mark every voice that is. If you played a video or audio, mark its voice as
+        Video/Audio. Every other voice counts as a student.
       </p>
       <div className="mt-4 flex flex-col gap-3">
         {speakers.length === 0 ? (
@@ -1095,44 +1105,66 @@ function TagSpeakersPanel({
           </div>
         ) : (
           speakers.map((s) => {
-            const role = roleOf(s.rawSpeakerTag)
+            const isTeacher = selected.has(s.rawSpeakerTag)
+            const isVideo = videos.has(s.rawSpeakerTag)
+            const asking = unanswered.includes(s)
             return (
               <div
                 key={s.rawSpeakerTag}
-                className={`flex flex-wrap items-center justify-between gap-4 rounded-xl border-2 p-4 transition-colors ${
-                  role === 'teacher' ? 'border-terracotta bg-peach-tint' : role === 'video' ? 'border-ink-soft/40 bg-lavender-tint' : 'border-transparent bg-mint-tint/50'
+                className={`flex flex-col gap-3 rounded-xl border-2 p-4 transition-colors ${
+                  isTeacher ? 'border-terracotta bg-peach-tint' : isVideo ? 'border-ink-soft/40 bg-lavender-tint' : asking ? 'border-gold bg-cream-card' : 'border-transparent bg-mint-tint/50'
                 }`}
               >
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                    {s.rawSpeakerTag}
-                    {speakerActivity(s) ? <span className="normal-case tracking-normal"> · {speakerActivity(s)}</span> : null}
-                  </p>
-                  <p className="mt-1 text-sm text-ink">"{s.sample}"</p>
-                </div>
-                <div role="radiogroup" aria-label={`${s.rawSpeakerTag} is`} className="flex shrink-0 rounded-full border border-hairline bg-cream-card p-1">
-                  {SPEAKER_ROLES.map(({ role: r, label }) => (
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                      {s.rawSpeakerTag}
+                      {speakerActivity(s) ? <span className="normal-case tracking-normal"> · {speakerActivity(s)}</span> : null}
+                    </p>
+                    <p className="mt-1 text-sm text-ink">"{s.sample}"</p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-2">
                     <button
-                      key={r}
                       type="button"
-                      role="radio"
-                      aria-checked={role === r}
-                      onClick={() => choose(s.rawSpeakerTag, r)}
+                      onClick={() => toggle(s.rawSpeakerTag, 'teacher')}
                       disabled={tagging}
-                      className={`rounded-full px-3 py-1.5 text-sm font-semibold transition-colors disabled:opacity-60 ${
-                        role === r
-                          ? r === 'teacher'
-                            ? 'bg-terracotta text-cream'
-                            : r === 'video'
-                              ? 'bg-ink text-cream'
-                              : 'bg-forest text-cream'
-                          : 'text-ink-soft hover:text-ink'
+                      aria-pressed={isTeacher}
+                      className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
+                        isTeacher
+                          ? 'border-terracotta bg-terracotta text-cream hover:bg-terracotta/90'
+                          : 'border-terracotta text-terracotta-600 hover:bg-peach-tint'
                       }`}
                     >
-                      {label}
+                      {isTeacher ? '✓ Teacher' : 'This is the Teacher'}
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => toggle(s.rawSpeakerTag, 'video')}
+                      disabled={tagging}
+                      aria-pressed={isVideo}
+                      className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors disabled:opacity-60 ${
+                        isVideo ? 'bg-ink text-cream hover:bg-ink/90' : 'text-ink-soft hover:bg-lavender-tint hover:text-ink'
+                      }`}
+                    >
+                      {isVideo ? '✓ Video/Audio' : 'This is video/audio'}
+                    </button>
+                  </div>
                 </div>
+                {asking && (
+                  <div className="flex flex-wrap items-center gap-3 border-t border-hairline pt-3">
+                    <p className="text-sm text-ink">
+                      This voice talked for {Math.round((s.totalSec ?? 0) / 60)} minutes. Is it a student, or video/audio?
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => toggle(s.rawSpeakerTag, 'student')}
+                      disabled={tagging}
+                      className="rounded-full border border-forest px-3 py-1 text-xs font-semibold text-forest hover:bg-mint-tint disabled:opacity-60"
+                    >
+                      It's a student
+                    </button>
+                  </div>
+                )}
               </div>
             )
           })
@@ -1142,11 +1174,14 @@ function TagSpeakersPanel({
         <button
           type="button"
           onClick={handleAnalyze}
-          disabled={selected.size === 0 || tagging}
+          disabled={selected.size === 0 || unanswered.length > 0 || tagging}
           className="mt-4 rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-forest/90 disabled:bg-hairline disabled:text-ink-soft"
         >
           {tagging ? 'Analyzing...' : 'Analyze session'}
         </button>
+      )}
+      {unanswered.length > 0 && !tagging && (
+        <p className="mt-2 text-xs text-ink-soft">Answer the question on the highlighted voice to analyze.</p>
       )}
       {onCancel && (
         <button
@@ -2807,11 +2842,11 @@ function SummaryTab({
   const tiles: { label: string; metric: ConfidentMetric; unit?: string; note?: string; accent: Accent }[] = [
     ...(room
       ? [
-          { label: 'Teacher', metric: roomPct(room.pct.teacher), unit: '%', accent: ACCENTS.terracotta },
-          { label: 'Student voice', metric: roomPct(room.pct.student), unit: '%', accent: ACCENTS.gold },
-          ...(room.videoSec > 0 ? [{ label: 'Video', metric: roomPct(room.pct.video), unit: '%', accent: ACCENTS.teal }] : []),
-          { label: 'Other sounds', metric: roomPct(room.pct.other), unit: '%', accent: ACCENTS.lavender },
-          { label: 'Quiet', metric: roomPct(room.pct.quiet), unit: '%', accent: ACCENTS.sky },
+          { label: 'Teacher Voice', metric: roomPct(room.pct.teacher), unit: '%', accent: ACCENTS.terracotta },
+          { label: 'Student Voice', metric: roomPct(room.pct.student), unit: '%', note: 'at least', accent: ACCENTS.gold },
+          ...(room.videoSec > 0 ? [{ label: 'Video/Audio', metric: roomPct(room.pct.video), unit: '%', accent: ACCENTS.teal }] : []),
+          { label: 'Group Voice', metric: roomPct(room.pct.other), unit: '%', accent: ACCENTS.lavender },
+          { label: 'Quiet Time', metric: roomPct(room.pct.quiet), unit: '%', accent: ACCENTS.sky },
         ]
       : [
           { label: 'You spoke', metric: getPresenceMetric(teacherPct), unit: '%', accent: ACCENTS.terracotta },
@@ -5565,13 +5600,17 @@ function TalkParticipationTab({
   const silenceNote = (silencePct ?? 0) > 0 ? leadingSilenceNote(session.metricsDetail?.firstWordSec) : null
   // Only when it is long enough to be worth a look: every lesson has a longest
   // stretch, and a 40-second one is not a finding.
+  // With the per-second breakdown, your longest stretch is always shown, as
+  // one of the measured facts beside the shares.
+  const room = roomBreakdown(session.metricsLogs)
+  const [pick, setPick] = useState<RoomPick | null>(null)
+  const hasRoom = room != null
   const stretch = useMemo(() => {
     const longest = longestTeacherStretch(session.segments)
-    return longest && longest.durationSec >= MIN_STRETCH_TO_SHOW_SEC ? longest : null
-  }, [session.segments])
+    return longest && (hasRoom || longest.durationSec >= MIN_STRETCH_TO_SHOW_SEC) ? longest : null
+  }, [session.segments, hasRoom])
 
   const nonSpeech = nonSpeechSplit(session.metricsDetail, session.durationSec)
-  const room = roomBreakdown(session.metricsLogs)
   const moves = session.teachingMoves
   const p = moves?.participation
   const invitations = (p?.invitations ?? moves?.invitations ?? []).map((q) => ({
@@ -5600,9 +5639,11 @@ function TalkParticipationTab({
           </p>
           {room ? (
             <p className="text-sm text-ink-soft">
-              "Teacher" and "Student voice" count only seconds with words the transcript gave to you or to a student,
-              and the short pauses between them, so they can be lower than what you remember. A voice with no words
-              could be anyone, and is counted with "Other sounds"; so is noise. "Video" is a voice you marked as one.
+              "Teacher Voice" and "Student Voice" count only seconds with words the transcript gave to you or to a
+              student, and the short pauses between them. Student Voice is a minimum: students the microphone couldn't
+              make out aren't in it. "Group Voice" is sound with no transcribed words, most often students talking
+              together; music or other room sound is counted there too. "Video/Audio" is a voice you marked as one.
+              Click any of them to see the moments behind it.
             </p>
           ) : (
           <p className="text-sm text-ink-soft">
@@ -5624,7 +5665,14 @@ function TalkParticipationTab({
     >
       {/* Who was heard and how fast, then the lesson minute by minute. */}
       <div id="stat-talkRatio" className="flex flex-col gap-3">
-        <TalkNumbers teacherPct={session.teacherTalkPct} studentPct={session.studentTalkPct} wpm={wpm} room={room} />
+        <TalkNumbers
+          teacherPct={session.teacherTalkPct}
+          studentPct={session.studentTalkPct}
+          wpm={wpm}
+          room={room}
+          picked={pick && 'kind' in pick ? pick.kind : null}
+          onPick={(kind) => setPick(pick && 'kind' in pick && pick.kind === kind ? null : { kind })}
+        />
         <TalkFlowStrip
           segments={session.segments}
           durationSec={session.durationSec}
@@ -5633,7 +5681,9 @@ function TalkParticipationTab({
           marks={[]}
           shares={recordingShares(session.teacherTalkPct, session.studentTalkPct, nonSpeech)}
           room={room}
+          onPick={room ? setPick : undefined}
         />
+        {room && pick && <RoomMoments room={room} segments={session.segments} pick={pick} onClose={() => setPick(null)} />}
       </div>
 
       {/* How you brought students in: your moves and the answers heard, on
@@ -5764,11 +5814,15 @@ function TalkNumbers({
   studentPct,
   wpm,
   room,
+  picked,
+  onPick,
 }: {
   teacherPct: number | null
   studentPct: number | null
   wpm: number | null
   room: RoomBreakdown | null
+  picked: RoomKind | null
+  onPick: (kind: RoomKind) => void
 }) {
   const tile = (label: string, value: string, sub: string, color: string | undefined) => (
     <div className="rounded-xl border border-hairline bg-cream-card px-4 py-3">
@@ -5781,12 +5835,41 @@ function TalkNumbers({
   )
   const pace = tile('Your pace', wpm != null ? String(Math.round(wpm)) : '—', wpm != null ? `words a minute · conversation usually runs ${CONVERSATIONAL_WPM_RANGE}` : 'unavailable', undefined)
   if (room) {
-    const pct = (n: number) => `${Math.round(n)}%`
+    // Minutes first: they can be checked against the lesson as remembered,
+    // and a share cannot. Each opens the moments behind it.
+    const total = room.seconds.length
+    const minutes = (pct: number) => {
+      const sec = Math.round((pct / 100) * total)
+      const m = Math.floor(sec / 60)
+      return m ? `${m} min${sec % 60 ? ` ${sec % 60} s` : ''}` : `${sec} s`
+    }
+    const kinds: { kind: RoomKind; sub: string }[] = [
+      { kind: 'teacher', sub: 'your words, and pauses between them' },
+      { kind: 'student', sub: 'students’ words; any the microphone couldn’t make out aren’t counted' },
+      ...(room.videoSec > 0 ? [{ kind: 'video' as const, sub: 'the voice you marked as video or audio' }] : []),
+      { kind: 'other', sub: 'no transcribed words — most often students talking together' },
+      { kind: 'quiet', sub: 'the microphone heard nothing' },
+    ]
     return (
-      <div className={`grid grid-cols-1 gap-3 ${room.videoSec > 0 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
-        {tile('Teacher', pct(room.pct.teacher), 'your words, and pauses between them', ROOM_COLOR.teacher)}
-        {tile('Student voice', pct(room.pct.student), 'students’ words, one or several', ROOM_COLOR.student)}
-        {room.videoSec > 0 && tile('Video', pct(room.pct.video), `${Math.round(room.videoSec / 60)} min you marked as a video`, ROOM_COLOR.video)}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {kinds.map(({ kind, sub }) => (
+          <button
+            key={kind}
+            type="button"
+            onClick={() => onPick(kind)}
+            aria-expanded={picked === kind}
+            className={`rounded-xl border bg-cream-card px-4 py-3 text-left transition-colors hover:border-forest ${picked === kind ? 'border-forest' : 'border-hairline'}`}
+          >
+            <p className="text-xs font-semibold text-ink-soft">{ROOM_LABEL[kind]}</p>
+            <p className="font-heading text-2xl font-extrabold leading-tight" style={{ color: ROOM_COLOR[kind] }}>
+              {kind === 'student' ? 'at least ' : ''}
+              {minutes(room.pct[kind])}
+            </p>
+            <p className="text-xs text-ink-soft">
+              {Math.round(room.pct[kind])}% · {sub}
+            </p>
+          </button>
+        ))}
         {pace}
       </div>
     )
@@ -5859,8 +5942,11 @@ function LongestStretchCard({
   return (
     <div className="flex flex-col gap-2 border-t border-dashed border-hairline pt-4">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="font-heading text-base font-bold text-forest">Your longest explanation</p>
-        <span className="font-heading text-base font-bold text-forest">about {Math.max(1, Math.round(stretch.durationSec / 60))} min</span>
+        <p className="font-heading text-base font-bold text-forest">Your longest stretch</p>
+        <span className="font-heading text-base font-bold text-forest">
+          {Math.floor(stretch.durationSec / 60) ? `${Math.floor(stretch.durationSec / 60)} min ` : ''}
+          {Math.round(stretch.durationSec % 60)} s
+        </span>
       </div>
       {matched?.about && <p className="-mt-1 text-xs text-ink-soft">{matched.about[0].toUpperCase() + matched.about.slice(1)}</p>}
       <div className="rounded-r-xl border-l-4 border-terracotta bg-cream px-3.5 py-2.5">

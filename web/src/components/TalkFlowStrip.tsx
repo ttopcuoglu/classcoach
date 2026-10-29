@@ -8,8 +8,8 @@
 // below is the same recording slice by slice.
 //
 // A lesson that carries the server's per-second breakdown (roomBreakdown.ts)
-// is drawn from that instead: teacher, student voice, a tagged video, other
-// sounds and quiet, for the bar, the strip and the tiles alike.
+// is drawn from that instead: teacher voice, student voice, a tagged video or
+// audio, group voice and quiet time, for the bar, the strip and the tiles.
 
 import { useState } from 'react'
 import { buildFlow, type FlowKind } from '../lib/talkFlow'
@@ -40,11 +40,11 @@ export const ROOM_COLOR: Record<RoomKind, string> = {
 }
 
 export const ROOM_LABEL: Record<RoomKind, string> = {
-  teacher: 'Teacher',
-  student: 'Student voice',
-  video: 'Video',
-  other: 'Other sounds',
-  quiet: 'Quiet',
+  teacher: 'Teacher Voice',
+  student: 'Student Voice',
+  video: 'Video/Audio',
+  other: 'Group Voice',
+  quiet: 'Quiet Time',
 }
 
 const ROOM_ORDER: RoomKind[] = ['teacher', 'student', 'video', 'other', 'quiet']
@@ -126,6 +126,7 @@ export default function TalkFlowStrip({
   marks,
   shares,
   room,
+  onPick,
 }: {
   segments: TranscriptSegment[]
   durationSec: number | null
@@ -136,6 +137,8 @@ export default function TalkFlowStrip({
   shares: ShareSlice[]
   /// The server's per-second breakdown, when the lesson has one.
   room?: RoomBreakdown | null
+  /// A block or legend entry was clicked: show what was said there.
+  onPick?: (pick: { kind: RoomKind } | { startSec: number; endSec: number }) => void
 }) {
   const [hover, setHover] = useState<number | null>(null)
   const flow = durationSec ? buildFlow(segments, durationSec, seconds ?? null) : null
@@ -174,12 +177,20 @@ export default function TalkFlowStrip({
         ))}
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-ink">
-        {slices.map((s) => (
-          <span key={s.key} className="flex items-center gap-1.5">
-            {view.hatched(s.key) ? <HatchedSwatch className="h-2.5 w-2.5 rounded-sm" /> : <i className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: view.color(s.key) }} />}
-            {label(s.key)} <b>{Math.round(s.pct)}%</b>
-          </span>
-        ))}
+        {slices.map((s) => {
+          const swatch = view.hatched(s.key) ? <HatchedSwatch className="h-2.5 w-2.5 rounded-sm" /> : <i className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: view.color(s.key) }} />
+          return room && onPick ? (
+            <button key={s.key} type="button" onClick={() => onPick({ kind: s.key as RoomKind })} className="flex items-center gap-1.5 hover:underline">
+              {swatch}
+              {label(s.key)} <b>{Math.round(s.pct)}%</b>
+            </button>
+          ) : (
+            <span key={s.key} className="flex items-center gap-1.5">
+              {swatch}
+              {label(s.key)} <b>{Math.round(s.pct)}%</b>
+            </span>
+          )
+        })}
       </div>
       <svg viewBox={`0 0 ${W} 78`} width="100%" role="img" aria-label="What the recording held, across the lesson" onMouseLeave={() => setHover(null)}>
         <defs>
@@ -198,6 +209,8 @@ export default function TalkFlowStrip({
             fill={view.hatched(k) ? 'url(#flow-strip-hatch)' : view.color(k)}
             opacity={hover == null || hover === i ? 1 : 0.55}
             onMouseEnter={() => setHover(i)}
+            onClick={onPick ? () => onPick({ startSec: i * view.binSec, endSec: (i + 1) * view.binSec }) : undefined}
+            style={onPick ? { cursor: 'pointer' } : undefined}
           />
         ))}
         {marks.map((m, i) => (
@@ -226,10 +239,10 @@ export default function TalkFlowStrip({
       </div>
       {room ? (
         <p className="text-xs text-ink-soft">
-          “Teacher” and “Student voice” are only seconds with words the transcript gave to you or to a student, and the
-          short pauses between them. “Other sounds” is everything else that wasn’t quiet
-          {room.unclearSec >= 60 ? `, including ${Math.round(room.unclearSec / 60)} min of voices too unclear to transcribe` : ''}.
-          {room.videoSec > 0 ? ' “Video” is the voice you marked as a video.' : ''}
+          “Teacher Voice” and “Student Voice” are seconds with words the transcript gave to you or to a student, and the
+          short pauses between them. “Group Voice” is sound with no transcribed words — most often students talking
+          together; music or other room sound is counted here too.
+          {room.videoSec > 0 ? ' “Video/Audio” is the voice you marked as one.' : ''}
         </p>
       ) : (
         <p className="text-xs text-ink-soft">
