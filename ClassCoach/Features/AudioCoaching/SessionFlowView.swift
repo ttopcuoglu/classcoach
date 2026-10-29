@@ -110,9 +110,9 @@ private struct AnalyzingView: View {
     }
 }
 
-/// Mirrors `AudioCoaching.tsx`'s `TagSpeakersPanel` — select every voice
-/// that's the teacher (diarization sometimes splits one person into two),
-/// then analyze; everyone else is auto-grouped "Student" server-side.
+/// Mirrors `AudioCoaching.tsx`'s `TagSpeakersPanel` — mark each voice as the
+/// teacher (diarization sometimes splits one person into two), a student or
+/// a video, then analyze.
 struct TagSpeakersView: View {
     let session: AudioSessionWithSegments
     let speakers: [SpeakerSample]
@@ -128,8 +128,8 @@ struct TagSpeakersView: View {
     let onTagged: (AudioSessionWithSegments) -> Void
 
     @State private var selected: Set<String> = []
-    /// Voices that were a video playing. A voice is the teacher, a video, or
-    /// neither; choosing one clears the other.
+    /// Voices that were a video playing. Every voice is the teacher, a
+    /// student or a video, shown as chosen.
     @State private var videos: Set<String> = []
     @State private var tagging = false
     @State private var error: String?
@@ -137,7 +137,7 @@ struct TagSpeakersView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Which voice is the teacher?").font(.title3.bold()).foregroundStyle(AppTheme.textPrimary)
-            Text("Automatic diarization can tell voices apart, but it can't reliably tell who's the teacher — and it sometimes splits one teacher into two voices. Select every voice that's you; everyone else will be grouped as Student. If you played a video, mark its voice as a video so it isn't counted as a student.")
+            Text("Automatic diarization can tell voices apart, but it can't reliably tell who's the teacher — and it sometimes splits one teacher into two voices. Mark every voice that's you as Teacher. If you played a video, mark its voice as Video so it isn't counted as a student.")
                 .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
 
             if speakers.isEmpty {
@@ -149,7 +149,6 @@ struct TagSpeakersView: View {
 
                 ForEach(speakers, id: \.rawSpeakerTag) { speaker in
                     let isTeacher = selected.contains(speaker.rawSpeakerTag)
-                    let isVideo = videos.contains(speaker.rawSpeakerTag)
                     VStack(alignment: .leading, spacing: 8) {
                         Text(speaker.rawSpeakerTag.uppercased())
                             .font(.caption2.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
@@ -159,42 +158,13 @@ struct TagSpeakersView: View {
                         }
                         Text("\"\(speaker.sample)\"")
                             .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                        HStack(spacing: 10) {
-                            Button {
-                                if isTeacher {
-                                    selected.remove(speaker.rawSpeakerTag)
-                                } else {
-                                    selected.insert(speaker.rawSpeakerTag)
-                                    videos.remove(speaker.rawSpeakerTag)
-                                }
-                            } label: {
-                                Label(isTeacher ? "Teacher" : "This is the Teacher", systemImage: isTeacher ? "checkmark" : "person")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(isTeacher ? .white : AppTheme.primary)
-                                    .padding(.horizontal, 16).padding(.vertical, 9)
-                                    .background(isTeacher ? AppTheme.primary : Color.clear, in: Capsule())
-                                    .overlay(Capsule().stroke(AppTheme.primary, lineWidth: 1.5))
-                            }
-                            .disabled(tagging)
-                            .accessibilityAddTraits(isTeacher ? .isSelected : [])
-
-                            Button {
-                                if isVideo {
-                                    videos.remove(speaker.rawSpeakerTag)
-                                } else {
-                                    videos.insert(speaker.rawSpeakerTag)
-                                    selected.remove(speaker.rawSpeakerTag)
-                                }
-                            } label: {
-                                Label(isVideo ? "Video" : "This is a video", systemImage: isVideo ? "checkmark" : "play.rectangle")
-                                    .font(.footnote.weight(.semibold))
-                                    .foregroundStyle(isVideo ? .white : AppTheme.textSecondary)
-                                    .padding(.horizontal, 12).padding(.vertical, 7)
-                                    .background(isVideo ? AppTheme.textPrimary : Color.clear, in: Capsule())
-                            }
-                            .disabled(tagging)
-                            .accessibilityAddTraits(isVideo ? .isSelected : [])
+                        Picker("\(speaker.rawSpeakerTag) is", selection: role(of: speaker.rawSpeakerTag)) {
+                            Text("Teacher").tag(SpeakerRole.teacher)
+                            Text("Student").tag(SpeakerRole.student)
+                            Text("Video").tag(SpeakerRole.video)
                         }
+                        .pickerStyle(.segmented)
+                        .disabled(tagging)
                     }
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -225,6 +195,18 @@ struct TagSpeakersView: View {
             preselect()
             if error == nil { error = initialError }
         }
+    }
+
+    private enum SpeakerRole: Hashable { case teacher, student, video }
+
+    private func role(of tag: String) -> Binding<SpeakerRole> {
+        Binding(
+            get: { selected.contains(tag) ? .teacher : videos.contains(tag) ? .video : .student },
+            set: { role in
+                if role == .teacher { selected.insert(tag) } else { selected.remove(tag) }
+                if role == .video { videos.insert(tag) } else { videos.remove(tag) }
+            }
+        )
     }
 
     /// One tap for the common case. The teacher who mis-tagged had to choose

@@ -970,6 +970,14 @@ function speakerActivity(speaker: SpeakerSample): string | null {
   return `${spoken} · ${speaker.utteranceCount} turn${speaker.utteranceCount === 1 ? '' : 's'}`
 }
 
+type SpeakerRole = NonNullable<SpeakerSample['role']>
+
+const SPEAKER_ROLES: { role: SpeakerRole; label: string }[] = [
+  { role: 'teacher', label: 'Teacher' },
+  { role: 'student', label: 'Student' },
+  { role: 'video', label: 'Video' },
+]
+
 function TagSpeakersPanel({
   session,
   speakers,
@@ -1002,23 +1010,21 @@ function TagSpeakersPanel({
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  // A voice is the teacher, a video, or neither; choosing one clears the other.
-  function toggle(rawSpeakerTag: string, as: 'teacher' | 'video') {
-    const [mine, setMine, setOther] = as === 'teacher' ? [selected, setSelected, setVideos] : [videos, setVideos, setSelected]
-    const adding = !mine.has(rawSpeakerTag)
-    setMine((prev) => {
+  // Every voice is one of the three, shown as chosen, so a voice left alone is
+  // seen to count as a student rather than assumed to.
+  function roleOf(rawSpeakerTag: string): SpeakerRole {
+    return selected.has(rawSpeakerTag) ? 'teacher' : videos.has(rawSpeakerTag) ? 'video' : 'student'
+  }
+
+  function choose(rawSpeakerTag: string, role: SpeakerRole) {
+    const set = (keep: boolean) => (prev: Set<string>) => {
       const next = new Set(prev)
-      if (adding) next.add(rawSpeakerTag)
+      if (keep) next.add(rawSpeakerTag)
       else next.delete(rawSpeakerTag)
       return next
-    })
-    if (adding) {
-      setOther((prev) => {
-        const next = new Set(prev)
-        next.delete(rawSpeakerTag)
-        return next
-      })
     }
+    setSelected(set(role === 'teacher'))
+    setVideos(set(role === 'video'))
   }
 
   async function handleAnalyze() {
@@ -1067,10 +1073,9 @@ function TagSpeakersPanel({
       {session.failureReason && <p className="mt-2 text-sm text-terracotta-600">{session.failureReason}</p>}
       <p className="mt-1 text-sm text-ink-soft">
         Automatic diarization can tell voices apart, but it can't reliably tell who's the teacher — and it
-        sometimes splits one teacher into two voices. The voice that spoke the most is picked for you, since
-        that's usually the teacher. Change it if that's not you, and select every voice that is; everyone else
-        will be grouped as Student. If you played a video, mark its voice as a video so it isn't counted as a
-        student.
+        sometimes splits one teacher into two voices. The voice that spoke the most is picked as Teacher for
+        you, since that's usually you; mark every voice that is. If you played a video, mark its voice as Video
+        so it isn't counted as a student.
       </p>
       <div className="mt-4 flex flex-col gap-3">
         {speakers.length === 0 ? (
@@ -1089,47 +1094,43 @@ function TagSpeakersPanel({
           </div>
         ) : (
           speakers.map((s) => {
-            const isTeacher = selected.has(s.rawSpeakerTag)
-            const isVideo = videos.has(s.rawSpeakerTag)
+            const role = roleOf(s.rawSpeakerTag)
             return (
               <div
                 key={s.rawSpeakerTag}
-                className={`flex items-center justify-between gap-4 rounded-xl border-2 p-4 transition-colors ${
-                  isTeacher ? 'border-terracotta bg-peach-tint' : isVideo ? 'border-ink-soft/40 bg-lavender-tint' : 'border-transparent bg-mint-tint/50'
+                className={`flex flex-wrap items-center justify-between gap-4 rounded-xl border-2 p-4 transition-colors ${
+                  role === 'teacher' ? 'border-terracotta bg-peach-tint' : role === 'video' ? 'border-ink-soft/40 bg-lavender-tint' : 'border-transparent bg-mint-tint/50'
                 }`}
               >
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
                     {s.rawSpeakerTag}
                     {speakerActivity(s) ? <span className="normal-case tracking-normal"> · {speakerActivity(s)}</span> : null}
                   </p>
                   <p className="mt-1 text-sm text-ink">"{s.sample}"</p>
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => toggle(s.rawSpeakerTag, 'teacher')}
-                    disabled={tagging}
-                    aria-pressed={isTeacher}
-                    className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
-                      isTeacher
-                        ? 'border-terracotta bg-terracotta text-cream hover:bg-terracotta/90'
-                        : 'border-terracotta text-terracotta-600 hover:bg-peach-tint'
-                    }`}
-                  >
-                    {isTeacher ? '✓ Teacher' : 'This is the Teacher'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => toggle(s.rawSpeakerTag, 'video')}
-                    disabled={tagging}
-                    aria-pressed={isVideo}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors disabled:opacity-60 ${
-                      isVideo ? 'bg-ink text-cream hover:bg-ink/90' : 'text-ink-soft hover:bg-lavender-tint hover:text-ink'
-                    }`}
-                  >
-                    {isVideo ? '✓ Video' : 'This is a video'}
-                  </button>
+                <div role="radiogroup" aria-label={`${s.rawSpeakerTag} is`} className="flex shrink-0 rounded-full border border-hairline bg-cream-card p-1">
+                  {SPEAKER_ROLES.map(({ role: r, label }) => (
+                    <button
+                      key={r}
+                      type="button"
+                      role="radio"
+                      aria-checked={role === r}
+                      onClick={() => choose(s.rawSpeakerTag, r)}
+                      disabled={tagging}
+                      className={`rounded-full px-3 py-1.5 text-sm font-semibold transition-colors disabled:opacity-60 ${
+                        role === r
+                          ? r === 'teacher'
+                            ? 'bg-terracotta text-cream'
+                            : r === 'video'
+                              ? 'bg-ink text-cream'
+                              : 'bg-forest text-cream'
+                          : 'text-ink-soft hover:text-ink'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
             )
