@@ -504,13 +504,28 @@ struct OverviewTab: View {
         let teacher = session.teacherTalkPct
         let students = session.studentTalkPct
         let silence = teacher != nil && students != nil ? max(0, ((100 - teacher! - students!) * 10).rounded() / 10) : nil
-        var out = [
-            Tile(label: "You spoke", value: Self.pct(teacher), unit: "%", tint: Color(hex: 0xF5DBC8)),
-            Tile(label: "Students spoke", value: Self.pct(students), unit: "%", tint: Color(hex: 0xF5E7C4)),
-        ]
+        var out: [Tile]
+        // A lesson with the per-second breakdown shows the same five Talk &
+        // Participation shows.
+        if let room = RoomBreakdown(session.roomTrace) {
+            out = [
+                Tile(label: "Teacher Voice", value: Self.pct(room.pct[.teacher]), unit: "%", tint: Color(hex: 0xF5DBC8)),
+                Tile(label: "Student Voice", value: Self.pct(room.pct[.student]), unit: "%", tint: Color(hex: 0xF5E7C4), note: "at least"),
+            ]
+            if room.videoSec > 0 { out.append(Tile(label: "Video/Audio", value: Self.pct(room.pct[.video]), unit: "%", tint: Color(hex: 0xD2E8E6))) }
+            out.append(Tile(label: "Group Voice", value: Self.pct(room.pct[.other]), unit: "%", tint: Color(hex: 0xE5E0EF)))
+            out.append(Tile(label: "Quiet Time", value: Self.pct(room.pct[.quiet]), unit: "%", tint: Color(hex: 0xDDE8F4)))
+        } else {
+            out = [
+                Tile(label: "You spoke", value: Self.pct(teacher), unit: "%", tint: Color(hex: 0xF5DBC8)),
+                Tile(label: "Students spoke", value: Self.pct(students), unit: "%", tint: Color(hex: 0xF5E7C4)),
+            ]
+        }
         // The rest split the way Talk & Participation splits it; recordings
         // with no sound reading keep one combined tile.
-        if let silence, let quiet = detail["quietSec"], let unresolved = detail["unresolvedSec"], quiet + unresolved > 0 {
+        if RoomBreakdown(session.roomTrace) != nil {
+            // Already split above.
+        } else if let silence, let quiet = detail["quietSec"], let unresolved = detail["unresolvedSec"], quiet + unresolved > 0 {
             let sound = (silence * unresolved / (quiet + unresolved) * 10).rounded() / 10
             out.append(Tile(label: "Sound, no words", value: Self.pct(sound), unit: "%", tint: Color(hex: 0xE5E0EF)))
             out.append(Tile(label: "Quiet", value: Self.pct(max(0, silence - sound)), unit: "%", tint: Color(hex: 0xDDE8F4)))

@@ -412,7 +412,10 @@ struct TalkSection: View {
     let hardLook: AnyView?
     let onDiscuss: () -> Void
 
+    @State private var moments: TalkMoments?
+
     private var wpm: Double? { session.metricsDetail?["teacherWordsPerMinute"] }
+    private var room: RoomBreakdown? { RoomBreakdown(session.roomTrace) }
 
     var body: some View {
         let moves = ParticipationMoves(session)
@@ -420,9 +423,11 @@ struct TalkSection: View {
         let hasEnvelope = session.metricsDetail?["quietSec"] != nil
         var read = [
             "Talk time describes the recording, not the room: it doesn\u{2019}t show how many students took part or whether they were engaged, and a microphone near you hears you far better than it hears them.",
-            "\u{201C}Sound, no words\u{201D} and \u{201C}Quiet\u{201D} are everything that was neither clearly you nor clearly a student"
-                + (hasEnvelope ? ". In a classroom, sound with no words is usually voices the microphone could not make out; a video or noise from outside reads the same way."
-                    : ": quiet work, several voices at once, and audio too faint to place."),
+            room != nil
+                ? "\u{201C}Teacher Voice\u{201D} and \u{201C}Student Voice\u{201D} count only seconds with words the transcript gave to you or to a student, and the short pauses between them. Student Voice is a minimum: students the microphone couldn\u{2019}t make out aren\u{2019}t in it. \u{201C}Group Voice\u{201D} is sound with no transcribed words, most often students talking together; music or other room sound is counted there too. \u{201C}Video/Audio\u{201D} is a voice you marked as one."
+                : "\u{201C}Sound, no words\u{201D} and \u{201C}Quiet\u{201D} are everything that was neither clearly you nor clearly a student"
+                    + (hasEnvelope ? ". In a classroom, sound with no words is usually voices the microphone could not make out; a video or noise from outside reads the same way."
+                        : ": quiet work, several voices at once, and audio too faint to place."),
         ]
         if let silenceNote { read.append(silenceNote) }
         if wpm != nil {
@@ -432,13 +437,46 @@ struct TalkSection: View {
             section: .talk, note: note, keep: moves.keep, tryNext: session.nextSteps?.talk,
             howToRead: read, hardLook: hardLook, onDiscuss: onDiscuss
         ) {
-            talkNumbers
+            if let room { roomNumbers(room) } else { talkNumbers }
             // Your moves are drawn once, on "When it happened" below.
-            FlowStrip(session: session, marks: [])
+            FlowStrip(session: session, marks: [], room: room, onPick: { moments = $0 })
             BroughtStudentsInView(session: session, moves: moves)
-            if let stretch = TeacherStretch.longest(in: session.segments), stretch.durationSec >= TeacherStretch.minToShowSec {
+            // With the per-second breakdown, your longest stretch is always
+            // shown, as one of the measured facts beside the shares.
+            if let stretch = TeacherStretch.longest(in: session.segments), room != nil || stretch.durationSec >= TeacherStretch.minToShowSec {
                 LongestStretchView(stretch: stretch, read: session.teachingMoves?.stretch, segments: session.segments)
             }
+        }
+        .sheet(item: $moments) { TalkMomentsSheet(session: session, moments: $0) }
+    }
+
+    /// Minutes first, each share as the strip colours it. Only Teacher Voice,
+    /// Student Voice and Teacher pause open anything: the rest had no words.
+    private func roomNumbers(_ room: RoomBreakdown) -> some View {
+        let pause = ThinkingPause.detail(session)
+        let kinds: [(RoomBreakdown.Kind, String)] = [
+            (.teacher, "your words, and pauses between them"),
+            (.student, "students\u{2019} words; any the microphone couldn\u{2019}t make out aren\u{2019}t counted"),
+        ] + (room.videoSec > 0 ? [(.video, "the voice you marked as video or audio")] : []) + [
+            (.other, "no transcribed words \u{2014} most often students talking together"),
+            (.quiet, "the microphone heard nothing"),
+        ]
+        let pauseSub = pause.average != nil
+            ? "average after \(pause.measured) thinking question\(pause.measured == 1 ? "" : "s")"
+            : pause.thinking.isEmpty ? "no question asked students to explain or reason" : "no pause after a thinking question could be timed"
+        return LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+            ForEach(kinds, id: \.0) { kind, sub in
+                let opens: TalkMoments? = kind == .teacher ? .teacher : kind == .student ? .student : nil
+                tile(kind.label, (kind == .student ? "at least " : "") + room.minutes(kind),
+                     "\(Int((room.pct[kind] ?? 0).rounded()))% \u{00B7} \(sub)", kind.color,
+                     link: opens == nil ? nil : kind == .student ? "See the conversation" : "See your lines")
+                    .onTapGesture { if let opens { moments = opens } }
+            }
+            tile("Your pace", wpm.map { "\(Int($0.rounded()))" } ?? "\u{2014}",
+                 wpm != nil ? "words a minute \u{00B7} conversation usually runs \(AudioInsights.conversationalWpmRange)" : "unavailable", nil)
+            tile("Teacher pause", pause.average.map { String(format: "%.1f s", $0) } ?? "\u{2014}", pauseSub, nil,
+                 link: pause.thinking.isEmpty ? nil : "See the questions")
+                .onTapGesture { if !pause.thinking.isEmpty { moments = .pause } }
         }
     }
 
@@ -462,14 +500,17 @@ struct TalkSection: View {
         }
     }
 
-    private func tile(_ label: String, _ value: String, _ sub: String, _ color: Color?) -> some View {
+    private func tile(_ label: String, _ value: String, _ sub: String, _ color: Color?, link: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
             Text(value).font(.heading(.title2)).foregroundStyle(color ?? AppTheme.textPrimary)
+                .minimumScaleFactor(0.7).lineLimit(1)
             Text(sub).font(.caption2).foregroundStyle(AppTheme.textSecondary).fixedSize(horizontal: false, vertical: true)
+            if let link { Text(link).font(.caption2.weight(.semibold)).foregroundStyle(AppTheme.terracotta600).padding(.top, 2) }
         }
         .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
+        .contentShape(Rectangle())
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
     }
@@ -481,6 +522,11 @@ struct TalkSection: View {
 struct FlowStrip: View {
     let session: AudioSessionWithSegments
     let marks: [(Double, MoveShape)]
+    /// The server's per-second breakdown, when the lesson has one: the bar,
+    /// legend and strip are drawn from it instead.
+    var room: RoomBreakdown? = nil
+    /// A Teacher Voice or Student Voice block was tapped.
+    var onPick: ((TalkMoments) -> Void)? = nil
 
     static let you = Color(hex: 0x2F855A)
     static let students = Color(hex: 0x8B7BC2)
@@ -491,7 +537,9 @@ struct FlowStrip: View {
     private static let bins = 30
 
     var body: some View {
-        if let duration = session.durationSec, duration > 0, !session.segments.isEmpty {
+        if let room, !session.segments.isEmpty {
+            roomBody(room)
+        } else if let duration = session.durationSec, duration > 0, !session.segments.isEmpty {
             let binSec = duration / Double(Self.bins)
             let flow = (0..<Self.bins).map { bin(Double($0) * binSec, Double($0 + 1) * binSec) }
             let slices = shares.filter { $0.pct >= 0.5 }
@@ -569,6 +617,62 @@ struct FlowStrip: View {
     }
 
     private struct Share { let label: String; let pct: Double; let color: Color? }
+
+    private func roomBody(_ room: RoomBreakdown) -> some View {
+        let total = room.seconds.count
+        let binSec = Double(total) / Double(Self.bins)
+        let flow = (0..<Self.bins).map { room.kind(from: Int(Double($0) * binSec), to: Int(Double($0 + 1) * binSec)) }
+        let slices = RoomBreakdown.Kind.allCases.map { Share(label: $0.label, pct: room.pct[$0] ?? 0, color: $0.color) }.filter { $0.pct >= 0.5 }
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Your recording, minute by minute")
+                Spacer()
+                Text(mmss(Double(total)))
+            }
+            .font(.caption.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
+            GeometryReader { geo in
+                HStack(spacing: 2) {
+                    ForEach(slices, id: \.label) { s in
+                        sliceFill(s.color)
+                            .frame(width: max(2, (geo.size.width - CGFloat(slices.count - 1) * 2) * CGFloat(s.pct / 100)))
+                    }
+                }
+            }
+            .frame(height: 14)
+            .clipShape(Capsule())
+            FlowLayout(spacing: 12) {
+                ForEach(slices, id: \.label) { s in
+                    HStack(spacing: 5) {
+                        sliceFill(s.color).frame(width: 10, height: 10).clipShape(Circle())
+                        (Text("\(s.label) ") + Text("\(Int(s.pct.rounded()))%").bold())
+                    }
+                    .font(.caption).foregroundStyle(AppTheme.textPrimary)
+                }
+            }
+            HStack(spacing: 1) {
+                ForEach(Array(flow.enumerated()), id: \.offset) { i, k in
+                    sliceFill(k?.color)
+                        .onTapGesture {
+                            if k == .teacher || k == .student { onPick?(.range(Double(i) * binSec, Double(i + 1) * binSec)) }
+                        }
+                }
+            }
+            .frame(height: 28)
+            HStack {
+                Text("0:00")
+                Spacer()
+                Text(mmss(Double(total)))
+            }
+            .font(.caption2).foregroundStyle(AppTheme.textSecondary)
+            Text("\u{201C}Teacher Voice\u{201D} and \u{201C}Student Voice\u{201D} are seconds with words the transcript gave to you or to a student, and the short pauses between them. \u{201C}Group Voice\u{201D} is sound with no transcribed words \u{2014} most often students talking together; music or other room sound is counted here too."
+                 + (room.videoSec > 0 ? " \u{201C}Video/Audio\u{201D} is the voice you marked as one." : "")
+                 + " Tap a Teacher Voice or Student Voice block to see what was said.")
+                .font(.caption2).foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .background(AppTheme.cream, in: RoundedRectangle(cornerRadius: 18))
+    }
 
     /// Mirrors `recordingShares`: you and students as the tiles state them,
     /// the rest split into sound-with-no-words and quiet where the envelope
@@ -858,7 +962,10 @@ struct LongestStretchView: View {
         let opening = (lines.first { $0.text.split(whereSeparator: \.isWhitespace).count >= 6 } ?? lines.first)?
             .text.trimmingCharacters(in: .whitespaces) ?? stretch.opening
         VStack(alignment: .leading, spacing: 8) {
-            PartHeading(title: "Your longest explanation", count: "about \(max(1, Int((stretch.durationSec / 60).rounded()))) min")
+            PartHeading(title: "Your longest stretch", count: {
+                let m = Int(stretch.durationSec) / 60, s = Int(stretch.durationSec.rounded()) % 60
+                return m > 0 ? "\(m) min \(s) s" : "\(s) s"
+            }())
             if let about = matched?.about, !about.isEmpty {
                 Text(about.prefix(1).uppercased() + about.dropFirst()).font(.caption).foregroundStyle(AppTheme.textSecondary)
             }
@@ -1818,5 +1925,220 @@ private struct PatternCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.terracotta600.opacity(0.3), lineWidth: 1.5))
+    }
+}
+
+// MARK: - The per-second breakdown
+
+/// What each second of the recording was, as the server worked it out once
+/// the teacher said which voice was them and which, if any, was a video or
+/// audio — mirrors web/src/lib/roomBreakdown.ts. A second is the teacher's or
+/// a student's only when the transcript has their words in it, or a short
+/// pause between them. Only lessons analysed since it existed carry it.
+struct RoomBreakdown {
+    enum Kind: CaseIterable {
+        case teacher, student, video, other, quiet
+
+        var label: String {
+            switch self {
+            case .teacher: "Teacher Voice"
+            case .student: "Student Voice"
+            case .video: "Video/Audio"
+            case .other: "Group Voice"
+            case .quiet: "Quiet Time"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .teacher: FlowStrip.you
+            case .student: FlowStrip.students
+            case .video: Color(hex: 0xC2577F)
+            case .other: FlowStrip.sound
+            case .quiet: FlowStrip.quiet
+            }
+        }
+    }
+
+    /// One kind per second, in lesson order; nil where there was too little
+    /// audio to say.
+    let seconds: [Kind?]
+    /// Percentages of the seconds that could be read.
+    let pct: [Kind: Double]
+    let videoSec: Int
+
+    private static let kinds: [Character: Kind] = ["t": .teacher, "s": .student, "g": .student, "x": .video, "u": .other, "o": .other, "q": .quiet]
+
+    init?(_ trace: String?) {
+        guard let trace, !trace.isEmpty else { return nil }
+        let seconds = trace.map { Self.kinds[$0] }
+        var count: [Kind: Int] = [:]
+        for k in seconds { if let k { count[k, default: 0] += 1 } }
+        let read = count.values.reduce(0, +)
+        guard read > 0 else { return nil }
+        self.seconds = seconds
+        pct = Dictionary(uniqueKeysWithValues: Kind.allCases.map { ($0, Double(count[$0] ?? 0) / Double(read) * 100) })
+        videoSec = count[.video] ?? 0
+    }
+
+    /// Minutes first: they can be checked against the lesson as remembered.
+    func minutes(_ kind: Kind) -> String {
+        let sec = Int(((pct[kind] ?? 0) / 100 * Double(seconds.count)).rounded())
+        let m = sec / 60, s = sec % 60
+        return m > 0 ? (s > 0 ? "\(m) min \(s) s" : "\(m) min") : "\(s) s"
+    }
+
+    /// What most of [start, end) was. Words win a tie, as on the web.
+    func kind(from start: Int, to end: Int) -> Kind? {
+        var tally: [Kind: Int] = [:]
+        for sec in max(0, start)..<min(seconds.count, max(start + 1, end)) { if let k = seconds[sec] { tally[k, default: 0] += 1 } }
+        return Kind.allCases.reduce(nil as Kind?) { best, k in (tally[k] ?? 0) > (best.flatMap { tally[$0] } ?? 0) ? k : best }
+    }
+}
+
+/// What a tile or a block of the strip opens: your lines, the conversation
+/// students were part of, the questions behind Teacher pause, or what was
+/// said in one slice of the lesson.
+enum TalkMoments: Identifiable {
+    case teacher, student, pause
+    case range(Double, Double)
+
+    var id: String {
+        switch self {
+        case .teacher: "teacher"
+        case .student: "student"
+        case .pause: "pause"
+        case .range(let a, let b): "\(a)-\(b)"
+        }
+    }
+}
+
+/// Each time students were heard, with what the teacher said just before and
+/// just after — mirrors web/src/lib/exchanges.ts.
+struct Exchange: Identifiable {
+    let before: TranscriptSegment?
+    var students: [TranscriptSegment]
+    var after: TranscriptSegment?
+    var id: String { students[0].id }
+
+    static func all(_ segments: [TranscriptSegment]) -> [Exchange] {
+        let lines = segments.filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }.sorted { $0.startSec < $1.startSec }
+        var out: [Exchange] = []
+        var lastTeacher: TranscriptSegment?
+        var current: Exchange?
+        for line in lines {
+            if line.speakerLabel == "Teacher" {
+                if var c = current {
+                    c.after = line
+                    out.append(c)
+                    current = nil
+                }
+                lastTeacher = line
+            } else if current != nil {
+                current!.students.append(line)
+            } else {
+                current = Exchange(before: lastTeacher, students: [line], after: nil)
+            }
+        }
+        if let current { out.append(current) }
+        return out
+    }
+}
+
+/// The moments behind Teacher Voice, Student Voice or Teacher pause, so each
+/// number can be checked against what was said — mirrors RoomMoments.tsx and
+/// PauseMoments in AudioCoaching.tsx.
+struct TalkMomentsSheet: View {
+    let session: AudioSessionWithSegments
+    let moments: TalkMoments
+    @Environment(\.dismiss) private var dismiss
+
+    private var lines: [TranscriptSegment] {
+        session.segments.filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }.sorted { $0.startSec < $1.startSec }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) { content }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(AppTheme.background)
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+    }
+
+    private var title: String {
+        switch moments {
+        case .teacher:
+            let n = lines.filter { $0.speakerLabel == "Teacher" }.count
+            return "Teacher Voice \u{00B7} \(n) line\(n == 1 ? "" : "s")"
+        case .student:
+            let n = Exchange.all(session.segments).count
+            return "Student Voice \u{00B7} \(n) exchange\(n == 1 ? "" : "s")"
+        case .pause:
+            let n = ThinkingPause.detail(session).thinking.count
+            return "Teacher pause \u{00B7} \(n) question\(n == 1 ? "" : "s")"
+        case .range(let a, let b):
+            return "\(mmss(a))\u{2013}\(mmss(b))"
+        }
+    }
+
+    @ViewBuilder private var content: some View {
+        switch moments {
+        case .teacher:
+            ForEach(lines.filter { $0.speakerLabel == "Teacher" }) { line($0, who: false) }
+        case .student:
+            let talk = Exchange.all(session.segments)
+            if talk.isEmpty { empty("No student words were transcribed.") }
+            ForEach(talk) { x in
+                VStack(alignment: .leading, spacing: 6) {
+                    if let before = x.before { line(before, who: true) }
+                    ForEach(x.students) { line($0, who: true) }
+                    if let after = x.after { line(after, who: true) }
+                }
+                Divider()
+            }
+        case .pause:
+            let detail = ThinkingPause.detail(session)
+            ForEach(Array(detail.thinking.enumerated()), id: \.offset) { i, q in
+                let own = lines.first { $0.endSec > q.entry.timestampSec }
+                let next = own.flatMap { own in lines.first { $0.startSec >= own.endSec - 0.01 && $0.id != own.id } }
+                let p = detail.pauses[i]
+                let waited = p.map { $0.keptTalking ? "you kept talking" : String(format: "%.1f s", $0.sec) + ($0.answered ? " \u{00B7} a student answered" : "") } ?? "could not be timed"
+                VStack(alignment: .leading, spacing: 6) {
+                    said(q.entry.timestampSec, teacher: true, Redaction.withoutAddressedNames(q.entry.text), who: true)
+                    Text("Pause: \(waited)").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary).padding(.leading, 44)
+                    if let next { line(next, who: true) }
+                }
+                Divider()
+            }
+        case .range(let a, let b):
+            let inside = lines.filter { $0.endSec > a && $0.startSec < b }
+            if inside.isEmpty { empty("No words were transcribed here.") }
+            ForEach(inside) { line($0, who: true) }
+        }
+    }
+
+    private func line(_ s: TranscriptSegment, who: Bool) -> some View {
+        said(s.startSec, teacher: s.speakerLabel == "Teacher", Redaction.withoutAddressedNames(s.text.trimmingCharacters(in: .whitespaces)), who: who)
+    }
+
+    private func said(_ at: Double, teacher: Bool, _ text: String, who: Bool) -> some View {
+        var label = Text("")
+        if who || !teacher {
+            label = Text(teacher ? "You: " : "Student: ").font(.caption.weight(.semibold))
+                .foregroundColor(teacher ? RoomBreakdown.Kind.teacher.color : RoomBreakdown.Kind.student.color)
+        }
+        return (Text(mmss(at) + "  ").font(.caption.monospacedDigit()).foregroundColor(AppTheme.textSecondary) + label + Text(text))
+            .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func empty(_ text: String) -> some View {
+        Text(text).font(.subheadline).foregroundStyle(AppTheme.textSecondary)
     }
 }

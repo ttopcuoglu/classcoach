@@ -669,6 +669,7 @@ struct AudioFollowUpLine: Decodable {
 private struct MetricsLogs: Decodable {
     let answerLog: [AudioAnswer]?
     let followUpLog: [AudioFollowUpLine]?
+    let roomTrace: String?
 }
 
 struct AudioSession: Decodable, Identifiable {
@@ -698,6 +699,9 @@ struct AudioSession: Decodable, Identifiable {
     let answerLog: [AudioAnswer]?
     /// The follow-ups those answers got — metricsLogs.followUpLog.
     let followUpLog: [AudioFollowUpLine]?
+    /// What each second of the lesson was, one character a second — see
+    /// RoomBreakdown. metricsLogs.roomTrace; absent on older lessons.
+    let roomTrace: String?
     let highlights: [AudioHighlight]?
     let phases: [AudioPhase]?
     let questionLog: [AudioQuestionLogEntry]?
@@ -799,6 +803,7 @@ struct AudioSession: Decodable, Identifiable {
         let logs = try? container.decodeIfPresent(MetricsLogs.self, forKey: .metricsLogs)
         answerLog = logs?.answerLog
         followUpLog = logs?.followUpLog
+        roomTrace = logs?.roomTrace
         highlights = try container.decodeIfPresent([AudioHighlight].self, forKey: .highlights)
         phases = try container.decodeIfPresent([AudioPhase].self, forKey: .phases)
         questionLog = try container.decodeIfPresent([AudioQuestionLogEntry].self, forKey: .questionLog)
@@ -888,6 +893,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var metricsDetail: [String: Double]? { session.metricsDetail }
     var answerLog: [AudioAnswer]? { session.answerLog }
     var followUpLog: [AudioFollowUpLine]? { session.followUpLog }
+    var roomTrace: String? { session.roomTrace }
     var highlights: [AudioHighlight]? { session.highlights }
     var phases: [AudioPhase]? { session.phases }
     var questionLog: [AudioQuestionLogEntry]? { session.questionLog }
