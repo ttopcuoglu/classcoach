@@ -1607,6 +1607,23 @@ struct RoutinesSection: View {
                                        "help": "Getting help", "finish": "Finishing", "other": "Directions"]
     private static let partWord = ["task": "what to do", "steps": "the steps", "time": "how long", "product": "what to hand in"]
 
+    /// Routines held to the four parts; must match the server's SCORED_ROUTINES.
+    private static let scoredRoutines = ["start", "transition"]
+
+    /// "a, b and c", for a finding that reads as a sentence.
+    private func list(_ parts: [String], joiner: String) -> String {
+        let words = parts.map { Self.partWord[$0] ?? $0 }
+        return words.count <= 1 ? words.joined() : words.dropLast().joined(separator: ", ") + " \(joiner) " + words.last!
+    }
+
+    /// What the one scored direction named, and what it left out.
+    private func oneDirection(_ parts: [String]) -> String {
+        if parts.isEmpty { return "named none of the four parts" }
+        if parts.count == 4 { return "named all four \u{2014} what to do, the steps, how long and what to hand in" }
+        let missing = ["task", "steps", "time", "product"].filter { !parts.contains($0) }
+        return "named \(list(parts, joiner: "and")), but not \(list(missing, joiner: "or"))"
+    }
+
     private func named(_ parts: [String]) -> String {
         parts.isEmpty ? "named none of the four" : "named " + parts.map { Self.partWord[$0] ?? $0 }.joined(separator: ", ")
     }
@@ -1615,9 +1632,21 @@ struct RoutinesSection: View {
         let moves = session.teachingMoves
         let directions = moves?.directions ?? []
         let typeAt = { (sec: Double) in moves?.routines?.directionTypes.first { $0.timestampSec == sec }?.type }
-        let complete = directions.filter { $0.parts.count == 4 }
-        let directionRows = directions.sorted { ($0.parts.count, -$0.timestampSec) > ($1.parts.count, -$1.timestampSec) }.map { d -> EvidenceLine in
-            let tag = (typeAt(d.timestampSec).flatMap { Self.routineLabel[$0] }.map { "\($0) \u{00B7} " } ?? "") + named(d.parts)
+        // Only directions that start or change work are held to the four
+        // parts (server lib/routines.ts scoredDirections): "grab a book" and
+        // "one more minute" need no time limit or hand-in. A lesson read
+        // before routines were typed keeps every direction scored.
+        let typed = !(moves?.routines?.directionTypes.isEmpty ?? true)
+        let isScored = { (d: AudioTeachingMoves.Direction) in !typed || Self.scoredRoutines.contains(typeAt(d.timestampSec) ?? "") }
+        let scored = directions.filter(isScored)
+        let complete = scored.filter { $0.parts.count == 4 }
+        let directionRows = directions.sorted {
+            (isScored($0) ? 1 : 0, $0.parts.count, -$0.timestampSec) > (isScored($1) ? 1 : 0, $1.parts.count, -$1.timestampSec)
+        }.map { d -> EvidenceLine in
+            let label = typeAt(d.timestampSec).flatMap { Self.routineLabel[$0] }
+            // A materials or time cue is listed for what it was, with no parts.
+            guard isScored(d) else { return EvidenceLine(tag: label ?? "Directions", quote: d.quote, timestampSec: d.timestampSec) }
+            let tag = (label.map { "\($0) \u{00B7} " } ?? "") + named(d.parts)
             return EvidenceLine(tag: tag.prefix(1).uppercased() + tag.dropFirst(), quote: d.quote, timestampSec: d.timestampSec)
         }
         var byType: [(String, Int)] = []
@@ -1625,11 +1654,12 @@ struct RoutinesSection: View {
             guard let t = typeAt(d.timestampSec), t != "other", let label = Self.routineLabel[t] else { continue }
             if let i = byType.firstIndex(where: { $0.0 == label }) { byType[i].1 += 1 } else { byType.append((label, 1)) }
         }
-        let missingTime = directions.filter { !$0.parts.contains("time") }.count
+        let missingTime = scored.filter { !$0.parts.contains("time") }.count
         let directionFinding: String? = directions.isEmpty ? nil
-            : directions.count == 1 ? "Your one set of directions \(directions[0].parts.isEmpty ? "named none of the four parts" : named(directions[0].parts))."
-            : "\(complete.count) of your \(directions.count) directions named all four: what to do, the steps, how long, and what to hand in."
-                + (missingTime > 0 && complete.count < directions.count ? " \(missingTime) didn\u{2019}t say how long." : "")
+            : scored.isEmpty ? "Your directions were about materials and timing, which don\u{2019}t need all four parts \u{2014} what to do, the steps, how long and what to hand in."
+            : scored.count == 1 ? "1 direction \(typed ? "started or changed the work" : "was heard"): it \(oneDirection(scored[0].parts))."
+            : "\(complete.count) of your \(scored.count) directions\(typed ? " that started or changed the work" : "") named all four: what to do, the steps, how long, and what to hand in."
+                + (missingTime > 0 && complete.count < scored.count ? " \(missingTime) didn\u{2019}t say how long." : "")
 
         let redirections: [AudioTeachingMoves.Redirection] = moves?.redirections
             ?? (session.redirectionLog ?? []).map { AudioTeachingMoves.Redirection(quote: $0.text, timestampSec: $0.timestampSec, clarity: nil) }
@@ -1742,7 +1772,7 @@ struct RoutinesSection: View {
                     ], hint: "Tap a category")
                 }
             }
-            if !directions.isEmpty { directionsGrid(directions, complete: complete.count) }
+            if !scored.isEmpty { directionsGrid(scored, typed: typed) }
         }
     }
 
@@ -1756,8 +1786,14 @@ struct RoutinesSection: View {
         return e.state == "confirmed_none" ? "Your asks held: none needed repeating." : nil
     }
 
-    private func directionsGrid(_ directions: [AudioTeachingMoves.Direction], complete: Int) -> some View {
-        OptionalBlock(title: "Your directions, part by part", summary: "\(complete) of \(directions.count) named all four parts.") {
+    /// Each direction that started or changed the work against the four parts.
+    /// The finding above gives the count, so the summary says what the grid
+    /// holds rather than repeating it.
+    private func directionsGrid(_ directions: [AudioTeachingMoves.Direction], typed: Bool) -> some View {
+        OptionalBlock(
+            title: "Your directions, part by part",
+            summary: "\(typed ? "Each direction that started or changed the work" : "Each set of directions"), against what to do, the steps, how long and what to hand in."
+        ) {
             Grid(horizontalSpacing: 6, verticalSpacing: 6) {
                 GridRow {
                     Text("")
