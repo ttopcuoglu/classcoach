@@ -11,7 +11,7 @@ import {
   StatTile,
   type Accent,
 } from '../components/report'
-import { beyondRecall } from '../lib/questionMix'
+import { beyondRecall, checkCount } from '../lib/questionMix'
 import { getAudioSession, type AudioEscalationRung, type AudioQuote, type AudioSessionWithSegments } from '../lib/api'
 import { buildCorrectionBalance, coverageCaveatLine, DETECTION_CAVEAT } from '../lib/correctionBalance'
 import {
@@ -136,7 +136,8 @@ export default function AudioCoachingExport() {
       ? Math.max(0, Math.round((100 - teacherPct - studentPct) * 10) / 10)
       : null
 
-  const questions = getCountMetric({ count: session.questionCount, recordedSec })
+  // The questions and checks the Questioning card counts (lib/questionMix).
+  const questions = getCountMetric({ count: beyondRecall(session)?.total ?? session.questionCount, recordedSec })
   // Counted as the Questioning card counts it, so paper and screen agree.
   const mix = beyondRecall(session)
   const higherOrder = mix && mix.total > 0 ? formatRatio(mix.beyond, mix.total) : null
@@ -149,7 +150,7 @@ export default function AudioCoachingExport() {
     recordedSec,
   })
   const cfu = getCountMetric({
-    count: session.cfuCount,
+    count: checkCount(session),
     recordedSec,
     minDurationSec: MIN_DURATION_FOR_CFU_DETECTION_SEC,
   })

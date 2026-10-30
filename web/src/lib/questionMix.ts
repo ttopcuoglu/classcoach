@@ -20,16 +20,37 @@ function sameMoment(a: { timestampSec: number; text: string }, b: { timestampSec
   return Math.abs(a.timestampSec - b.timestampSec) <= 8 && na.length > 0 && nb.length > 0 && (na.startsWith(nb.slice(0, 20)) || nb.startsWith(na.slice(0, 20)))
 }
 
+/// The questions the card counts, before sorting: the logged ones minus any
+/// the teacher answered themself.
+function counted(session: Pick<AudioSession, 'questionLog' | 'teachingMoves'>) {
+  const selfAnswered = session.teachingMoves?.selfAnswered ?? []
+  return (session.questionLog ?? []).filter((q) => !selfAnswered.some((sa) => sameMoment(q, sa)))
+}
+
+/// THE check count — the Summary tile, Questioning and the printable report
+/// all show this one: stored checks the read did not set aside, plus counted
+/// questions tagged as checks that the stored list does not already hold.
+export function checkCount(session: Pick<AudioSession, 'questionLog' | 'teachingMoves' | 'cfuLog' | 'cfuCount'>): number | null {
+  if (!session.cfuLog) return session.cfuCount ?? null
+  const checks = session.cfuLog.filter((c) => c.loop?.who !== 'not_a_check')
+  const kinds = session.teachingMoves?.questionKinds ?? []
+  const tagged = counted(session).filter(
+    (q) =>
+      kinds.some((k) => Math.abs(k.timestampSec - q.timestampSec) <= MATCH_WINDOW_SEC && k.check) &&
+      !checks.some((c) => Math.abs(c.timestampSec - q.timestampSec) <= MATCH_WINDOW_SEC),
+  )
+  return checks.length + tagged.length
+}
+
 export function beyondRecall(session: Pick<AudioSession, 'questionLog' | 'teachingMoves'>): { beyond: number; total: number } | null {
   const log = session.questionLog
   if (!log) return null
   const kinds = session.teachingMoves?.questionKinds ?? []
-  const selfAnswered = session.teachingMoves?.selfAnswered ?? []
-  const counted = log.filter((q) => !selfAnswered.some((sa) => sameMoment(q, sa)))
+  const questions = counted(session)
   let beyond = 0
-  for (const q of counted) {
+  for (const q of questions) {
     const kind = kinds.find((k) => Math.abs(k.timestampSec - q.timestampSec) <= MATCH_WINDOW_SEC)?.kind
     if (kind ? !RECALL_KINDS.has(kind) : q.type === 'higher_order') beyond++
   }
-  return { beyond, total: counted.length }
+  return { beyond, total: questions.length }
 }

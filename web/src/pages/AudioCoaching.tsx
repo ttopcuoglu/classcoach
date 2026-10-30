@@ -89,6 +89,7 @@ import {
   LOW_CAPTURE_PCT,
 } from '../lib/reportConfidence'
 import { buildNextTimeItems, workedNote, type NoticeCandidate } from '../lib/reportHighlights'
+import { checkCount } from '../lib/questionMix'
 import { focusLineKey, lineIgnoresPause, stepIgnoresPause } from '../lib/focusLine'
 
 function formatTime(sec: number): string {
@@ -2918,7 +2919,7 @@ function SummaryTab({
   // the same measures, as the printable report, so the screen and the paper
   // open the same way. Silence sits beside the two talk shares because they
   // are shares of the recording, not of the talking.
-  const questions = classifyQuestions(session)
+  const { questions, selfAnswered: answeredSelf } = countedQuestions(session)
   const mixCount = (k: MixKey) => questions.filter((q) => q.mix === k).length
   const arc = moves?.arc ?? []
   const teacherPct = session.teacherTalkPct
@@ -2978,7 +2979,14 @@ function SummaryTab({
       : [{ label: 'Silence / other', metric: getPresenceMetric(silencePct), unit: '%', accent: ACCENTS.lavender }]),
     // Words a minute of the teacher's own speaking time, as Talk & Participation shows it.
     { label: 'Pace', metric: speechRateMetric(wpm != null ? Math.round(wpm) : null), unit: 'wpm', accent: room ? ACCENTS.gold : ACCENTS.rose },
-    { label: 'Questions', metric: getCountMetric({ count: session.questionCount, recordedSec: session.durationSec ?? 0 }), accent: ACCENTS.mint },
+    // The questions Questioning counts, with the ones you answered yourself
+    // said beside them rather than folded in.
+    {
+      label: 'Questions',
+      metric: getCountMetric({ count: session.questionLog ? questions.length : session.questionCount, recordedSec: session.durationSec ?? 0 }),
+      note: answeredSelf.length > 0 ? `+ ${answeredSelf.length} you answered` : undefined,
+      accent: ACCENTS.mint,
+    },
     // Teacher Pause Time, the same number Questioning & Checking shows. Not
     // "wait time": Rowe's wait time ends when a STUDENT responds, and this
     // ends when the teacher speaks again, with any answer included. The
@@ -3009,7 +3017,7 @@ function SummaryTab({
     {
       label: 'Checks',
       metric: getCountMetric({
-        count: session.cfuLog ? session.cfuLog.filter((c) => c.loop?.who !== 'not_a_check').length : session.cfuCount,
+        count: checkCountOf(session),
         recordedSec: session.durationSec ?? 0,
         minDurationSec: MIN_DURATION_FOR_CFU_DETECTION_SEC,
       }),
@@ -3498,7 +3506,7 @@ function MyGrowthTab({
   // as a triumph. The gap between the two lines is the recall questions, and
   // it cannot lie that way. Sorted by classifyQuestions, so each point is the
   // "X of Y questions went beyond recall" that lesson's own page shows.
-  const questionMixes = analyzed.map((s) => (s.questionLog == null ? null : classifyQuestions(s)))
+  const questionMixes = analyzed.map((s) => (s.questionLog == null ? null : countedQuestions(s).questions))
   const beyondRecall = questionMixes.map((qs) => (qs == null ? null : qs.filter((q) => q.mix !== 'recall').length))
   const allQuestions = questionMixes.map((qs) => (qs == null ? null : qs.length))
   const questionMax = Math.max(6, ...allQuestions.filter((v): v is number => v != null)) * 1.15
@@ -5336,7 +5344,7 @@ const ROUTINE_LABEL: Record<string, string> = {
   materials: 'Materials',
   help: 'Getting help',
   finish: 'Finishing',
-  other: 'Directions',
+  other: 'Other directions',
 }
 const PART_WORD: Record<string, string> = { task: 'what to do', steps: 'the steps', time: 'how long', product: 'what to hand in' }
 /// Routines held to the four parts; must match the server's SCORED_ROUTINES.
@@ -5387,10 +5395,12 @@ function ClimateRoutinesTab({
       const tag = `${label ? `${label} · ` : ''}${named}`
       return { quote: d.quote, timestampSec: d.timestampSec, tag: tag[0].toUpperCase() + tag.slice(1) }
     })
+  // Every direction in one of the chips, so they add up to the category's
+  // count: "Directions & routines 20" sat over chips that summed to fewer.
   const byType = new Map<string, number>()
   for (const d of directions) {
-    const t = typeAt(d.timestampSec)
-    if (t && t !== 'other') byType.set(t, (byType.get(t) ?? 0) + 1)
+    const t = typeAt(d.timestampSec) ?? 'other'
+    byType.set(t, (byType.get(t) ?? 0) + 1)
   }
   const missingTime = scored.filter((d) => !d.parts.includes('time')).length
   const missingOf = (parts: string[]) => (['task', 'steps', 'time', 'product'] as const).filter((p) => !parts.includes(p))
@@ -5400,16 +5410,24 @@ function ClimateRoutinesTab({
       : scored.length === 0
         ? `Your directions were about materials and timing, which don’t need all four parts — what to do, the steps, how long and what to hand in.`
         : scored.length === 1
-          ? `1 direction ${typed ? 'started or changed the work' : 'was heard'}: it ${
+          ? `${typed && directions.length > 1 ? `Of your ${directions.length} directions, 1` : '1 direction'} ${typed ? 'started or changed the work' : 'was heard'}: it ${
               scored[0].parts.length === 0
                 ? 'named none of the four parts'
                 : scored[0].parts.length === 4
                   ? 'named all four — what to do, the steps, how long and what to hand in'
                   : `named ${partsList(scored[0].parts)}, but not ${partsList(missingOf(scored[0].parts)).replace(/ and /g, ' or ')}`
             }.`
-          : `${complete.length} of your ${scored.length} directions${typed ? ' that started or changed the work' : ''} named all four: what to do, the steps, how long, and what to hand in.${
-            missingTime > 0 && complete.length < scored.length ? ` ${missingTime} didn’t say how long.` : ''
-          }`
+          : typed && scored.length < directions.length
+            ? // The whole count first, then the part that is scored, so the
+              // sentence agrees with the category's number above it.
+              `Of your ${directions.length} directions, ${scored.length} started or changed the work, and ${
+                complete.length === 0 ? 'none' : complete.length
+              } of those named all four: what to do, the steps, how long, and what to hand in.${
+                missingTime > 0 && complete.length < scored.length ? ` ${missingTime} didn’t say how long.` : ''
+              }`
+            : `${complete.length} of your ${scored.length} directions${typed ? ' that started or changed the work' : ''} named all four: what to do, the steps, how long, and what to hand in.${
+                missingTime > 0 && complete.length < scored.length ? ` ${missingTime} didn’t say how long.` : ''
+              }`
 
   // 2. Redirection & expectations.
   const redirections = moves?.redirections ?? (session.redirectionLog ?? []).map((r) => ({ quote: r.text, timestampSec: r.timestampSec, clarity: null }))
@@ -6355,7 +6373,7 @@ function QuestioningCheckingTab({
   onDiscuss: () => void
 }) {
   const moves = session.teachingMoves
-  const questions = classifyQuestions(session)
+  const { questions } = countedQuestions(session)
   const count = (k: MixKey) => questions.filter((q) => q.mix === k).length
 
   // The follow-up rate now lives only in the goal under Try next time; the
@@ -6503,9 +6521,23 @@ function studentVoiceSeparated(session: Pick<AudioSessionWithSegments, 'segments
 /// Shown wherever a measure needs student voice and the lesson has none.
 const NEEDS_STUDENT_VOICE = 'needs student voice told apart from yours'
 
-function tawtOf(session: AudioSessionWithSegments) {
+/// THE question count, for every card that shows one: the questions left with
+/// students, sorted Recall / Explain & reason, with the ones the teacher
+/// answered themself apart. The Summary tile once counted all fifteen logged
+/// questions while Questioning counted thirteen plus two answered, and the
+/// two Keep lines counted the answered ones as reasoning.
+function countedQuestions(session: Pick<AudioSession, 'questionLog' | 'teachingMoves'>) {
   const selfAnswered = (session.teachingMoves?.selfAnswered ?? []).map((q) => ({ timestampSec: q.timestampSec, quote: withoutAddressedNames(q.quote) }))
   const questions = classifyQuestions(session).filter((q) => !selfAnswered.some((sa) => sameMoment(q, sa)))
+  return { questions, selfAnswered }
+}
+
+/// THE check count lives in lib/questionMix (checkCount), shared with the
+/// printable report.
+const checkCountOf = checkCount
+
+function tawtOf(session: AudioSessionWithSegments) {
+  const { questions, selfAnswered } = countedQuestions(session)
   const thinking = questions.filter((q) => q.mix !== 'recall')
   const pauses = pausesAfter(session.segments ?? [], thinking)
   // With no student separated, an answer reads as the teacher still talking.
@@ -6693,7 +6725,7 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
           {questions.length} question{questions.length === 1 ? '' : 's'}
           {/* Answered-yourself questions are not among the counted ones; said
               here so the chips below add up to what this line says. */}
-          {selfAnswered.length > 0 && ` + ${selfAnswered.length} you answered`} · {checks.length} check{checks.length === 1 ? '' : 's'}
+          {selfAnswered.length > 0 && ` + ${selfAnswered.length} you answered`} · {checkCount} check{checkCount === 1 ? '' : 's'}
         </span>
       </div>
       <p className="text-base font-semibold text-ink">
@@ -6704,9 +6736,9 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
             : `${beyond} of ${questions.length} asked for more than recall. `}
         {selfAnswered.length > 0 &&
           `Plus ${selfAnswered.length} you answered yourself before a student could. `}
-        {checks.length === 0
+        {checkCount === 0
           ? 'No checks for understanding were heard.'
-          : `You checked for understanding ${checks.length} time${checks.length === 1 ? '' : 's'}${
+          : `You checked for understanding ${checkCount} time${checkCount === 1 ? '' : 's'}${
               everyone > 0 ? `, ${everyone === checks.length ? 'each' : `${everyone} of them`} asking everyone` : ''
             }.`}
       </p>
@@ -6761,30 +6793,41 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
         </div>
       </div>
 
-      {/* The key, as the choice of what the list shows. */}
-      <div className="flex flex-wrap gap-2 print:hidden" role="group">
-        {pills
-          .filter((pl) => pl.n > 0)
-          .map((pl) => {
-            const on = pick === pl.key
-            return (
-              <button
-                key={pl.key}
-                type="button"
-                aria-pressed={on}
-                onClick={() => {
-                  setPick(pl.key)
-                  setHot(null)
-                }}
-                className={`flex min-h-[40px] items-center gap-2 rounded-full border-[1.5px] px-4 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-terracotta/40 ${on ? 'border-forest bg-forest text-cream' : 'border-hairline bg-cream-card text-ink'}`}
-              >
-                {pl.swatch}
-                {pl.label}
-                <span className={`rounded-full px-2 text-xs ${on ? 'bg-white/20 text-cream' : 'bg-cream text-ink-soft'}`}>{pl.n}</span>
-              </button>
-            )
-          })}
-      </div>
+      {/* The key, as the choice of what the list shows. Two rows, so the
+          numbers add up: the kinds of question make up the questions counted
+          above; answered-yourself, follow-ups and checks are other moments on
+          the same timeline, not more questions. Read as one row they summed to
+          more than the questions asked. */}
+      {(['kinds', 'other'] as const).map((row) => {
+        const rowPills = pills.filter((pl) => pl.n > 0 && (row === 'kinds' ? pl.key in MIX : !(pl.key in MIX)))
+        if (rowPills.length === 0) return null
+        return (
+          <div key={row} className="flex flex-wrap items-center gap-2 print:hidden" role="group">
+            <span className="w-full text-xs font-semibold uppercase tracking-wide text-ink-soft sm:w-auto sm:pr-1">
+              {row === 'kinds' ? `Your ${questions.length} question${questions.length === 1 ? '' : 's'}` : 'Also on the timeline'}
+            </span>
+            {rowPills.map((pl) => {
+              const on = pick === pl.key
+              return (
+                <button
+                  key={pl.key}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => {
+                    setPick(pl.key)
+                    setHot(null)
+                  }}
+                  className={`flex min-h-[40px] items-center gap-2 rounded-full border-[1.5px] px-4 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-terracotta/40 ${on ? 'border-forest bg-forest text-cream' : 'border-hairline bg-cream-card text-ink'}`}
+                >
+                  {pl.swatch}
+                  {pl.label}
+                  <span className={`rounded-full px-2 text-xs ${on ? 'bg-white/20 text-cream' : 'bg-cream text-ink-soft'}`}>{pl.n}</span>
+                </button>
+              )
+            })}
+          </div>
+        )
+      })}
 
       {mixCaveat && <p className="-mt-1 text-xs text-ink-soft">{mixCaveat}</p>}
 
@@ -7011,7 +7054,7 @@ function buildTrendInsight(sessions: AudioSession[]): string | null {
 
   // The beyond-recall share, sorted the way each lesson's own page sorts it.
   const beyondShares = sessions
-    .map((s) => (s.questionLog == null ? [] : classifyQuestions(s)))
+    .map((s) => (s.questionLog == null ? [] : countedQuestions(s).questions))
     .filter((qs) => qs.length >= MIN_N_FOR_PERCENT)
     .map((qs) => (qs.filter((q) => q.mix !== 'recall').length / qs.length) * 100)
   if (beyondShares.length >= 3) {
