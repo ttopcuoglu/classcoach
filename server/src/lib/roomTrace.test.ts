@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { buildRoomTrace, roomShares } from './roomTrace.ts'
+import { buildRoomTrace, openingWasRecorderOnly, roomFacts, roomShares } from './roomTrace.ts'
 
 // A lesson is described a second at a time by its voice class: v one voice,
 // m many, o other sound, q quiet, - too little audio.
@@ -62,4 +62,31 @@ test('shares count each of the seven', () => {
     roomOtherSec: 1,
     roomQuietSec: 1,
   })
+})
+
+test('room facts group seconds the way the report tiles do', () => {
+  const facts = roomFacts('ttsgxxuoqq')
+  assert.deepEqual(
+    { t: facts.teacherSec, s: facts.studentSec, g: facts.groupSec, x: facts.videoSec, q: facts.quietSec },
+    { t: 2, s: 2, g: 2, x: 2, q: 2 },
+  )
+})
+
+test('a quiet opening before the first words is the recorder running early', () => {
+  const facts = roomFacts('q'.repeat(40) + 'ttt')
+  assert.equal(facts.openingSec, 40)
+  assert.equal(openingWasRecorderOnly(facts), true)
+})
+
+test('an opening full of sound is a room settling, not the recorder', () => {
+  // The creative writing warm-up: 42 wordless seconds of room sound before
+  // the teacher's first line, which the note called "nothing for the first
+  // minutes".
+  const facts = roomFacts('u'.repeat(30) + 'o'.repeat(12) + 'ttt')
+  assert.equal(facts.openingSec, 42)
+  assert.equal(openingWasRecorderOnly(facts), false)
+})
+
+test('a short quiet opening is not worth a sentence', () => {
+  assert.equal(openingWasRecorderOnly(roomFacts('q'.repeat(20) + 'ttt')), false)
 })

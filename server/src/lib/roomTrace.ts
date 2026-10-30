@@ -115,3 +115,46 @@ export function roomShares(trace: RoomTrace): RoomShares {
     roomQuietSec: count('q'),
   }
 }
+
+/// What the talk note is told about the room, from the same trace the report
+/// draws its tiles and strip from, so the note cannot describe a different
+/// lesson from the one on screen. Seconds are grouped the way the tiles
+/// group them: a student's words in a crowd are still student voice, and a
+/// voice with no words is counted with other sound as group voice.
+export type RoomFacts = {
+  teacherSec: number
+  studentSec: number
+  groupSec: number
+  videoSec: number
+  quietSec: number
+  /// The stretch before anyone's words were first heard, and how much of it
+  /// was quiet. Only an opening that was nearly all quiet is the recorder
+  /// running before the lesson; one full of sound is a room settling.
+  openingSec: number
+  openingQuietSec: number
+}
+
+/// Above this share of quiet, a wordless opening reads as the recorder
+/// started early rather than a room already talking.
+const QUIET_OPENING_SHARE = 0.8
+
+export function roomFacts(trace: RoomTrace): RoomFacts {
+  const count = (chars: string) => Array.from(trace).filter((c) => chars.includes(c)).length
+  const firstWords = trace.search(/[tsgx]/)
+  const opening = firstWords === -1 ? trace : trace.slice(0, firstWords)
+  return {
+    teacherSec: count('t'),
+    studentSec: count('sg'),
+    groupSec: count('uo'),
+    videoSec: count('x'),
+    quietSec: count('q'),
+    openingSec: opening.length,
+    openingQuietSec: Array.from(opening).filter((c) => c === 'q' || c === '-').length,
+  }
+}
+
+/// True when the wordless opening was the recorder running before the
+/// lesson: long enough to matter, and nearly all quiet.
+export function openingWasRecorderOnly(facts: RoomFacts): boolean {
+  return facts.openingSec >= 30 && facts.openingQuietSec >= facts.openingSec * QUIET_OPENING_SHARE
+}

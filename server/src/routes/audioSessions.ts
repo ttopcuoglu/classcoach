@@ -12,7 +12,7 @@ import { enrichClassroomMoves } from '../lib/classroomMoves.ts'
 import { readEscalation } from '../lib/escalation.ts'
 import { readTeachingMoves } from '../lib/teachingMoves.ts'
 import { parseLevelTrace, splitNonSpeech, teacherIntervals } from '../lib/settleTime.ts'
-import { buildRoomTrace, roomShares } from '../lib/roomTrace.ts'
+import { buildRoomTrace, openingWasRecorderOnly, roomFacts, roomShares, type RoomFacts } from '../lib/roomTrace.ts'
 import { buildSoundTimeline } from '../lib/soundTimeline.ts'
 import { enrichLessonContent } from '../lib/lessonObjective.ts'
 import { checkFeatureAccess, hasActivePlan, startOfCurrentMonth } from '../lib/billing.ts'
@@ -1755,6 +1755,11 @@ export type ClassSummaryMetrics = {
   waitTime2Sec?: number | null
   waitTime2SampleCount?: number | null
   firstWordSec?: number | null
+  /// The room second by second, as the report's tiles and strip show it, for
+  /// lessons that have it. Without it the note was told only teacher, student
+  /// and "silence", and explained a silence share that was mostly group talk
+  /// and a video as the recorder running before the lesson.
+  room?: RoomFacts | null
   /// What the audible student talk was about (lib/studentTalkFocus.ts), so the
   /// talk note can say whether the student share meant a discussion or a room
   /// talking over itself. Null is "not measured", which is common.
@@ -1782,6 +1787,53 @@ export type ClassSummaryMetrics = {
   subject?: string | null
 }
 
+/// The pace as the note should read it. "Notably quick" was left to the
+/// model, which called 164 against a 120-160 range notable.
+export function paceReading(wpm: number): string {
+  if (wpm < 120) return 'Reading: below the usual range.'
+  if (wpm <= 160) return 'Reading: inside the usual range — do not mention pace.'
+  if (wpm <= 180) return 'Reading: a little above the usual range — not worth mentioning.'
+  return 'Reading: well above the usual range.'
+}
+
+/// The room's seconds as the tiles group them, for the measured list.
+function roomLines(room: RoomFacts): string {
+  const total = room.teacherSec + room.studentSec + room.groupSec + room.videoSec + room.quietSec
+  const part = (sec: number) => `${mmss(sec)} (${total > 0 ? Math.round((sec / total) * 100) : 0}%)`
+  return [
+    `- the room second by second, as the report's tiles show it. "Silence" above is everything that was not teacher or student words; here it is split:`,
+    `  - teacher voice: ${part(room.teacherSec)}`,
+    `  - student voice: ${part(room.studentSec)}`,
+    `  - group voice, sound with no transcribed words — most often students talking together: ${part(room.groupSec)}`,
+    `  - a video or audio the teacher tagged: ${part(room.videoSec)}`,
+    `  - quiet time, the microphone heard nothing: ${part(room.quietSec)}`,
+  ].join('\n')
+}
+
+/// What may be said about the start of the recording. The trace says whether
+/// the wordless opening was quiet; without it the old firstWordSec line is
+/// kept, and only for an opening long enough to matter.
+export function openingLine(metrics: ClassSummaryMetrics | undefined): string {
+  const room = metrics?.room
+  if (room) {
+    if (openingWasRecorderOnly(room)) {
+      return `The first ${mmss(room.openingSec)} were quiet with no words, so that is the recorder running before the lesson got going rather than quiet in the room.`
+    }
+    return room.openingSec >= 30
+      ? `The first ${mmss(room.openingSec)} had sound but no transcribed words — the room was not quiet. Do not describe the start of the recording as silence or the recorder running early.`
+      : ''
+  }
+  return metrics?.firstWordSec != null && metrics.firstWordSec >= 30
+    ? `Nothing was transcribed until ${mmss(metrics.firstWordSec)}. Whether that stretch was quiet or a room settling is not known, so do not say which.`
+    : ''
+}
+
+/// The room facts for a lesson that carries the per-second trace.
+function storedRoomFacts(detail: unknown): RoomFacts | null {
+  const trace = detail && typeof detail === 'object' ? (detail as Record<string, unknown>).roomTrace : null
+  return typeof trace === 'string' && trace.length > 0 ? roomFacts(trace) : null
+}
+
 export function buildClassSummarySystemPrompt(
   exhibits: { text: string; timestampSec: number }[],
   recordedSec: number,
@@ -1797,7 +1849,7 @@ export function buildClassSummarySystemPrompt(
   const measured = metrics
     ? `What the recording measured. You may cite these numbers and no others:
 - teacher talk: ${metrics.teacherTalkPct ?? 'not measured'}%
-- student talk: ${metrics.studentTalkPct ?? 'not measured'}%${metrics.studentVoiceDetected ? '' : ' (NO student voice was separately detected at all)'}
+- student talk: ${metrics.studentTalkPct ?? 'not measured'}%${metrics.studentVoiceDetected ? '' : ' (NO student voice was separately detected at all)'}${metrics.room ? `\n${roomLines(metrics.room)}` : ''}
 - questions asked: ${metrics.questionCount ?? 'not measured'}
 - of those, higher-order: ${
         metrics.higherOrderCount != null && metrics.questionCount != null
@@ -1882,13 +1934,13 @@ ${
       : 'No redirections were heard.'
   }
 Student names: ${metrics?.nameMentions ?? 'not measured'} mentions across ${metrics?.uniqueNames ?? 'not measured'} names.
-${metrics?.teacherWordsPerMinute != null ? `Teacher speaking pace: about ${metrics.teacherWordsPerMinute} words a minute of their own speaking time, short pauses included (everyday conversation usually runs about 120-160).` : 'Teacher speaking pace: not measured.'}
+${metrics?.teacherWordsPerMinute != null ? `Teacher speaking pace: about ${metrics.teacherWordsPerMinute} words a minute of their own speaking time, short pauses included (everyday conversation usually runs about 120-160). ${paceReading(metrics.teacherWordsPerMinute)}` : 'Teacher speaking pace: not measured.'}
 ${
     metrics?.waitTime2Sec != null
       ? `Pause after a student finished answering, before the teacher spoke: about ${metrics.waitTime2Sec}s across ${metrics.waitTime2SampleCount ?? 0} exchanges. This is a different number from the wait time above, which is the pause AFTER THE QUESTION.`
       : 'Pause after a student answer: not measured.'
   }
-${metrics?.firstWordSec != null && metrics.firstWordSec >= 30 ? `Nothing was transcribed until ${mmss(metrics.firstWordSec)}, so that much of the silence is the recorder running before the lesson got going rather than quiet in the room.` : ''}
+${openingLine(metrics)}
 ${(() => {
     const f = metrics?.studentTalkFocus as
       | { classified?: number; onTopic?: number; procedural?: number; offTopic?: number; unclear?: number }
@@ -1902,14 +1954,15 @@ ${(() => {
 Then THE TALK NOTE: one paragraph about who was heard and for how long,
 covering both the shape of the teacher's talk and where students got
 the floor, and what that does and does not tell us.
-The numbers — teacher talk, student talk, silence — are on that screen, so do
+The numbers — ${metrics?.room ? 'teacher voice, student voice, group voice, video and quiet time' : 'teacher talk, student talk, silence'} — are on that screen, so do
 not restate them. Pace is the exception worth making: how fast the teacher
-spoke is new to this report and a teacher will not have it in mind, so where
-the pace is notably quick for explaining new material, say so plainly and in
-their own terms — not as a verdict, since there is no correct rate and a fast
-stretch of storytelling is not a fault. Where the recording caught nothing for
-the first minutes, say that too, so the silence share is not read as quiet in
-the room. Say what they cannot: where the long teacher stretches fell
+spoke is new to this report and a teacher will not have it in mind. Go by the
+reading given with the pace above: mention it only where that reading says it
+is well above the usual range, plainly and in their own terms — not as a
+verdict, since there is no correct rate and a fast stretch of storytelling is
+not a fault. Never call a pace inside or a little above the range quick. Say
+nothing about the start of the recording beyond what the line about it above
+says, and never stretch seconds into "minutes". Say what they cannot: where the long teacher stretches fell
 and what they were doing (explaining, setting up, recapping), where students
 got the floor, and whether the shape changed across the lesson. The caveat
 governs this section more than any other, and it cuts both ways. A room
@@ -2082,6 +2135,7 @@ export async function requestClassSummaryText(session: ClassSummarySource, segme
       waitTime2Sec: metricNumber(session.metricsDetail, 'waitTime2Sec'),
       waitTime2SampleCount: metricNumber(session.metricsDetail, 'waitTime2SampleCount'),
       firstWordSec: metricNumber(session.metricsDetail, 'firstWordSec'),
+      room: storedRoomFacts(session.metricsDetail),
       studentTalkFocus: session.studentTalkFocus ?? null,
       cfuMoments: ((session.cfuLog ?? []) as { timestampSec: number; text: string }[]).slice(0, 12),
       feedbackMoments: ((session.feedbackLog ?? []) as { kind: string; timestampSec: number; text: string }[]).slice(0, 12),

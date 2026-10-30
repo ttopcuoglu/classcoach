@@ -31,7 +31,7 @@ export type Participation = {
 
 const SYSTEM_PROMPT = `You are reading the teacher's side of a classroom recording. Find three kinds of moment in THEIR words. Copy the teacher's sentence EXACTLY as it appears, and give the timestamp of the line it came from.
 
-INVITATIONS — the teacher explicitly opens the floor for students to contribute something substantive: an idea, an answer, a reading, their work. The invitation has to be in the words — "who wants to share…", "anyone have an idea?", "raise your hand if…", "turn and talk", "write it down, then we'll share", "who would like to read?". A plain content question to the room ("what are the two main allies?", "why do they tell sailors not to drink seawater?") is a QUESTION, not an invitation — leave it out. Also leave out logistics ("did you find those coefficients?", "do you want me to draw it?"), checks on understanding ("any questions?", "did anyone miss any of these?"), and fragments that are not a whole sentence. For each, say the response format it offered:
+INVITATIONS — the teacher explicitly opens the floor for students to contribute something substantive: an idea, an answer, a reading, their work. The invitation has to be in the words — "who wants to share…", "anyone have an idea?", "raise your hand if…", "turn and talk", "write it down, then we'll share", "who would like to read?". A plain content question to the room ("what are the two main allies?", "why do they tell sailors not to drink seawater?") is a QUESTION, not an invitation — leave it out. Also leave out logistics ("did you find those coefficients?", "do you want me to draw it?"), instructions about materials or getting set up ("grab a book", "if you don't have a book, grab one", "take out your notebook", "open to page 40", "get with your group") — these ask students to DO something, not to SAY or SHARE something — checks on understanding ("any questions?", "did anyone miss any of these?"), and fragments that are not a whole sentence. For each, say the response format it offered:
 - hands — raise a hand to be called on ("hands up if you've got an idea")
 - call_out — answer aloud, no hands ("just shout it out")
 - turn_and_talk — talk to a partner or group first ("turn to your neighbor")
@@ -40,7 +40,7 @@ INVITATIONS — the teacher explicitly opens the floor for students to contribut
 - choral — everyone says it together
 - open — an invitation with no format named ("who wants to share?", "anyone?")
 
-EXTENDING — the teacher pushes a student to explain or build on an idea:
+EXTENDING — the teacher pushes a student to explain or build on an idea THEY JUST GAVE. It answers something a student said. A fresh question to the whole room, even a "why" question ("why do you think he picked Abel?"), is a QUESTION, not extending — leave it out:
 - probe — asks a student to say more or go further on what they said ("say more about that", "what do you mean by…")
 - reasoning — asks how they know or why ("what makes you think that?", "how did you get that?")
 - build_on_peer — asks students to respond to a classmate ("who can add to that?", "do you agree with her?", "who sees it differently?")
@@ -86,6 +86,36 @@ export function withoutNames(quote: string, names: string[]): string {
   return out
 }
 
+/// A sentence that only asks students to get materials or get set up. The
+/// read was told to leave these out and still counted "if you do not have a
+/// physical book, I would like you to grab one" as opening the floor, and the
+/// card's "first half" headline was built on it.
+const SETUP_VERB = /\b(grab|get|take out|pull out|open( up)?|turn to|put away|clear)\b/i
+const MATERIAL = /\b(books?|notebooks?|laptops?|chromebooks?|paper|pencils?|folders?|binders?|page|devices?|materials|desks?)\b/i
+/// Words that make it an invitation after all: "open to page 40 and read it
+/// with your partner" asks students to say something.
+const ASKS_FOR_A_CONTRIBUTION = /\b(share|tell|say|answer|discuss|talk|explain|read|think|ideas?)\b/i
+
+export function isMaterialsInstruction(quote: string): boolean {
+  // Either order: "grab your book" and "if you do not have a book, grab one".
+  return SETUP_VERB.test(quote) && MATERIAL.test(quote) && !ASKS_FOR_A_CONTRIBUTION.test(quote)
+}
+
+/// How soon after a student was heard a teacher's line can still be following
+/// up on what they said.
+const FOLLOW_UP_WINDOW_SEC = 15
+
+/// A follow-up answers something a student said, so it needs a student line
+/// heard just before it. The read sees only the teacher's side, and counted
+/// fresh "why" questions to the room as follow-ups: the card said "2" over
+/// "followed up on 0 of 6 answers". A follow-up to a student the microphone
+/// missed is dropped too, as the answer dots drop that answer.
+export function followsAStudent(timestampSec: number, segments: Segment[]): boolean {
+  return segments.some(
+    (s) => s.speakerLabel !== 'Teacher' && s.text.trim() !== '' && s.startSec < timestampSec && s.endSec >= timestampSec - FOLLOW_UP_WINDOW_SEC,
+  )
+}
+
 export function parseParticipation(text: string, segments: Segment[]): Participation {
   const flat = flattenTeacherSpeech(segments)
   const names = addressedNamesIn(segments)
@@ -93,8 +123,12 @@ export function parseParticipation(text: string, segments: Segment[]): Participa
   const pick = <T extends string>(attr: string, allowed: readonly T[], fallback: T): T =>
     allowed.find((a) => attr.replace(/[\s-]+/g, '_').includes(a)) ?? fallback
   return {
-    invitations: read('invitations').map((q) => ({ quote: q.quote, timestampSec: q.timestampSec, format: pick(q.attr, INVITE_FORMATS, 'open') })),
-    extending: read('extending').map((q) => ({ quote: q.quote, timestampSec: q.timestampSec, kind: pick(q.attr, EXTEND_KINDS, 'probe') })),
+    invitations: read('invitations')
+      .filter((q) => !isMaterialsInstruction(q.quote))
+      .map((q) => ({ quote: q.quote, timestampSec: q.timestampSec, format: pick(q.attr, INVITE_FORMATS, 'open') })),
+    extending: read('extending')
+      .filter((q) => followsAStudent(q.timestampSec, segments))
+      .map((q) => ({ quote: q.quote, timestampSec: q.timestampSec, kind: pick(q.attr, EXTEND_KINDS, 'probe') })),
     widening: read('widening').map(({ quote, timestampSec }) => ({ quote, timestampSec })),
   }
 }
