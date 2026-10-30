@@ -65,6 +65,7 @@ import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { readStudentTalkFocus } from '../lib/studentTalkFocus.ts'
 import { readMomentToRevisit } from '../lib/momentToRevisit.ts'
 import { parseNextSteps, writeNextStepsFromNotes } from '../lib/nextSteps.ts'
+import { withoutMeasures } from '../lib/noMeasures.ts'
 import { questionMixOf } from '../lib/questionMix.ts'
 import { asksForPauseAfterQuestion, focusLineKey, lineIgnoresPause, MAX_STORED_LINES, PAUSE_GOAL_SEC, rewriteWithoutPause, writeFocusLine, type FocusLine } from '../lib/focusLine.ts'
 
@@ -1874,7 +1875,7 @@ Structure, when the recording is long enough for three paragraphs:
 
 2. WHAT WENT WELL. Name specific things this teacher actually did — a connection they drew, a question they asked, a routine that worked, a moment they gave students room. Several of them, each tied to the moment it came from, not one line of praise. Be concrete and generous. Vague praise is worse than none.
 
-3. WHAT MIGHT BE WORTH A LOOK. Offered as questions for the teacher to weigh, not verdicts. And every one of them must be tied to the single most important caveat: THIS IS A MICROPHONE IN A ROOM. It hears the teacher clearly and students poorly. A student who spoke quietly, from the back, or in a group did not reach it. A low student-talk number may mean the room was quiet, or may mean the recording could not hear it, and you must say so rather than letting the teacher read it as a verdict on their teaching. Never tell a teacher what happened in their room that you could not hear. Where you are unsure, say what the recording could and could not show and let them judge.
+3. ONE IDEA TO TAKE THE CONTENT FURTHER. A friendly suggestion, the way a colleague who teaches this subject would offer one over coffee: a single idea, rooted in THIS lesson's material, for going one layer deeper next time — a question that would push the central idea further, a connection to something students know, a way to make a concept they met today do more work. Name the actual ideas, terms and moments from the lesson; never "the content" in the abstract. Start from something the teacher already did and build on it. Not a list, not a correction, and nothing about the recording, the microphone, talk time, pauses or checks: those are on the report's cards and are not this paragraph's business.
 
 If a number is missing or the transcript is too thin to support a paragraph, say so plainly and write less. Writing less is always allowed — but only for want of evidence. Where the transcript does support it, write the full paragraph.
 
@@ -1959,10 +1960,9 @@ Then THE TALK NOTE: one paragraph about who was heard and for how long,
 covering both the shape of the teacher's talk and where students got
 the floor, and what that does and does not tell us.
 The numbers — ${metrics?.room ? 'teacher voice, student voice, group voice, video and quiet time' : 'teacher talk, student talk, silence'} — are on that screen, so do
-not restate them. Pace is the exception worth making: how fast the teacher
-spoke is new to this report and a teacher will not have it in mind. Go by the
-reading given with the pace above: mention it only where that reading says it
-is well above the usual range, plainly and in their own terms — not as a
+not restate them. Pace is on the card too: mention it only where the reading
+given with the pace above says it is well above the usual range, and then only
+in words ("you moved quickly through the setup"), never as a number — not as a
 verdict, since there is no correct rate and a fast stretch of storytelling is
 not a fault. Never call a pace inside or a little above the range quick. Say
 nothing about the start of the recording beyond what the line about it above
@@ -1994,10 +1994,9 @@ into one they can. Again the
 counts are already on screen. Say what kinds of questions these were, whether
 they built on each other or moved on, what happened after one was asked, and
 whether answers were followed up or accepted. When you mention how many asked
-for more than recall, say "asked students to explain or reason" and give it as a count — "three of the seven" — and never as a
-percentage: with a handful of questions a percentage reads as a score. State
-it once, plainly, and move on to the questions themselves — do not comment on
-the count, qualify it, or explain what it is. It is not a judgement of the
+for more than recall, say that some questions "asked students to explain or reason" and name them — never as a count or a
+percentage: the count is on the card beside this note, and a note that restates
+it can only disagree with it. Move on to the questions themselves. It is not a judgement of the
 teacher's questioning, and the way to honour that is to describe what a
 specific question asked of students, not to add a caveat.
 
@@ -2009,6 +2008,12 @@ Then NEXT TIME, three separate lines: one for Talk & Participation, one for Ques
 ${metrics && !metrics.studentVoiceDetected ? `No student voice was separated from the teacher's in this lesson, so students' answers sit inside the teacher's lines. No line may rest on the measured pause after a question, on how long the teacher talked without a break, or on the count of answers followed up: none of those can be measured here. A suggestion about questioning moves is still fine.\n` : ''}${metrics?.avgWaitTimeSec != null && metrics.avgWaitTimeSec >= 3 ? `The wait after a question was already about ${metrics.avgWaitTimeSec}s, and three or more is the goal, so no line may tell the teacher to pause longer after asking a question. A pause after a student's ANSWER is a different pause and may still be suggested, named as that.\n` : ''}
 WRITE ABOUT THE LESSON, NOT THE REPORT. No note explains how a number was produced. Nothing is "coded as", "logged as", "marked as", "recognised as", "counted as", "matched" or "detected by" anything, and there is no "the system" or "the figure comes from" — a teacher reading about their own lesson should never have to read about software. How the numbers are made is explained once, on the page, under "How to read these numbers". What the microphone could and could not hear is different: that is about the recording, and it stays.
 
+HOW THE FIVE NOTES OPEN. The checks, climate, talk, questions and content notes each open with something positive or worth noticing from that section, in the lesson's own content — a connection drawn, a question that asked for reasoning, a direction that set up the work cleanly, a place students got the floor — named with its moment. What a section's numbers mean is on its card, so a note does not walk through them.
+
+NO MEASUREMENTS IN WORDS. Nowhere in the summary or the five notes: no counts of moves or questions ("three of the seven", "two checks"), no percentages or shares, no durations ("for twelve minutes", "about 40 seconds"), no rates ("164 words a minute"). Every one of those is on a card the teacher is looking at, and a note that restates one can only disagree with it. A time that points to a moment ("at 14:01") is fine, and so are numbers that are part of the lesson's content (a date, a quantity in a problem).
+
+THE MICROPHONE. This overrides every instruction above about the microphone or the recording. The page already says what a room microphone can and cannot hear — a notice when no student voice was told apart, a line under the question kinds when little of the room came through, and "How to read this" under every card — so the narrative does not repeat it. The summary never mentions the microphone, the recording, or what it could or could not hear. A note mentions it only when that section's own evidence is missing because of it (no student voice was separated, or most of the room went unheard), and then in one short clause, never a sentence of its own. Still never claim more than the recording shows: say what happened, not what it could not show.
+
 LENGTH OF THE FIVE NOTES. The checks, climate, talk, questions and content notes each open a section a teacher then reads the evidence under, so each has a hard limit of four sentences and 80 words, whatever the fuller descriptions above invite. Count before you answer; a fifth sentence or a long final clause is over the limit. Say the one or two things that matter most about that section in this lesson, keep any caveat about the microphone to a single clause, and leave the rest to the evidence below the note. The class summary is not shortened: it keeps its three paragraphs.
 
 Respond with exactly these blocks and nothing else. The summary block
@@ -2019,7 +2024,7 @@ First paragraph: what the lesson was about.
 
 Second paragraph: what went well, specifically.
 
-Third paragraph: what might be worth a look, with the microphone caveat.
+Third paragraph: one idea to take the content further.
 </class_summary>
 <checks_note>
 Your checks note.
@@ -2216,12 +2221,14 @@ async function writeClassSummary(
   return prisma.audioSession.update({
     where: { id: session.id },
     data: {
-      classSummary: normalizeParagraphs(classSummary),
-      ...(checksNarrative ? { checksNarrative: normalizeParagraphs(checksNarrative) } : {}),
-      ...(climateNarrative ? { climateNarrative: normalizeParagraphs(climateNarrative) } : {}),
-      ...(talkNarrative ? { talkNarrative: normalizeParagraphs(talkNarrative) } : {}),
-      ...(questionsNarrative ? { questionsNarrative: normalizeParagraphs(questionsNarrative) } : {}),
-      ...(contentNarrative ? { contentNarrative: normalizeParagraphs(contentNarrative) } : {}),
+      // No measurement in words survives into the summary or a note: each is
+      // on a card beside it (lib/noMeasures.ts).
+      classSummary: normalizeParagraphs(withoutMeasures(classSummary)),
+      ...(checksNarrative ? { checksNarrative: normalizeParagraphs(withoutMeasures(checksNarrative)) } : {}),
+      ...(climateNarrative ? { climateNarrative: normalizeParagraphs(withoutMeasures(climateNarrative)) } : {}),
+      ...(talkNarrative ? { talkNarrative: normalizeParagraphs(withoutMeasures(talkNarrative)) } : {}),
+      ...(questionsNarrative ? { questionsNarrative: normalizeParagraphs(withoutMeasures(questionsNarrative)) } : {}),
+      ...(contentNarrative ? { contentNarrative: normalizeParagraphs(withoutMeasures(contentNarrative)) } : {}),
       ...(connectionIdeas.length > 0 && lessonContent ? { lessonContent: { ...lessonContent, connectionIdeas } } : {}),
       // Always written, even empty: "this summary suggested nothing" is an
       // answer, and null is what tells the report to ask (/:id/next-steps).
