@@ -78,3 +78,20 @@ export async function readRoutines(segments: Segment[], directions: Quoted[]): P
     return null
   }
 }
+
+/// The routines a direction is held to the four parts for — what to do, the
+/// steps, how long, what to hand in. Those fit a direction that starts or
+/// changes the work. "If you do not have a physical book, grab one" and "one
+/// more minute" were scored against them too, and a lesson whose transitions
+/// were brisk read "0 of 4 named all four".
+export const SCORED_ROUTINES: readonly RoutineType[] = ['start', 'transition']
+
+/// The directions held to the four parts. A lesson read before routines were
+/// classified has no types, and keeps every direction as it always did.
+export function scoredDirections<D extends { timestampSec?: number }>(directions: D[], types: { timestampSec: number; type: string }[] | undefined): D[] {
+  if (!types || types.length === 0) return directions
+  return directions.filter((d) => {
+    const type = types.find((t) => t.timestampSec === d.timestampSec)?.type
+    return type != null && (SCORED_ROUTINES as readonly string[]).includes(type)
+  })
+}

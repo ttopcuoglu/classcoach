@@ -454,6 +454,35 @@ function escalationFixture(): Json {
   }
 }
 
+/// `?climate=1`: the creative writing warm-up's directions — a time cue, two
+/// materials instructions and the one that started the work — with their
+/// routine types, so Climate & Routines' scoring can be looked at.
+function withClimate(report: Json): Json {
+  if (!new URLSearchParams(window.location.search).has('climate')) return report
+  const moves = (report.teachingMoves ?? {}) as Json
+  return {
+    ...report,
+    teachingMoves: {
+      ...moves,
+      directions: [
+        { quote: 'One more minute.', timestampSec: 373, parts: ['time'] },
+        { quote: 'If you do not have a Trevor Noah book, get up and get it.', timestampSec: 690, parts: ['task'] },
+        { quote: "We're only gonna listen to the first half of the chapter, then you'll do a reflection after.", timestampSec: 704, parts: ['task', 'steps', 'product'] },
+        { quote: 'If you do not have a physical book, I would like you to grab one.', timestampSec: 734, parts: ['task'] },
+      ],
+      routines: {
+        directionTypes: [
+          { timestampSec: 373, type: 'finish' },
+          { timestampSec: 690, type: 'materials' },
+          { timestampSec: 704, type: 'start' },
+          { timestampSec: 734, type: 'materials' },
+        ],
+        helpInvites: [],
+      },
+    },
+  }
+}
+
 function previewReport(): Json {
   const previewSoundTimeline = (): Json => {
     const words = [60, 120, 240, 300, 310, 340, 420, 505, 540, 620, 640, 700, 900, 980]
@@ -1945,7 +1974,7 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
     return { ...(previewReport() as Record<string, unknown>), schoolFocusIdea: previewDebriefIdea }
   }
   const reportMatch = path.match(/^\/api\/audio-sessions\/(preview-report)$/)
-  if (reportMatch) return { ...(previewReport() as Record<string, unknown>), schoolFocusIdea: previewDebriefIdea }
+  if (reportMatch) return withClimate({ ...(previewReport() as Record<string, unknown>), schoolFocusIdea: previewDebriefIdea })
   // Any OTHER session id fetched on its own. Without this the request fell
   // through to the list handler below and answered with an ARRAY, so opening
   // any row but the first handed the report page a session with no segments

@@ -5355,6 +5355,8 @@ const ROUTINE_LABEL: Record<string, string> = {
   other: 'Directions',
 }
 const PART_WORD: Record<string, string> = { task: 'what to do', steps: 'the steps', time: 'how long', product: 'what to hand in' }
+/// Routines held to the four parts; must match the server's SCORED_ROUTINES.
+const SCORED_ROUTINES: string[] = ['start', 'transition']
 
 /// Climate & Routines: directions and routines, redirection and the
 /// expectation it carried, and encouragement — from your own words. Language
@@ -5378,13 +5380,27 @@ function ClimateRoutinesTab({
   // 1. Directions & routines.
   const directions = moves?.directions ?? []
   const typeAt = (sec: number) => moves?.routines?.directionTypes.find((d) => d.timestampSec === sec)?.type
-  const complete = directions.filter((d) => d.parts.length === 4)
+  // Only directions that start or change work are held to the four parts
+  // (server lib/routines.ts scoredDirections): "grab a book" and "one more
+  // minute" do not need a time limit and something to hand in. A lesson read
+  // before routines were classified keeps every direction scored.
+  const typed = (moves?.routines?.directionTypes.length ?? 0) > 0
+  const isScored = (d: { timestampSec: number }) => !typed || SCORED_ROUTINES.includes(typeAt(d.timestampSec) ?? '')
+  const scored = directions.filter(isScored)
+  const complete = scored.filter((d) => d.parts.length === 4)
+  const partsList = (parts: string[]) => {
+    const words = parts.map((p) => PART_WORD[p] ?? p)
+    return words.length <= 1 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`
+  }
   const directionRows: Evidence[] = [...directions]
-    .sort((x, y) => y.parts.length - x.parts.length || x.timestampSec - y.timestampSec)
+    .sort((x, y) => Number(isScored(y)) - Number(isScored(x)) || y.parts.length - x.parts.length || x.timestampSec - y.timestampSec)
     .map((d) => {
       const t = typeAt(d.timestampSec)
+      const label = t ? ROUTINE_LABEL[t] : null
+      // A materials or time cue is listed for what it was, with no parts.
+      if (!isScored(d)) return { quote: d.quote, timestampSec: d.timestampSec, tag: label ?? 'Directions' }
       const named = d.parts.length === 0 ? 'named none of the four' : `named ${d.parts.map((p) => PART_WORD[p] ?? p).join(', ')}`
-      const tag = `${t ? `${ROUTINE_LABEL[t]} · ` : ''}${named}`
+      const tag = `${label ? `${label} · ` : ''}${named}`
       return { quote: d.quote, timestampSec: d.timestampSec, tag: tag[0].toUpperCase() + tag.slice(1) }
     })
   const byType = new Map<string, number>()
@@ -5392,15 +5408,24 @@ function ClimateRoutinesTab({
     const t = typeAt(d.timestampSec)
     if (t && t !== 'other') byType.set(t, (byType.get(t) ?? 0) + 1)
   }
-  const missingTime = directions.filter((d) => !d.parts.includes('time')).length
+  const missingTime = scored.filter((d) => !d.parts.includes('time')).length
+  const missingOf = (parts: string[]) => (['task', 'steps', 'time', 'product'] as const).filter((p) => !parts.includes(p))
   const directionFinding =
     directions.length === 0
       ? null
-      : directions.length === 1
-        ? `Your one set of directions ${directions[0].parts.length === 0 ? 'named none of the four parts' : `named ${directions[0].parts.map((p) => PART_WORD[p] ?? p).join(', ')}`}.`
-        : `${complete.length} of your ${directions.length} direction${directions.length === 1 ? '' : 's'} named all four: what to do, the steps, how long, and what to hand in.${
-          missingTime > 0 && complete.length < directions.length ? ` ${missingTime} didn’t say how long.` : ''
-        }`
+      : scored.length === 0
+        ? `Your directions were about materials and timing, which don’t need all four parts — what to do, the steps, how long and what to hand in.`
+        : scored.length === 1
+          ? `1 direction ${typed ? 'started or changed the work' : 'was heard'}: it ${
+              scored[0].parts.length === 0
+                ? 'named none of the four parts'
+                : scored[0].parts.length === 4
+                  ? 'named all four — what to do, the steps, how long and what to hand in'
+                  : `named ${partsList(scored[0].parts)}, but not ${partsList(missingOf(scored[0].parts)).replace(/ and /g, ' or ')}`
+            }.`
+          : `${complete.length} of your ${scored.length} directions${typed ? ' that started or changed the work' : ''} named all four: what to do, the steps, how long, and what to hand in.${
+            missingTime > 0 && complete.length < scored.length ? ` ${missingTime} didn’t say how long.` : ''
+          }`
 
   // 2. Redirection & expectations.
   const redirections = moves?.redirections ?? (session.redirectionLog ?? []).map((r) => ({ quote: r.text, timestampSec: r.timestampSec, clarity: null }))
@@ -5578,14 +5603,16 @@ function ClimateRoutinesTab({
         )}
       </div>
 
-      {/* Optional: every set of directions against the four parts. */}
-      {directions.length > 0 && (
+      {/* Optional: each direction that started or changed the work against
+          the four parts. The finding above already gives the count, so the
+          summary line says what the grid holds rather than repeating it. */}
+      {scored.length > 0 && (
         <DetailsOpenOnPaper className="group rounded-2xl border-[1.5px] border-hairline">
           <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-4 px-5 py-4 marker:hidden">
             <span className="flex-1">
               <b className="block font-heading text-lg text-forest">Your directions, part by part</b>
               <span className="text-sm text-ink-soft">
-                {complete.length} of {directions.length} named all four parts.
+                {typed ? 'Each direction that started or changed the work' : 'Each set of directions'}, against what to do, the steps, how long and what to hand in.
               </span>
             </span>
             <span className="rounded-full border border-hairline px-2.5 py-1 text-xs font-bold tracking-wide text-ink-soft">OPTIONAL</span>
@@ -5598,7 +5625,7 @@ function ClimateRoutinesTab({
                 <span key={h}>{h}</span>
               ))}
             </div>
-            {[...directions]
+            {[...scored]
               .sort((x, y) => x.timestampSec - y.timestampSec)
               .map((d, i) => (
                 <div key={i} className="grid grid-cols-[56px_repeat(4,minmax(0,1fr))] items-center gap-1.5" title={d.quote}>

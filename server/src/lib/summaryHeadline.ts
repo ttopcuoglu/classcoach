@@ -12,6 +12,7 @@
 import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
 import type { QuestionLogEntry } from './audioAnalysis.ts'
 import { extractTag } from './extractTag.ts'
+import { scoredDirections } from './routines.ts'
 
 export type HeadlineFacts = {
   subject: string | null
@@ -62,7 +63,11 @@ export function headlineFacts(session: {
     const k = kinds.find((x) => Math.abs(x.timestampSec - q.timestampSec) <= 4)?.kind
     return k ? (KIND_TO_MIX[k] ?? 'recall') : q.type === 'higher_order' ? 'explain' : 'recall'
   })
-  const directions = (Array.isArray(moves.directions) ? moves.directions : []) as { parts: string[] }[]
+  // Only directions that start or change work are held to the four parts.
+  const directions = scoredDirections(
+    (Array.isArray(moves.directions) ? moves.directions : []) as { parts: string[]; timestampSec?: number }[],
+    moves.routines?.directionTypes,
+  )
   const redirections = (Array.isArray(moves.redirections) ? moves.redirections : []) as { clarity: string }[]
   const keyTerms = (Array.isArray(content.keyTerms) ? content.keyTerms : []) as { studentCount: number }[]
   const invites = moves.participation?.invitations ?? moves.invitations
