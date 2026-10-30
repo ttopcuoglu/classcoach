@@ -483,6 +483,15 @@ function withClimate(report: Json): Json {
   }
 }
 
+/// `?nostudents=1`: every line put down to the teacher, as when the
+/// transcription told no student apart, so the report's handling of a lesson
+/// with no student voice can be looked at.
+function withNoStudents(report: Json): Json {
+  if (!new URLSearchParams(window.location.search).has('nostudents')) return report
+  const segments = (report.segments ?? []) as Json[]
+  return { ...report, segments: segments.map((seg) => ({ ...seg, speakerLabel: 'Teacher' })) }
+}
+
 function previewReport(): Json {
   const previewSoundTimeline = (): Json => {
     const words = [60, 120, 240, 300, 310, 340, 420, 505, 540, 620, 640, 700, 900, 980]
@@ -1974,7 +1983,7 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
     return { ...(previewReport() as Record<string, unknown>), schoolFocusIdea: previewDebriefIdea }
   }
   const reportMatch = path.match(/^\/api\/audio-sessions\/(preview-report)$/)
-  if (reportMatch) return withClimate({ ...(previewReport() as Record<string, unknown>), schoolFocusIdea: previewDebriefIdea })
+  if (reportMatch) return withNoStudents(withClimate({ ...(previewReport() as Record<string, unknown>), schoolFocusIdea: previewDebriefIdea }))
   // Any OTHER session id fetched on its own. Without this the request fell
   // through to the list handler below and answered with an ARRAY, so opening
   // any row but the first handed the report page a session with no segments

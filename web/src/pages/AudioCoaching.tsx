@@ -2330,6 +2330,7 @@ function ReportPanel({
                   contentNotes={session.contentNotes}
                   teachingMoves={session.teachingMoves ?? null}
                   narrative={session.contentNarrative ?? null}
+                  noStudents={!studentVoiceSeparated(session)}
                   lastRow={null}
                   onDiscuss={() => {}}
                 />
@@ -2413,6 +2414,7 @@ function ReportPanel({
                 talkInsight={talkInsight}
                 lastRow={sectionHardLook}
                 onDiscuss={discussThisSection}
+                onRetag={locked ? undefined : () => void handleRetag()}
               />
             )}
 
@@ -2432,6 +2434,7 @@ function ReportPanel({
                 contentNotes={session.contentNotes}
                 teachingMoves={session.teachingMoves ?? null}
                 narrative={session.contentNarrative ?? null}
+                noStudents={!studentVoiceSeparated(session)}
                 lastRow={sectionHardLook}
                 onDiscuss={discussThisSection}
               />
@@ -2886,7 +2889,16 @@ function SummaryTab({
     ...(room
       ? [
           { label: 'Teacher Voice', metric: roomPct(room.pct.teacher), unit: '%', accent: ACCENTS.terracotta, swatch: ROOM_COLOR.teacher },
-          { label: 'Student Voice', metric: roomPct(room.pct.student), unit: '%', note: 'at least', accent: ACCENTS.gold, swatch: ROOM_COLOR.student },
+          {
+            label: 'Student Voice',
+            metric: tawt.noStudents
+              ? { state: 'not_measurable' as const, display: '—', reason: 'Not separated from your voice in this recording.' }
+              : roomPct(room.pct.student),
+            unit: '%',
+            note: 'at least',
+            accent: ACCENTS.gold,
+            swatch: ROOM_COLOR.student,
+          },
           ...(room.videoSec > 0
             ? [{ label: 'Video/Audio', metric: roomPct(room.pct.video), unit: '%', accent: ACCENTS.teal, swatch: ROOM_COLOR.video }]
             : []),
@@ -2921,7 +2933,12 @@ function SummaryTab({
           : {
               state: 'not_measurable',
               display: '—',
-              reason: tawt.thinking.length === 0 ? 'No question asked students to explain or reason.' : 'No pause after a thinking question could be timed.',
+              reason:
+                tawt.thinking.length === 0
+                  ? 'No question asked students to explain or reason.'
+                  : tawt.noStudents
+                    ? 'Needs student voice told apart from yours.'
+                    : 'No pause after a thinking question could be timed.',
             },
       unit: 's',
       note: tawt.average != null ? `from ${tawtCount} question${tawtCount === 1 ? '' : 's'}` : undefined,
@@ -4681,6 +4698,7 @@ function LessonContentTab({
   narrative,
   lastRow,
   onDiscuss,
+  noStudents = false,
 }: {
   lessonContent: AudioLessonContent | null
   contentNotes: AudioContentNotes | null
@@ -4688,6 +4706,9 @@ function LessonContentTab({
   narrative: string | null
   lastRow: React.ReactNode
   onDiscuss: () => void
+  /// No student was told apart from the teacher, so which terms students
+  /// used cannot be counted.
+  noStudents?: boolean
 }) {
   const arc = teachingMoves?.arc ?? []
   const explanations = teachingMoves?.explanations ?? []
@@ -4805,7 +4826,9 @@ function LessonContentTab({
             <span className="flex-1">
               <b className="block font-heading text-lg text-forest">Academic vocabulary</b>
               <span className="text-sm text-ink-soft">
-                {studentUsed.length} of {keyTerms.length} key terms were heard from students.
+                {noStudents
+                  ? `No student voice was told apart from yours, so students’ use of these ${keyTerms.length} terms can’t be counted.`
+                  : `${studentUsed.length} of ${keyTerms.length} key terms were heard from students.`}
               </span>
             </span>
             <span className="rounded-full border border-hairline px-2.5 py-1 text-xs font-bold tracking-wide text-ink-soft">OPTIONAL</span>
@@ -5666,6 +5689,7 @@ function TalkParticipationTab({
   talkInsight,
   lastRow,
   onDiscuss,
+  onRetag,
 }: {
   session: AudioSessionWithSegments
   silencePct: number | null
@@ -5673,6 +5697,8 @@ function TalkParticipationTab({
   /// The section's Hard Look, opened from the card's footer.
   lastRow: React.ReactNode
   onDiscuss: () => void
+  /// Opens "which voice is the teacher?" again; absent on a locked report.
+  onRetag?: () => void
 }) {
   // What students talked about is no longer shown. The count could only ever
   // describe the turns the microphone caught, and those are the ones spoken
@@ -5691,10 +5717,14 @@ function TalkParticipationTab({
   const [pick, setPick] = useState<RoomPick | null>(null)
   const [pauseOpen, setPauseOpen] = useState(false)
   const hasRoom = room != null
+  const noStudents = !studentVoiceSeparated(session)
+  // A stretch ends when a student is heard; with none separated it runs
+  // through every answer, so it is not shown.
   const stretch = useMemo(() => {
+    if (noStudents) return null
     const longest = longestTeacherStretch(session.segments)
     return longest && (hasRoom || longest.durationSec >= MIN_STRETCH_TO_SHOW_SEC) ? longest : null
-  }, [session.segments, hasRoom])
+  }, [session.segments, hasRoom, noStudents])
 
   const nonSpeech = nonSpeechSplit(session.metricsDetail, session.durationSec)
   const moves = session.teachingMoves
@@ -5751,6 +5781,24 @@ function TalkParticipationTab({
     >
       {/* Who was heard and how fast, then the lesson minute by minute. */}
       <div id="stat-talkRatio" className="flex flex-col gap-3">
+        {noStudents && (session.segments ?? []).length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gold/60 bg-gold-tint/40 px-4 py-3">
+            <p className="text-sm text-ink">
+              <span className="font-semibold">No student voice was told apart from yours in this recording,</span> so students’
+              answers are counted as your talk. Teacher pause and your longest stretch need students separated, so they aren’t
+              shown.
+            </p>
+            {onRetag && (
+              <button
+                type="button"
+                onClick={onRetag}
+                className="shrink-0 rounded-full border border-forest px-3 py-1.5 text-sm font-semibold text-forest hover:bg-forest hover:text-cream print:hidden"
+              >
+                Fix who’s who
+              </button>
+            )}
+          </div>
+        )}
         <TalkNumbers
           teacherPct={session.teacherTalkPct}
           studentPct={session.studentTalkPct}
@@ -5763,6 +5811,7 @@ function TalkParticipationTab({
             setPick(pick && 'kind' in pick && pick.kind === kind ? null : { kind })
           }}
           pauseOpen={pauseOpen}
+          noStudents={noStudents}
           onPause={() => {
             setPick(null)
             setPauseOpen((v) => !v)
@@ -5978,6 +6027,7 @@ function TalkNumbers({
   onPick,
   pauseOpen,
   onPause,
+  noStudents = false,
 }: {
   teacherPct: number | null
   studentPct: number | null
@@ -5989,6 +6039,9 @@ function TalkNumbers({
   onPick: (kind: 'teacher' | 'student') => void
   pauseOpen: boolean
   onPause: () => void
+  /// No student was told apart from the teacher: Student Voice says so
+  /// rather than "at least 0 s".
+  noStudents?: boolean
 }) {
   const tile = (label: string, value: string, sub: string, color: string | undefined) => (
     <div className="rounded-xl border border-hairline bg-cream-card px-4 py-3">
@@ -6020,8 +6073,17 @@ function TalkNumbers({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {kinds.map(({ kind, sub }) => {
           // Only voices with words open: the rest had none to show.
-          const opens = kind === 'teacher' || kind === 'student' ? kind : null
-          const inner = (
+          const unseparated = kind === 'student' && noStudents
+          const opens = kind === 'teacher' || (kind === 'student' && !unseparated) ? kind : null
+          const inner = unseparated ? (
+            <>
+              <p className="text-xs font-semibold text-ink-soft">{ROOM_LABEL[kind]}</p>
+              <p className="font-heading text-2xl font-extrabold leading-tight" style={{ color: ROOM_COLOR[kind] }}>
+                Not separated
+              </p>
+              <p className="text-xs text-ink-soft">no line was told apart from yours, so students’ answers count as your talk</p>
+            </>
+          ) : (
             <>
               <p className="text-xs font-semibold text-ink-soft">{ROOM_LABEL[kind]}</p>
               <p className="font-heading text-2xl font-extrabold leading-tight" style={{ color: ROOM_COLOR[kind] }}>
@@ -6056,7 +6118,9 @@ function TalkNumbers({
           const sub =
             pause.average != null
               ? `average after ${timed} thinking question${timed === 1 ? '' : 's'}`
-              : pause.thinking.length === 0
+              : pause.noStudents && pause.thinking.length > 0
+                ? NEEDS_STUDENT_VOICE
+                : pause.thinking.length === 0
                 ? 'no question asked students to explain or reason'
                 : 'no pause after a thinking question could be timed'
           const inner = (
@@ -6064,10 +6128,10 @@ function TalkNumbers({
               <p className="text-xs font-semibold text-ink-soft">Teacher pause</p>
               <p className="font-heading text-2xl font-extrabold leading-tight text-ink">{pause.average != null ? `${pause.average.toFixed(1)} s` : '—'}</p>
               <p className="text-xs text-ink-soft">{sub}</p>
-              {pause.thinking.length > 0 && <p className="mt-1 text-xs font-semibold text-terracotta-600">See the questions</p>}
+              {pause.thinking.length > 0 && !pause.noStudents && <p className="mt-1 text-xs font-semibold text-terracotta-600">See the questions</p>}
             </>
           )
-          return pause.thinking.length > 0 ? (
+          return pause.thinking.length > 0 && !pause.noStudents ? (
             <button
               type="button"
               onClick={onPause}
@@ -6461,12 +6525,27 @@ const sameMoment = (a: { timestampSec: number; quote: string }, b: { timestampSe
 /// with students (a question you answered yourself is not one), the thinking
 /// ones among them (above recall), each one's pause until you spoke
 /// again, and their average.
+/// Whether the transcript told any student apart from the teacher. When it
+/// did not, students' answers sit inside the teacher's lines, and every read
+/// that needs to hear a student — the pause after a question, where a
+/// teacher stretch ends, which terms students used — measures nothing real:
+/// one lesson read 0.6 s of pause ("you kept talking") and a 12 min 51 s
+/// stretch straight through students answering.
+function studentVoiceSeparated(session: Pick<AudioSessionWithSegments, 'segments'>): boolean {
+  return (session.segments ?? []).some((s) => s.speakerLabel !== 'Teacher' && s.text.trim() !== '')
+}
+
+/// Shown wherever a measure needs student voice and the lesson has none.
+const NEEDS_STUDENT_VOICE = 'needs student voice told apart from yours'
+
 function tawtOf(session: AudioSessionWithSegments) {
   const selfAnswered = (session.teachingMoves?.selfAnswered ?? []).map((q) => ({ timestampSec: q.timestampSec, quote: withoutAddressedNames(q.quote) }))
   const questions = classifyQuestions(session).filter((q) => !selfAnswered.some((sa) => sameMoment(q, sa)))
   const thinking = questions.filter((q) => q.mix !== 'recall')
   const pauses = pausesAfter(session.segments ?? [], thinking)
-  return { selfAnswered, questions, thinking, pauses, average: averagePause(pauses) }
+  // With no student separated, an answer reads as the teacher still talking.
+  const noStudents = !studentVoiceSeparated(session)
+  return { selfAnswered, questions, thinking, pauses, average: noStudents ? null : averagePause(pauses), noStudents }
 }
 
 /// Your questions and checks for understanding on one lesson timeline: each
@@ -6479,7 +6558,7 @@ function tawtOf(session: AudioSessionWithSegments) {
 /// Never a claim that students understood.
 function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments }) {
   const checks = (session.cfuLog ?? []).filter((c) => c.loop?.who !== 'not_a_check')
-  const { selfAnswered, questions, thinking: thinkingQuestions, pauses: thinkingPauses, average: thinkingPause } = tawtOf(session)
+  const { selfAnswered, questions, thinking: thinkingQuestions, pauses: thinkingPauses, average: thinkingPause, noStudents } = tawtOf(session)
   // The follow-ups the answer log paired with a student answer — the same
   // ones the follow-up count rests on.
   const detail = (session.metricsDetail ?? {}) as Record<string, unknown>
@@ -6756,6 +6835,12 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
 
       {/* Teacher Pause Time: how long you left a question that asked
           students to explain or reason with the class, until you spoke again. */}
+      {thinkingPause == null && noStudents && thinkingQuestions.length > 0 && (
+        <p className="rounded-2xl border border-hairline bg-cream-card px-4 py-3 text-sm text-ink-soft">
+          <span className="font-semibold text-ink">Teacher Pause Time</span> isn’t shown: no student voice was told apart from
+          yours, so an answer would read as you still talking.
+        </p>
+      )}
       {thinkingPause != null && (
         <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card px-4 py-4">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
