@@ -1,7 +1,6 @@
 import { cloneElement, createContext, isValidElement, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
-import BroughtStudentsIn from '../components/BroughtStudentsIn'
 import TalkFlowStrip, { FLOW_COLOR, ROOM_COLOR, ROOM_LABEL, type ShareSlice } from '../components/TalkFlowStrip'
 import { roomBreakdown, type RoomBreakdown, type RoomKind } from '../lib/roomBreakdown'
 import RoomMoments, { type RoomPick } from '../components/RoomMoments'
@@ -5821,7 +5820,8 @@ function TalkParticipationTab({
           segments={session.segments}
           durationSec={session.durationSec}
           seconds={session.soundTimeline?.seconds ?? null}
-          // Your moves are drawn once, on "When it happened" below.
+          // No marks: invitations and follow-ups are no longer drawn on this
+          // card, which read as crowded; Questioning shows follow-ups and checks.
           marks={[]}
           shares={recordingShares(session.teacherTalkPct, session.studentTalkPct, nonSpeech)}
           room={room}
@@ -5836,12 +5836,6 @@ function TalkParticipationTab({
         />
         {room && pick && <RoomMoments segments={session.segments} pick={pick} onClose={() => setPick(null)} />}
         {room && pauseOpen && <PauseMoments pause={tawtOf(session)} segments={session.segments} onClose={() => setPauseOpen(false)} />}
-      </div>
-
-      {/* How you brought students in: your moves and the answers heard, on
-          one timeline, with every moment behind it. */}
-      <div className="border-t border-dashed border-hairline pt-5">
-        <BroughtStudentsIn session={session} />
       </div>
 
       {stretch && <LongestStretchCard stretch={stretch} read={moves?.stretch ?? null} segments={session.segments} />}

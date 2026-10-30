@@ -99,9 +99,8 @@ function mmss(sec: number): string {
 
 export type ShareSlice = { kind: FlowKind; pct: number }
 
-/// What the strip marks above itself: the three ways you brought students in,
-/// and checks for understanding — the same shapes and colours as "How you
-/// brought students in" below it.
+/// What the strip can mark above itself: invitations, follow-ups, reaching
+/// beyond volunteers, and checks for understanding.
 export type StripMark = { t: number; kind: 'invite' | 'probe' | 'voices' | 'check' }
 const MARK: Record<StripMark['kind'], { label: string; color: string }> = {
   invite: { label: 'Invitations to participate', color: '#B8674A' },
