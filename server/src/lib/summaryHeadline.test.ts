@@ -18,7 +18,6 @@ const FACTS = headlineFacts({
 test('facts are counted the way the page counts them', () => {
   assert.equal(FACTS.questionsBeyondRecall, 2)
   assert.equal(FACTS.questionsReasoning, 1)
-  assert.equal(FACTS.directionsComplete, 1)
   assert.equal(FACTS.capturedPct, 67)
   assert.match(factsText(FACTS), /followed up on 1 of 7/)
   assert.match(factsText({ ...FACTS, capturedPct: 30 }), /^Coverage: 30%/m)

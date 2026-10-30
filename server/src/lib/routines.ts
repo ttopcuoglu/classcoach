@@ -95,3 +95,60 @@ export function scoredDirections<D extends { timestampSec?: number }>(directions
     return type != null && (SCORED_ROUTINES as readonly string[]).includes(type)
   })
 }
+
+/// Starting directions this close together belong to one activity's setup
+/// when the lesson's stages were not read: setups cluster.
+export const ACTIVITY_GAP_SEC = 180
+
+export type DirectionActivity<D> = {
+  /// The lesson stage's title, when the stages were read; else null and the
+  /// apps show the time range.
+  title: string | null
+  startSec: number
+  endSec: number
+  /// Every part named anywhere in the activity's setup, by any direction in
+  /// its span — "how long" said once covers the whole activity.
+  parts: string[]
+  directions: D[]
+}
+
+/// The four parts belong to launching an activity, not to every sentence of
+/// it: "add 50 trees" and "draw the factory next to the river" are steps of
+/// one drawing task, and scoring each read "none of 15 named all four". So
+/// the scored directions are grouped into activities — by the lesson's
+/// stages where they were read, else by time — and each activity is judged
+/// on everything its setup said. Mirrored in web AudioCoaching.tsx and the
+/// iPhone's InsightsSections.swift.
+export function directionActivities<D extends { timestampSec?: number; parts: string[] }>(
+  directions: D[],
+  types: { timestampSec: number; type: string }[] | undefined,
+  arc: { title: string; startSec: number; endSec: number }[] | undefined,
+): DirectionActivity<D>[] {
+  const at = (d: D) => d.timestampSec ?? 0
+  const scored = [...scoredDirections(directions, types)].sort((a, b) => at(a) - at(b))
+  const groups: { title: string | null; startSec: number; endSec: number; directions: D[] }[] = []
+  const stages = (arc ?? []).filter((s) => s.endSec > s.startSec)
+  for (const d of scored) {
+    const t = at(d)
+    const stage = stages.find((s, i) => t >= s.startSec && (t < s.endSec || i === stages.length - 1))
+    const last = groups[groups.length - 1]
+    if (stage) {
+      const same = groups.find((g) => g.title === stage.title && g.startSec === stage.startSec)
+      if (same) same.directions.push(d)
+      else groups.push({ title: stage.title, startSec: stage.startSec, endSec: stage.endSec, directions: [d] })
+    } else if (last && last.title == null && t - last.endSec <= ACTIVITY_GAP_SEC) {
+      last.directions.push(d)
+      last.endSec = t
+    } else {
+      groups.push({ title: null, startSec: t, endSec: t, directions: [d] })
+    }
+  }
+  return groups.map((g) => {
+    // A time-grouped activity's span runs a little past its last direction,
+    // so a "one more minute" just after the steps still counts.
+    const end = g.title == null ? g.endSec + 60 : g.endSec
+    const inSpan = directions.filter((d) => at(d) >= g.startSec && at(d) <= end)
+    const parts = [...new Set([...g.directions, ...inSpan].flatMap((d) => d.parts))]
+    return { title: g.title, startSec: g.startSec, endSec: g.endSec, parts, directions: g.directions }
+  })
+}

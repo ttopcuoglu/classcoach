@@ -101,7 +101,7 @@ const FULL_LESSON_FORMAT = `Plain text only, no markdown. Respond with exactly t
 <step>
 <step_minutes>8</step_minutes>
 <step_title>What this part of the lesson is</step_title>
-<teacher_prompt>What the teacher does and says here, including the actual questions to ask.</teacher_prompt>
+<teacher_prompt>What the teacher does and says here, including the actual questions to ask. Where this part sets students working, include the launch in the teacher's words: what to do, how long they have, and what they hand in or show at the end — the parts a debrief recording most often finds missing, and the cheapest to get right in advance.</teacher_prompt>
 <student_task>What students are doing here, concretely.</student_task>
 </step>
 (one <step> per part of the lesson, in teaching order — the minutes must add up to the lesson length you were given)

@@ -5346,9 +5346,42 @@ const ROUTINE_LABEL: Record<string, string> = {
   finish: 'Finishing',
   other: 'Other directions',
 }
-const PART_WORD: Record<string, string> = { task: 'what to do', steps: 'the steps', time: 'how long', product: 'what to hand in' }
 /// Routines held to the four parts; must match the server's SCORED_ROUTINES.
 const SCORED_ROUTINES: string[] = ['start', 'transition']
+/// Starting directions this close together are one activity's setup when the
+/// lesson's stages were not read; must match the server's ACTIVITY_GAP_SEC.
+const ACTIVITY_GAP_SEC = 180
+
+/// The scored directions grouped into activities, each with every part its
+/// setup named — must match directionActivities in server lib/routines.ts.
+function directionActivities<D extends { timestampSec: number; parts: string[] }>(
+  directions: D[],
+  isScored: (d: D) => boolean,
+  arc: { title: string; startSec: number; endSec: number }[],
+) {
+  const stages = arc.filter((st) => st.endSec > st.startSec)
+  const groups: { title: string | null; startSec: number; endSec: number; directions: D[] }[] = []
+  for (const d of [...directions].filter(isScored).sort((x, y) => x.timestampSec - y.timestampSec)) {
+    const t = d.timestampSec
+    const stage = stages.find((st, i) => t >= st.startSec && (t < st.endSec || i === stages.length - 1))
+    const last = groups[groups.length - 1]
+    if (stage) {
+      const same = groups.find((g) => g.title === stage.title && g.startSec === stage.startSec)
+      if (same) same.directions.push(d)
+      else groups.push({ title: stage.title, startSec: stage.startSec, endSec: stage.endSec, directions: [d] })
+    } else if (last && last.title == null && t - last.endSec <= ACTIVITY_GAP_SEC) {
+      last.directions.push(d)
+      last.endSec = t
+    } else {
+      groups.push({ title: null, startSec: t, endSec: t, directions: [d] })
+    }
+  }
+  return groups.map((g) => {
+    const end = g.title == null ? g.endSec + 60 : g.endSec
+    const inSpan = directions.filter((d) => d.timestampSec >= g.startSec && d.timestampSec <= end)
+    return { ...g, parts: [...new Set([...g.directions, ...inSpan].flatMap((d) => d.parts))] }
+  })
+}
 
 /// Climate & Routines: directions and routines, redirection and the
 /// expectation it carried, and encouragement — from your own words. Language
@@ -5373,61 +5406,43 @@ function ClimateRoutinesTab({
   const directions = moves?.directions ?? []
   const typeAt = (sec: number) => moves?.routines?.directionTypes.find((d) => d.timestampSec === sec)?.type
   // Only directions that start or change work are held to the four parts
-  // (server lib/routines.ts scoredDirections): "grab a book" and "one more
-  // minute" do not need a time limit and something to hand in. A lesson read
-  // before routines were classified keeps every direction scored.
+  // (server lib/routines.ts scoredDirections), and they are judged per
+  // activity, not per sentence (directionActivities there): "add 50 trees"
+  // is a step of one drawing task, and scoring each step read "none of 15
+  // named all four". Grouped by the lesson's stages where they were read,
+  // else by time. A lesson read before routines were classified keeps every
+  // direction scored.
   const typed = (moves?.routines?.directionTypes.length ?? 0) > 0
   const isScored = (d: { timestampSec: number }) => !typed || SCORED_ROUTINES.includes(typeAt(d.timestampSec) ?? '')
-  const scored = directions.filter(isScored)
-  const complete = scored.filter((d) => d.parts.length === 4)
-  const partsList = (parts: string[]) => {
-    const words = parts.map((p) => PART_WORD[p] ?? p)
-    return words.length <= 1 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`
-  }
-  const directionRows: Evidence[] = [...directions]
-    .sort((x, y) => Number(isScored(y)) - Number(isScored(x)) || y.parts.length - x.parts.length || x.timestampSec - y.timestampSec)
+  const activities = directionActivities(directions, isScored, moves?.arc ?? [])
+  const activityName = (a: (typeof activities)[number]) => a.title ?? `${formatTime(a.startSec)}–${formatTime(a.endSec)}`
+  // How you set up each activity: one line per activity, in your own launch
+  // words. The four-part score and grid were removed (2026-10-30): the board
+  // and slides are invisible to a recording, so "none said how long" could be
+  // wrong, and a teacher had no reason to trust it. The four parts now live
+  // in Planning Coach, where a launch is written before the lesson.
+  const launchRows: Evidence[] = activities.map((a) => ({
+    quote: a.directions[0].quote,
+    timestampSec: a.directions[0].timestampSec,
+    tag: `Set up · ${activityName(a)}`,
+  }))
+  const cueRows: Evidence[] = directions
+    .filter((d) => !isScored(d))
+    .sort((x, y) => x.timestampSec - y.timestampSec)
     .map((d) => {
       const t = typeAt(d.timestampSec)
-      const label = t ? ROUTINE_LABEL[t] : null
-      // A materials or time cue is listed for what it was, with no parts.
-      if (!isScored(d)) return { quote: d.quote, timestampSec: d.timestampSec, tag: label ?? 'Directions' }
-      const named = d.parts.length === 0 ? 'named none of the four' : `named ${d.parts.map((p) => PART_WORD[p] ?? p).join(', ')}`
-      const tag = `${label ? `${label} · ` : ''}${named}`
-      return { quote: d.quote, timestampSec: d.timestampSec, tag: tag[0].toUpperCase() + tag.slice(1) }
+      return { quote: d.quote, timestampSec: d.timestampSec, tag: t ? ROUTINE_LABEL[t] : 'Directions' }
     })
-  // Every direction in one of the chips, so they add up to the category's
-  // count: "Directions & routines 20" sat over chips that summed to fewer.
-  const byType = new Map<string, number>()
-  for (const d of directions) {
-    const t = typeAt(d.timestampSec) ?? 'other'
-    byType.set(t, (byType.get(t) ?? 0) + 1)
-  }
-  const missingTime = scored.filter((d) => !d.parts.includes('time')).length
-  const missingOf = (parts: string[]) => (['task', 'steps', 'time', 'product'] as const).filter((p) => !parts.includes(p))
+  const directionRows: Evidence[] = [...launchRows, ...cueRows]
+  const n = activities.length
   const directionFinding =
-    directions.length === 0
+    directionRows.length === 0
       ? null
-      : scored.length === 0
-        ? `Your directions were about materials and timing, which don’t need all four parts — what to do, the steps, how long and what to hand in.`
-        : scored.length === 1
-          ? `${typed && directions.length > 1 ? `Of your ${directions.length} directions, 1` : '1 direction'} ${typed ? 'started or changed the work' : 'was heard'}: it ${
-              scored[0].parts.length === 0
-                ? 'named none of the four parts'
-                : scored[0].parts.length === 4
-                  ? 'named all four — what to do, the steps, how long and what to hand in'
-                  : `named ${partsList(scored[0].parts)}, but not ${partsList(missingOf(scored[0].parts)).replace(/ and /g, ' or ')}`
-            }.`
-          : typed && scored.length < directions.length
-            ? // The whole count first, then the part that is scored, so the
-              // sentence agrees with the category's number above it.
-              `Of your ${directions.length} directions, ${scored.length} started or changed the work, and ${
-                complete.length === 0 ? 'none' : complete.length
-              } of those named all four: what to do, the steps, how long, and what to hand in.${
-                missingTime > 0 && complete.length < scored.length ? ` ${missingTime} didn’t say how long.` : ''
-              }`
-            : `${complete.length} of your ${scored.length} directions${typed ? ' that started or changed the work' : ''} named all four: what to do, the steps, how long, and what to hand in.${
-                missingTime > 0 && complete.length < scored.length ? ` ${missingTime} didn’t say how long.` : ''
-              }`
+      : n === 0
+        ? 'Your directions were about materials, help and timing.'
+        : `You set up ${n} activit${n === 1 ? 'y' : 'ies'}${
+            cueRows.length > 0 ? `, and gave ${cueRows.length} shorter direction${cueRows.length === 1 ? '' : 's'} about materials, help or timing` : ''
+          }.`
 
   // 2. Redirection & expectations.
   const redirections = moves?.redirections ?? (session.redirectionLog ?? []).map((r) => ({ quote: r.text, timestampSec: r.timestampSec, clarity: null }))
@@ -5518,7 +5533,6 @@ function ClimateRoutinesTab({
   const keep: KeepLine | null =
     (specific[0] && { text: 'You named what was right, not just “good”.', quote: specific[0].text, timestampSec: specific[0].timestampSec }) ||
     (actionable[0] && { text: 'Your redirection told students what to do.', quote: actionable[0].quote, timestampSec: actionable[0].timestampSec }) ||
-    (complete[0] && { text: 'Your directions named what to do, the steps, how long, and what to hand in.', quote: complete[0].quote, timestampSec: complete[0].timestampSec }) ||
     null
 
   return (
@@ -5532,8 +5546,8 @@ function ClimateRoutinesTab({
       howToRead={
         <>
           <p className="text-sm text-ink-soft">
-            Everything here is from your own words. A direction is counted once however many sentences it runs to, and
-            each says which of the four parts it named: what to do, the steps, how long, and what to hand in.
+            Everything here is from your own words. Each activity you set up is shown once, with the words you launched it
+            with; anything written on the board or a slide isn’t part of the recording.
           </p>
           <p className="text-sm text-ink-soft">
             Tone isn't judged on this page: a transcript can't hear warmth or sarcasm, and a student's line can be filed as
@@ -5562,17 +5576,7 @@ function ClimateRoutinesTab({
                 key: 'directions',
                 label: 'Directions & routines',
                 finding: directionFinding,
-                desc: 'Directions for starting work, changing activities, materials, getting help and finishing — and which of the four parts each named.',
-                note:
-                  byType.size > 0 ? (
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      {[...byType.entries()].map(([t, n]) => (
-                        <span key={t} className="rounded-full bg-cream-card px-2.5 py-1 text-ink">
-                          {ROUTINE_LABEL[t]} <b>{n}</b>
-                        </span>
-                      ))}
-                    </div>
-                  ) : undefined,
+                desc: 'How you set up each activity, in your own words, then the shorter directions about materials, help and timing.',
                 items: directionRows.map((r) => ({ tag: r.tag, quote: r.quote, timestampSec: r.timestampSec })),
               },
               repeated
@@ -5605,46 +5609,6 @@ function ClimateRoutinesTab({
         )}
       </div>
 
-      {/* Optional: each direction that started or changed the work against
-          the four parts. The finding above already gives the count, so the
-          summary line says what the grid holds rather than repeating it. */}
-      {scored.length > 0 && (
-        <DetailsOpenOnPaper className="group rounded-2xl border-[1.5px] border-hairline">
-          <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-4 px-5 py-4 marker:hidden">
-            <span className="flex-1">
-              <b className="block font-heading text-lg text-forest">Your directions, part by part</b>
-              <span className="text-sm text-ink-soft">
-                {typed ? 'Each direction that started or changed the work' : 'Each set of directions'}, against what to do, the steps, how long and what to hand in.
-              </span>
-            </span>
-            <span className="rounded-full border border-hairline px-2.5 py-1 text-xs font-bold tracking-wide text-ink-soft">OPTIONAL</span>
-            <RowChevron className="group-open:rotate-180" />
-          </summary>
-          <div className="flex flex-col gap-1 px-5 pb-5">
-            <div className="grid grid-cols-[56px_repeat(4,minmax(0,1fr))] gap-1.5 pb-1 text-center text-xs font-bold text-ink-soft">
-              <span />
-              {['What to do', 'Steps', 'How long', 'Hand in'].map((h) => (
-                <span key={h}>{h}</span>
-              ))}
-            </div>
-            {[...scored]
-              .sort((x, y) => x.timestampSec - y.timestampSec)
-              .map((d, i) => (
-                <div key={i} className="grid grid-cols-[56px_repeat(4,minmax(0,1fr))] items-center gap-1.5" title={d.quote}>
-                  <span className="font-mono text-xs text-ink-soft">{formatTime(d.timestampSec)}</span>
-                  {(['task', 'steps', 'time', 'product'] as const).map((part) => (
-                    <i
-                      key={part}
-                      className={`block h-6 rounded-md ${d.parts.includes(part) ? 'bg-forest' : 'border-[1.5px] border-dashed border-[#C9BFAD]'}`}
-                      aria-label={`${PART_WORD[part]}: ${d.parts.includes(part) ? 'named' : 'not named'}`}
-                    />
-                  ))}
-                </div>
-              ))}
-            <p className="mt-2 text-xs text-ink-soft">A filled square is a part the direction named. Hover a row for its words.</p>
-          </div>
-        </DetailsOpenOnPaper>
-      )}
     </SectionShell>
   )
 }

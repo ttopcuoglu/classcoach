@@ -12,7 +12,6 @@
 import { anthropic, CLAUDE_MODEL } from './anthropic.ts'
 import type { QuestionLogEntry } from './audioAnalysis.ts'
 import { extractTag } from './extractTag.ts'
-import { scoredDirections } from './routines.ts'
 
 export type HeadlineFacts = {
   subject: string | null
@@ -31,8 +30,6 @@ export type HeadlineFacts = {
   explanations: number | null
   keyTermsTotal: number
   keyTermsStudentsUsed: number
-  directionsTotal: number
-  directionsComplete: number
   redirectionsTotal: number
   redirectionsActionable: number
 }
@@ -63,11 +60,6 @@ export function headlineFacts(session: {
     const k = kinds.find((x) => Math.abs(x.timestampSec - q.timestampSec) <= 4)?.kind
     return k ? (KIND_TO_MIX[k] ?? 'recall') : q.type === 'higher_order' ? 'explain' : 'recall'
   })
-  // Only directions that start or change work are held to the four parts.
-  const directions = scoredDirections(
-    (Array.isArray(moves.directions) ? moves.directions : []) as { parts: string[]; timestampSec?: number }[],
-    moves.routines?.directionTypes,
-  )
   const redirections = (Array.isArray(moves.redirections) ? moves.redirections : []) as { clarity: string }[]
   const keyTerms = (Array.isArray(content.keyTerms) ? content.keyTerms : []) as { studentCount: number }[]
   const invites = moves.participation?.invitations ?? moves.invitations
@@ -89,8 +81,6 @@ export function headlineFacts(session: {
     explanations: Array.isArray(moves.explanations) ? moves.explanations.length : null,
     keyTermsTotal: keyTerms.length,
     keyTermsStudentsUsed: keyTerms.filter((t) => t.studentCount > 0).length,
-    directionsTotal: directions.length,
-    directionsComplete: directions.filter((d) => d.parts.length === 4).length,
     redirectionsTotal: redirections.length,
     redirectionsActionable: redirections.filter((r) => r.clarity === 'actionable').length,
   }
@@ -111,7 +101,6 @@ export function factsText(f: HeadlineFacts): string {
   }
   if (f.explanations != null) lines.push(`Examples, analogies and meanings given: ${f.explanations}`)
   if (f.keyTermsTotal) lines.push(`Key terms: ${f.keyTermsStudentsUsed} of ${f.keyTermsTotal} were heard from students`)
-  if (f.directionsTotal) lines.push(`Directions: ${f.directionsComplete} of ${f.directionsTotal} named all four parts (task, steps, time, product)`)
   if (f.redirectionsTotal) lines.push(`Redirections: ${f.redirectionsActionable} of ${f.redirectionsTotal} told students what to do`)
   return lines.join('\n')
 }
