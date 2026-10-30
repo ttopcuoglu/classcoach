@@ -182,7 +182,6 @@ struct ReportView: View {
     @State private var tab: ReportTab = .summary
     @State private var section: InsightsSection = .talk
     @State private var rubricOpen = false
-    @State private var hardLookOpen = false
     @State private var focusMetric: FocusMetric?
     /// Set by a Discuss footer and consumed by Reflect on arrival.
     @State private var reflectFocus: ReflectFocus?
@@ -194,6 +193,7 @@ struct ReportView: View {
     @State private var attemptedMoment = false
     @State private var attemptedContentNotes = false
     @State private var attemptedNextSteps = false
+    @State private var attemptedPauseRewrite = false
     @State private var retagging = false
 
     private var locked: Bool { session.status == "locked" }
@@ -229,12 +229,6 @@ struct ReportView: View {
                         onUpdate: onUpdate,
                         onNavigateInsights: { target in section = target; tab = .insights }
                     )
-                    // The whole-lesson Hard Look, asked for here once. It used
-                    // to open the Insights tab, above whichever section a
-                    // teacher had just chosen; each section keeps its own part.
-                    if !(locked && session.hardLook == nil) {
-                        hardLookRow
-                    }
                     Text("\u{1F512} Audio was used for transcription only and is not stored.")
                         .font(.caption).foregroundStyle(AppTheme.textSecondary)
                     // Reading the summary and wanting to talk about it is the
@@ -246,8 +240,22 @@ struct ReportView: View {
                     ContentSpecialistTab(session: session, onUpdate: onUpdate) { discuss(.forSpecialist(session)) }
                 case .rubric:
                     // Nothing collapsed here — a teacher who opened this tab
-                    // has already said what they want.
+                    // has already said what they want. The Hard Look lives
+                    // here too, with the other on-demand reading of the whole
+                    // lesson, rather than on the Summary and under each
+                    // Insights section (as on the web since a7d0b65).
                     RubricLensTab(session: session, locked: locked, onUpdate: onUpdate)
+                    if !(locked && session.hardLook == nil) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Divider().padding(.vertical, 8)
+                            Text("The Hard Look")
+                                .font(.title3.weight(.bold)).foregroundStyle(AppTheme.forest)
+                            Text("The least generous honest reading of the whole lesson. For when you want it straight.")
+                                .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            HardLookTab(session: session, locked: locked, onUpdate: onUpdate)
+                        }
+                    }
                 case .reflect:
                     ReflectTab(session: session, locked: locked, focus: $reflectFocus, onUpdate: onUpdate)
                 case .myGrowth:
@@ -264,6 +272,7 @@ struct ReportView: View {
             await fillMissingSummary()
             await fillMissingContentNotes()
             await fillMissingNextSteps()
+            await rewriteStalePauseSteps()
         }
         .sheet(isPresented: $retagging) {
             RetagSpeakersView(session: session) { updated in
@@ -320,6 +329,25 @@ struct ReportView: View {
         attemptedNextSteps = true
         if let updated = try? await AudioCoachingService.generateNextSteps(sessionId: session.id) {
             onUpdate(updated)
+        }
+    }
+
+    /// A stored Try next time line asking for a pause after asking, on a
+    /// lesson whose Teacher Pause Time already met the goal, rewritten once
+    /// without it — mirrors the web report (f27528e). Written before the
+    /// suggestions were told the pause, one sat under a card showing 4.1 s
+    /// after the very question it named.
+    private func rewriteStalePauseSteps() async {
+        guard !locked, let steps = session.nextSteps, !attemptedPauseRewrite else { return }
+        guard let pause = ThinkingPause.detail(session).average else { return }
+        attemptedPauseRewrite = true
+        for (key, text) in [("talk", steps.talk), ("questions", steps.questions), ("climate", steps.climate)]
+        where FocusLine.ignoresPause(text, pauseSec: pause) {
+            if let result = try? await AudioCoachingService.rewriteNextStepWithoutPause(sessionId: session.id, key: key, pauseSec: pause) {
+                var updated = session
+                updated.session.nextSteps = result.nextSteps
+                onUpdate(updated)
+            }
         }
     }
 
@@ -411,18 +439,19 @@ struct ReportView: View {
 
             // One card per section in the web's design: header, note, the
             // section's own evidence, Keep and Try, and a footer holding
-            // "How to read this", this section's hard look, and the coach.
+            // "How to read this" and the coach. The Hard Look is on Rubric lens.
             Group {
                 switch section {
                 case .talk:
-                    TalkSection(session: session, note: AudioInsights.buildTalkInsight(session), hardLook: sectionHardLook, onDiscuss: discussSection)
+                    TalkSection(session: session, note: AudioInsights.buildTalkInsight(session), hardLook: nil, onDiscuss: discussSection,
+                                onRetag: session.status == "analyzed" ? { retagging = true } : nil)
                 case .questions:
                     QuestionsSection(session: session, note: AudioInsights.buildQuestioningInsight(session, higherOrderRatio: m.higherOrderRatio),
-                                     hardLook: sectionHardLook, onDiscuss: discussSection)
+                                     hardLook: nil, onDiscuss: discussSection)
                 case .content:
-                    ContentSection(session: session, hardLook: sectionHardLook, onDiscuss: discussSection)
+                    ContentSection(session: session, hardLook: nil, onDiscuss: discussSection)
                 case .routines:
-                    RoutinesSection(session: session, hardLook: sectionHardLook, onDiscuss: discussSection)
+                    RoutinesSection(session: session, hardLook: nil, onDiscuss: discussSection)
                 }
             }
             .id(section)
@@ -430,47 +459,7 @@ struct ReportView: View {
         }
     }
 
-    /// This section's part of the Hard Look, opened from the card's footer.
-    /// A locked report that never asked for one has none to show.
-    private var sectionHardLook: AnyView? {
-        if locked && session.hardLook == nil { return nil }
-        return AnyView(SectionHardLook(section: section, session: session, locked: locked, onUpdate: onUpdate))
-    }
-
     private func discussSection() { discuss(.forSection(section, in: session)) }
-
-    /// The other lens over the same four sections: the least generous reading
-    /// rather than the framework's. Second, and closed, on purpose — a teacher
-    /// should arrive at an unsparing critique of their own lesson by choosing
-    /// it on a day they can use it, not by scrolling past it on any other.
-    private var hardLookRow: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button {
-                withAnimation { hardLookOpen.toggle() }
-            } label: {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("The Hard Look")
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
-                        Text("The least generous honest reading of the whole lesson. For when you want it straight.")
-                            .font(.caption).foregroundStyle(AppTheme.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 8)
-                    Text(hardLookOpen ? "Hide" : "Show")
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
-                }
-            }
-
-            if hardLookOpen {
-                HardLookTab(session: session, locked: locked, onUpdate: onUpdate)
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
-    }
 
     private var disclaimer: some View {
         Text("This report reflects what could be heard in your recording — talk patterns, questioning, and classroom routines. It doesn't capture lesson planning, materials, physical space, visual engagement, or anything outside class time. Automated counts above are suggestions to confirm or edit, not final judgments. Audio is never saved: it's sent once for transcription and discarded, and only the transcript and these insights are kept.")

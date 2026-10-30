@@ -411,6 +411,8 @@ struct TalkSection: View {
     let note: String?
     let hardLook: AnyView?
     let onDiscuss: () -> Void
+    /// Opens "which voice is the teacher?" again; nil on a locked report.
+    var onRetag: (() -> Void)? = nil
 
     @State private var moments: TalkMoments?
 
@@ -419,6 +421,7 @@ struct TalkSection: View {
 
     var body: some View {
         let moves = ParticipationMoves(session)
+        let noStudents = !ThinkingPause.studentVoiceSeparated(session)
         let silenceNote = AudioInsights.leadingSilenceNote(firstWordSec: session.metricsDetail?["firstWordSec"])
         let hasEnvelope = session.metricsDetail?["quietSec"] != nil
         var read = [
@@ -437,22 +440,45 @@ struct TalkSection: View {
             section: .talk, note: note, keep: moves.keep, tryNext: session.nextSteps?.talk,
             howToRead: read, hardLook: hardLook, onDiscuss: onDiscuss
         ) {
-            if let room { roomNumbers(room) } else { talkNumbers }
-            // Your moves are drawn once, on "When it happened" below.
+            if noStudents && !session.segments.isEmpty { noStudentsNotice }
+            if let room { roomNumbers(room, noStudents: noStudents) } else { talkNumbers }
+            // No moves marked: "How you brought students in" was removed as
+            // crowded (web 5239b52); Questioning shows follow-ups and checks.
             FlowStrip(session: session, marks: [], room: room, onPick: { moments = $0 })
-            BroughtStudentsInView(session: session, moves: moves)
             // With the per-second breakdown, your longest stretch is always
-            // shown, as one of the measured facts beside the shares.
-            if let stretch = TeacherStretch.longest(in: session.segments), room != nil || stretch.durationSec >= TeacherStretch.minToShowSec {
+            // shown, as one of the measured facts beside the shares — unless
+            // no student was told apart, when it runs through every answer.
+            if !noStudents, let stretch = TeacherStretch.longest(in: session.segments), room != nil || stretch.durationSec >= TeacherStretch.minToShowSec {
                 LongestStretchView(stretch: stretch, read: session.teachingMoves?.stretch, segments: session.segments)
             }
         }
         .sheet(item: $moments) { TalkMomentsSheet(session: session, moments: $0) }
     }
 
+    /// No student was told apart from the teacher — mirrors the notice in
+    /// AudioCoaching.tsx, with the way to fix it right there.
+    private var noStudentsNotice: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            (Text("No student voice was told apart from yours in this recording,").fontWeight(.semibold)
+                + Text(" so students\u{2019} answers are counted as your talk. Teacher pause and your longest stretch need students separated, so they aren\u{2019}t shown."))
+                .font(.footnote).foregroundStyle(AppTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let onRetag {
+                Button("Fix who\u{2019}s who", action: onRetag)
+                    .font(.footnote.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .overlay(Capsule().strokeBorder(AppTheme.forest))
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.goldTint.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(AppTheme.gold.opacity(0.6)))
+    }
+
     /// Minutes first, each share as the strip colours it. Only Teacher Voice,
     /// Student Voice and Teacher pause open anything: the rest had no words.
-    private func roomNumbers(_ room: RoomBreakdown) -> some View {
+    private func roomNumbers(_ room: RoomBreakdown, noStudents: Bool) -> some View {
         let pause = ThinkingPause.detail(session)
         let kinds: [(RoomBreakdown.Kind, String)] = [
             (.teacher, "your words, and pauses between them"),
@@ -463,20 +489,26 @@ struct TalkSection: View {
         ]
         let pauseSub = pause.average != nil
             ? "average after \(pause.measured) thinking question\(pause.measured == 1 ? "" : "s")"
-            : pause.thinking.isEmpty ? "no question asked students to explain or reason" : "no pause after a thinking question could be timed"
+            : pause.thinking.isEmpty ? "no question asked students to explain or reason"
+            : pause.noStudents ? "needs student voice told apart from yours" : "no pause after a thinking question could be timed"
         return LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
             ForEach(kinds, id: \.0) { kind, sub in
-                let opens: TalkMoments? = kind == .teacher ? .teacher : kind == .student ? .student : nil
-                tile(kind.label, (kind == .student ? "at least " : "") + room.minutes(kind),
-                     "\(Int((room.pct[kind] ?? 0).rounded()))% \u{00B7} \(sub)", kind.color,
-                     link: opens == nil ? nil : kind == .student ? "See the conversation" : "See your lines")
-                    .onTapGesture { if let opens { moments = opens } }
+                if kind == .student && noStudents {
+                    tile(kind.label, "Not separated",
+                         "no line was told apart from yours, so students\u{2019} answers count as your talk", kind.color)
+                } else {
+                    let opens: TalkMoments? = kind == .teacher ? .teacher : kind == .student ? .student : nil
+                    tile(kind.label, (kind == .student ? "at least " : "") + room.minutes(kind),
+                         "\(Int((room.pct[kind] ?? 0).rounded()))% \u{00B7} \(sub)", kind.color,
+                         link: opens == nil ? nil : kind == .student ? "See the conversation" : "See your lines")
+                        .onTapGesture { if let opens { moments = opens } }
+                }
             }
             tile("Your pace", wpm.map { "\(Int($0.rounded()))" } ?? "\u{2014}",
                  wpm != nil ? "words a minute \u{00B7} conversation usually runs \(AudioInsights.conversationalWpmRange)" : "unavailable", nil)
             tile("Teacher pause", pause.average.map { String(format: "%.1f s", $0) } ?? "\u{2014}", pauseSub, nil,
-                 link: pause.thinking.isEmpty ? nil : "See the questions")
-                .onTapGesture { if !pause.thinking.isEmpty { moments = .pause } }
+                 link: pause.thinking.isEmpty || pause.noStudents ? nil : "See the questions")
+                .onTapGesture { if !pause.thinking.isEmpty && !pause.noStudents { moments = .pause } }
         }
     }
 
@@ -743,204 +775,6 @@ struct HatchFill: View {
     }
 }
 
-/// How you brought students in: the three moves as filters, and every moment
-/// — mirrors BroughtStudentsIn.tsx. Where they fell is the flow strip above.
-struct BroughtStudentsInView: View {
-    let session: AudioSessionWithSegments
-    let moves: ParticipationMoves
-
-    @State private var filter: MoveShape?
-    @State private var expanded = false
-
-    private static let studentColor = Color(hex: 0x8B7FC0)
-    private static let listLimit = 4
-
-    private struct Moment: Identifiable {
-        let id: Int
-        let t: Double
-        let type: MoveShape
-        let line: EvidenceLine
-    }
-
-    private var moments: [Moment] {
-        let all = moves.invitations.map { ($0, MoveShape.invite) } + moves.followUps.map { ($0, .probe) } + moves.widening.map { ($0, .voices) }
-        return all.compactMap { line, type in line.timestampSec.map { (line, type, $0) } }
-            .sorted { $0.2 < $1.2 }
-            .enumerated()
-            .map { Moment(id: $0.offset, t: $0.element.2, type: $0.element.1, line: $0.element.0) }
-    }
-
-    private static func name(_ k: MoveShape) -> String {
-        switch k {
-        case .invite: return "Invited the room in"
-        case .probe: return "Asked students to say more"
-        default: return "Reached beyond volunteers"
-        }
-    }
-
-    private static func desc(_ k: MoveShape) -> String {
-        switch k {
-        case .invite: return "Asking students to share, read, or answer."
-        case .probe: return "Follow-ups that pushed for reasons or detail."
-        default: return "Brought in students who hadn\u{2019}t raised a hand."
-        }
-    }
-
-    var body: some View {
-        let all = moments
-        let answers = session.answerLog ?? []
-        let heard = session.metricsDetail?["answersHeardCount"].map { Int($0) }
-        let followed = session.metricsDetail?["answersFollowedUpCount"].map { Int($0) }
-        let showRate = (heard ?? 0) >= 3 && followed != nil
-        if !all.isEmpty || showRate {
-            let duration = session.durationSec ?? max(60, all.map(\.t).max() ?? 60)
-            let firstHalf = all.filter { $0.t < duration / 2 }.count
-            let types: [MoveShape] = [.invite, .probe] + (all.contains { $0.type == .voices } ? [.voices] : [])
-            VStack(alignment: .leading, spacing: 12) {
-                PartHeading(title: "How you brought students in")
-                if !all.isEmpty {
-                    (Text("\(all.count) move\(all.count == 1 ? "" : "s") to bring students in \u{2014} ")
-                        + Text("\(firstHalf) of \(all.count)").foregroundColor(AppTheme.terracotta600)
-                        + Text(" came in the first half."))
-                        .font(.heading(.headline)).foregroundStyle(AppTheme.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if !all.isEmpty { timeline(all, duration: duration, types: types) }
-                ForEach(types, id: \.self) { k in
-                    moveCard(k, count: all.filter { $0.type == k }.count, answers: answers, heard: heard, followed: followed, showRate: showRate)
-                }
-                if !all.isEmpty { momentList(all) }
-            }
-        }
-    }
-
-    /// Checks for understanding, drawn on the timeline only — Questioning &
-    /// Checking lists them.
-    private var checks: [Double] {
-        (session.cfuLog ?? []).filter { $0.loop?.who != "not_a_check" }.map(\.timestampSec)
-    }
-
-    /// Your moves across the lesson. The answers the recording heard are the
-    /// dots on the follow-up card, not a second row here.
-    private func timeline(_ all: [Moment], duration: Double, types: [MoveShape]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("When it happened")
-                Spacer()
-                Text(mmss(duration))
-            }
-            .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
-            HStack(spacing: 8) {
-                Text("You").font(.caption2.weight(.semibold)).foregroundStyle(AppTheme.textSecondary).frame(width: 40, alignment: .leading)
-                GeometryReader { geo in
-                    ZStack(alignment: .topLeading) {
-                        Path { p in p.move(to: CGPoint(x: 0, y: 16)); p.addLine(to: CGPoint(x: geo.size.width, y: 16)) }
-                            .stroke(AppTheme.hairline, lineWidth: 2)
-                        ForEach(all) { m in
-                            m.type.view(size: 14)
-                                .opacity(filter == nil || filter == m.type ? 1 : 0.18)
-                                .position(x: min(geo.size.width - 7, max(7, geo.size.width * CGFloat(m.t / duration))), y: 16)
-                        }
-                        ForEach(Array(checks.enumerated()), id: \.offset) { _, t in
-                            MoveShape.check.view(size: 14)
-                                .opacity(filter == nil ? 1 : 0.18)
-                                .position(x: min(geo.size.width - 7, max(7, geo.size.width * CGFloat(t / duration))), y: 16)
-                        }
-                    }
-                }
-                .frame(height: 32)
-            }
-            Divider().padding(.top, 4)
-            FlowLayout(spacing: 10) {
-                ForEach(types + (checks.isEmpty ? [] : [.check]), id: \.self) { k in
-                    HStack(spacing: 4) { k.view(size: 10); Text(k.markLabel) }
-                }
-            }
-            .font(.caption2).foregroundStyle(AppTheme.textSecondary)
-        }
-        .padding(14)
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
-    }
-
-    private func moveCard(_ k: MoveShape, count: Int, answers: [AudioAnswer], heard: Int?, followed: Int?, showRate: Bool) -> some View {
-        let on = filter == k
-        return Button {
-            filter = on ? nil : k
-            expanded = false
-        } label: {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack {
-                    k.view(size: 13).frame(width: 30, height: 30).background(k.soft, in: RoundedRectangle(cornerRadius: 8))
-                    Spacer()
-                    Text("\(count)").font(.heading(.title)).foregroundStyle(k.color)
-                }
-                Text(Self.name(k)).font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
-                Text(Self.desc(k)).font(.caption).foregroundStyle(AppTheme.textSecondary)
-                if k == .probe, showRate, let heard, let followed {
-                    if !answers.isEmpty {
-                        FlowLayout(spacing: 4) {
-                            ForEach(Array(answers.enumerated()), id: \.offset) { _, a in
-                                Circle().fill(a.followed ? k.color : .clear).overlay(Circle().strokeBorder(k.color, lineWidth: 2)).frame(width: 12, height: 12)
-                            }
-                        }
-                        .padding(.top, 2)
-                    }
-                    (Text("Followed up on ") + Text("\(followed) of \(heard)").bold().foregroundColor(AppTheme.textPrimary)
-                        + Text(" student answers the recording could hear"))
-                        .font(.caption).foregroundStyle(AppTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .multilineTextAlignment(.leading)
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(on ? k.color : AppTheme.hairline, lineWidth: on ? 2 : 1))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func momentList(_ all: [Moment]) -> some View {
-        let matching = all.filter { filter == nil || $0.type == filter }
-        let shown = filter != nil || expanded ? matching : Array(matching.prefix(Self.listLimit))
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(filter.map { "\(Self.name($0)) \u{00B7} \(matching.count)" } ?? "Every moment, in order")
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
-                Spacer()
-                if filter != nil {
-                    Button("Show all") { filter = nil }.font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
-                }
-            }
-            VStack(spacing: 0) {
-                ForEach(Array(shown.enumerated()), id: \.element.id) { idx, m in
-                    if idx > 0 { Divider() }
-                    HStack(alignment: .top, spacing: 10) {
-                        Text(mmss(m.t)).font(.caption.monospacedDigit().weight(.semibold)).foregroundStyle(AppTheme.textSecondary).frame(width: 40, alignment: .leading)
-                        m.type.view(size: 12).padding(.top, 2)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(m.line.tag.uppercased()).font(.caption2.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
-                            Text("\u{201C}\(Redaction.withoutAddressedNames(m.line.quote ?? ""))\u{201D}").font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(12)
-                }
-                if filter == nil && matching.count > Self.listLimit {
-                    Divider()
-                    Button(expanded ? "Show fewer" : "Show all \(matching.count)") { expanded.toggle() }
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
-                        .frame(maxWidth: .infinity).padding(12)
-                }
-            }
-            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
-        }
-    }
-}
-
 /// Your longest unbroken stretch of talk: how long, what it was doing, its
 /// words behind "Show transcript", and a place to break it only where the
 /// stretch read found one — mirrors LongestStretchCard.
@@ -1030,14 +864,10 @@ struct QuestionsSection: View {
     @State private var hot: Int?
     @State private var showAlsoHeard = false
 
-    private static let mixLabel: [QuestionMix: String] = [
-        .recall: "Recall", .understand: "Understand", .apply: "Apply", .higherOrder: "Higher-order",
-    ]
+    private static let mixLabel: [QuestionMix: String] = [.recall: "Recall", .reason: "Explain & reason"]
     private static let mixDesc: [QuestionMix: String] = [
         .recall: "Retrieved from memory \u{2014} a fact, name or step they already had.",
-        .understand: "Put meaning into their own words \u{2014} explain, summarise, interpret.",
-        .apply: "Used what they had learned on a new case.",
-        .higherOrder: "Analysed, judged with evidence, or made something new.",
+        .reason: "Asked for more than a fact: explain, interpret, apply, compare, judge or create.",
     ]
     /// Two kinds beside the three a question can ask for, in their own colours.
     private static let selfColor = Color(hex: 0xC96A45)
@@ -1053,11 +883,9 @@ struct QuestionsSection: View {
         let heard = session.metricsDetail?["answersHeardCount"].map { Int($0) }
         let followed = session.metricsDetail?["answersFollowedUpCount"].map { Int($0) }
         let showRate = (heard ?? 0) >= 3 && followed != nil
-        let first = questions.first { $0.mix == .higherOrder } ?? questions.first { $0.mix == .understand }
+        let first = questions.first { $0.mix == .reason }
         let keep = first.map {
-            KeepLine(text: count(.higherOrder) > 0
-                     ? "Your \u{201C}why\u{201D} questions. \(count(.higherOrder)) asked students to analyse, judge with evidence, or make something new."
-                     : "\(count(.understand)) of your questions asked students to put an idea in their own words.",
+            KeepLine(text: "\(count(.reason)) of your questions asked students to explain or reason, not just recall.",
                      quote: $0.entry.text, timestampSec: $0.entry.timestampSec)
         }
         // The follow-up rate lives only in this goal; the follow-ups
@@ -1066,7 +894,7 @@ struct QuestionsSection: View {
         return SectionCard(
             section: .questions, note: note, keep: keep, tryNext: session.nextSteps?.questions, tryGoal: goal,
             howToRead: [
-                "Questions are the ones you asked and left with students \u{2014} not \u{201C}okay?\u{201D}, \u{201C}right?\u{201D} or \u{201C}are we ready?\u{201D}. Each is sorted by what answering it asked for: recall, explaining why or how, or reasoning (justifying, comparing, judging). A question you answered yourself before a student could, and a follow-up straight after a student answer, each have their own colour on the timeline. Tags like \u{201C}right?\u{201D} and housekeeping questions are listed but not counted.",
+                "Questions are the ones you asked and left with students \u{2014} not \u{201C}okay?\u{201D}, \u{201C}right?\u{201D} or \u{201C}are we ready?\u{201D}. Each is sorted by what answering it asked for: recall (a fact, name or step students already had), or explaining and reasoning (why or how, applying, comparing, judging). \u{201C}What else?\u{201D} and \u{201C}Are we missing anything?\u{201D} are recall. A question you answered yourself before a student could, and a follow-up straight after a student answer, each have their own colour on the timeline. Tags like \u{201C}right?\u{201D} and housekeeping questions are listed but not counted.",
                 "A check is a moment you asked students to show or say what they understood. Each says who it asked and what you did next \u{2014} from your own words, so a check you acted on silently (scanning boards, changing course without saying so) shows as nothing heard. It never says whether students understood.",
                 "A follow-up can only be spotted after a student answer the recording heard, so the dots count those answers only.",
             ],
@@ -1115,11 +943,15 @@ struct QuestionsSection: View {
         let selfAnswered = tawt.selfAnswered
         let checks = qcChecks
         let count = { (k: QuestionMix) in questions.filter { $0.mix == k }.count }
-        let current: QPick = pick ?? (count(.higherOrder) > 0 ? .mix(.higherOrder) : count(.understand) > 0 ? .mix(.understand)
+        let current: QPick = pick ?? (count(.reason) > 0 ? .mix(.reason)
             : !questions.isEmpty ? .mix(.recall) : !selfAnswered.isEmpty ? .selfAnswered : .checks)
         VStack(alignment: .leading, spacing: 12) {
             PartHeading(title: "Your questions and checks",
-                        count: "\(questions.count) question\(questions.count == 1 ? "" : "s") \u{00B7} \(checks.count) check\(checks.count == 1 ? "" : "s")")
+                        // Answered-yourself questions are not among the
+                        // counted ones; said here so the pills add up.
+                        count: "\(questions.count) question\(questions.count == 1 ? "" : "s")"
+                            + (selfAnswered.isEmpty ? "" : " + \(selfAnswered.count) you answered")
+                            + " \u{00B7} \(checks.count) check\(checks.count == 1 ? "" : "s")")
             if questions.isEmpty && checks.isEmpty && selfAnswered.isEmpty && followUps.isEmpty {
                 Text("No questions or checks for understanding were heard in this lesson.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
             } else {
@@ -1134,18 +966,28 @@ struct QuestionsSection: View {
                 }
                 qcList(current, questions, selfAnswered, checks)
                 if let average = tawt.average { tawtCard(tawt, average: average) }
+                else if tawt.noStudents && !tawt.thinking.isEmpty {
+                    (Text("Teacher Pause Time").fontWeight(.semibold).foregroundStyle(AppTheme.textPrimary)
+                        + Text(" isn\u{2019}t shown: no student voice was told apart from yours, so an answer would read as you still talking."))
+                        .font(.footnote).foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
+                }
             }
         }
     }
 
     private func qcFinding(_ questions: [QItem], _ selfCount: Int, _ checks: [AudioCfuEntry], count: (QuestionMix) -> Int) -> String {
-        let beyond = count(.understand) + count(.apply) + count(.higherOrder)
+        let beyond = count(.reason)
         let everyone = checks.filter { $0.loop?.who == "everyone" }.count
         var q: String
         if questions.isEmpty { q = "No questions were left with students. " }
         else if beyond == 0 { q = "All \(questions.count) questions asked students to recall something. " }
-        else { q = "\(beyond) of \(questions.count) were higher-order questions (explain or reasoning). " }
-        if selfCount > 0 { q += (selfCount == 1 ? "Once" : "\(selfCount) times") + " you answered your own question. " }
+        else { q = "\(beyond) of \(questions.count) asked for more than recall. " }
+        if selfCount > 0 { q += "Plus \(selfCount) you answered yourself before a student could. " }
         if checks.isEmpty { return q + "No checks for understanding were heard." }
         var c = "You checked for understanding \(checks.count) time\(checks.count == 1 ? "" : "s")"
         if everyone > 0 { c += ", " + (everyone == checks.count ? "each" : "\(everyone) of them") + " asking everyone" }
@@ -1240,18 +1082,22 @@ struct QuestionsSection: View {
     /// but hiding still makes a claim, because what is left reads as the whole
     /// shape of a teacher's questioning. Two cases have to say otherwise.
     private var qcMixCaveat: String? {
-        let levelsRead = !(session.teachingMoves?.questionKinds ?? []).isEmpty
-        if !levelsRead {
-            return "The levels were not read for this lesson, so these come from a coarser split that can only tell recall from the rest \u{2014} Apply and Higher-order could not appear either way."
+        // With the per-second breakdown, the share is Teacher Voice plus
+        // Student Voice as the tiles show them; the older coverage read said
+        // 27% beside tiles of 28% and 4%. A tagged video is not the room.
+        if let room = RoomBreakdown(session.roomTrace) {
+            let pct = Int(((room.pct[.teacher] ?? 0) + (room.pct[.student] ?? 0)).rounded())
+            guard pct < Self.lowCapturePct else { return nil }
+            return "About \(pct)% of this lesson came through as your words or students\u{2019} words, so this is the shape of the questions that were heard. A kind missing here was not necessarily a kind you did not ask."
         }
         let detail = session.metricsDetail ?? [:]
         let captured = (detail["teacherTalkSec"] ?? 0) + (detail["studentTalkSec"] ?? 0)
         guard let duration = session.durationSec, duration > 0, captured > 0 else {
-            return "How much of this room came through as speech is unknown, so this is the shape of the questions that were heard. A level missing here was not necessarily a level you did not ask."
+            return "How much of this room came through as speech is unknown, so this is the shape of the questions that were heard. A kind missing here was not necessarily a kind you did not ask."
         }
         let pct = Int((captured / duration * 100).rounded())
         guard pct < Self.lowCapturePct else { return nil }
-        return "About \(pct)% of this room came through as speech, so this is the shape of the questions that were heard. A level missing here was not necessarily a level you did not ask."
+        return "About \(pct)% of this room came through as speech, so this is the shape of the questions that were heard. A kind missing here was not necessarily a kind you did not ask."
     }
 
     private func qcChecksDesc(_ checks: [AudioCfuEntry]) -> String {
@@ -1552,7 +1398,12 @@ struct ContentSection: View {
     private func vocabulary(_ terms: [AudioKeyTerm]) -> some View {
         let used = terms.filter { $0.studentCount > 0 }
         let onlyYou = terms.filter { $0.studentCount == 0 }
-        return OptionalBlock(title: "Academic vocabulary", summary: "\(used.count) of \(terms.count) key terms were heard from students.") {
+        // With no student told apart from the teacher, students' terms can't
+        // be counted, and "0 of N" would read as a verdict.
+        let summary = ThinkingPause.studentVoiceSeparated(session)
+            ? "\(used.count) of \(terms.count) key terms were heard from students."
+            : "No student voice was told apart from yours, so students\u{2019} use of these \(terms.count) terms can\u{2019}t be counted."
+        return OptionalBlock(title: "Academic vocabulary", summary: summary) {
             HStack(spacing: 14) {
                 HStack(spacing: 5) { Circle().fill(AppTheme.forest).frame(width: 10, height: 10); Text("You") }
                 HStack(spacing: 5) { Circle().fill(AppTheme.gold).frame(width: 10, height: 10); Text("Students") }

@@ -619,6 +619,29 @@ struct FocusLine: Decodable {
         let hex = String(h, radix: 16)
         return String(repeating: "0", count: 8 - hex.count) + hex
     }
+
+    /// Three seconds or more after a thinking question gives most students
+    /// time to think, as the report says under Teacher Pause Time.
+    static let pauseGoalSec = 3.0
+
+    /// A line telling the teacher to pause after ASKING — in either order,
+    /// "pause after asking why" or "after asking why…, pause". Must match the
+    /// server's asksForPauseAfterQuestion (server lib/focusLine.ts).
+    static func asksForPauseAfterQuestion(_ line: String) -> Bool {
+        let asking = "(asking|you ask|a question|each question|your question|the question)"
+        let patterns = [
+            "\\b(pause|wait)\\w*\\b[^.,;]*?\\bafter \(asking)",
+            "\\bafter \(asking)[^.;]*?\\b(pause|wait)\\b(?! for (a|the|their) (student'?s? )?answer)",
+        ]
+        return patterns.contains { line.range(of: $0, options: [.regularExpression, .caseInsensitive]) != nil }
+    }
+
+    /// A stored line or suggestion out of date because the lesson's Teacher
+    /// Pause Time already met the goal.
+    static func ignoresPause(_ text: String?, pauseSec: Double?) -> Bool {
+        guard let text, let pauseSec, pauseSec >= pauseGoalSec else { return false }
+        return asksForPauseAfterQuestion(text)
+    }
 }
 
 /// A number, or nothing for any other JSON value — so one unexpected value
@@ -736,8 +759,9 @@ struct AudioSession: Decodable, Identifiable {
     let studentTalkFocus: AudioStudentTalkFocus?
     /// Null until the lesson has been read for it — the Summary tab asks.
     let momentToRevisit: AudioMomentToRevisit?
-    /// Null on reports summarised before this existed.
-    let nextSteps: AudioNextSteps?
+    /// Null on reports summarised before this existed. Var: a line asking for
+    /// a pause the lesson already shows is rewritten in place.
+    var nextSteps: AudioNextSteps?
     /// A plain-language "Lesson at a glance" paragraph, generated after analysis.
     let classSummary: String?
     /// Narrative for the Checks & Feedback section, written in the same model

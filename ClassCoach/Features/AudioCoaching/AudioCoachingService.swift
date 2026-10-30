@@ -287,16 +287,31 @@ enum AudioCoachingService {
     }
 
     /// "Try next time" lines for a report summarised before they existed.
-    private struct FocusLineBody: Encodable { let text: String; let from: String }
+    private struct FocusLineBody: Encodable { let text: String; let from: String; let pauseSec: Double? }
     struct FocusLineResponse: Decodable { let key: String; let line: FocusLine }
 
     /// The focus said simply, written once per item and kept with the lesson.
     /// Mirrors `writeFocusLine` on the web.
-    static func writeFocusLine(sessionId: String, text: String, from: String) async throws -> FocusLineResponse {
+    /// `pauseSec` is the lesson's Teacher Pause Time, so the line never asks
+    /// for a pause the lesson already shows.
+    static func writeFocusLine(sessionId: String, text: String, from: String, pauseSec: Double?) async throws -> FocusLineResponse {
         try await APIClient.shared.request(
             "/api/audio-sessions/\(sessionId)/focus-line",
             method: "POST",
-            body: FocusLineBody(text: text, from: from)
+            body: FocusLineBody(text: text, from: from, pauseSec: pauseSec)
+        )
+    }
+
+    private struct WithoutPauseBody: Encodable { let key: String; let pauseSec: Double }
+    struct NextStepsResponse: Decodable { let nextSteps: AudioNextSteps? }
+
+    /// Rewrites a stored Try next time line that asks for a pause the lesson's
+    /// Teacher Pause Time already shows — mirrors rewriteNextStepWithoutPause.
+    static func rewriteNextStepWithoutPause(sessionId: String, key: String, pauseSec: Double) async throws -> NextStepsResponse {
+        try await APIClient.shared.request(
+            "/api/audio-sessions/\(sessionId)/next-steps/without-pause",
+            method: "POST",
+            body: WithoutPauseBody(key: key, pauseSec: pauseSec)
         )
     }
 
