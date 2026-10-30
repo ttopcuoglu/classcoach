@@ -11,12 +11,21 @@
 export const MIX_KINDS = ['recall', 'explain', 'reasoning'] as const
 export type MixKind = (typeof MIX_KINDS)[number]
 
+/// Both vocabularies: Bloom's revised, stored since 2026-10-26, and the words
+/// used before it. Without the Bloom's names every question read since then
+/// fell to recall here, so a staff "beyond recall" figure counted an
+/// "understand" or "analyze" question as recall.
 const KIND_TO_MIX: Record<string, MixKind> = {
+  remember: 'recall',
+  understand: 'explain',
+  apply: 'explain',
+  analyze: 'reasoning',
+  evaluate: 'reasoning',
+  create: 'reasoning',
   recall: 'recall',
   explain: 'explain',
   justify: 'reasoning',
   compare: 'reasoning',
-  evaluate: 'reasoning',
 }
 
 /// Seconds either side a teaching-moves quote may sit from the question it
@@ -24,6 +33,15 @@ const KIND_TO_MIX: Record<string, MixKind> = {
 const MATCH_WINDOW_SEC = 4
 
 export type MixCounts = Record<MixKind, number>
+
+/// The lesson page's test for a question the teacher answered themself
+/// (sameMoment in AudioCoaching.tsx): close in time, same opening words.
+function sameMoment(a: { timestampSec: number; text: string }, b: { timestampSec: number; quote: string }): boolean {
+  const norm = (q: string) => q.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim()
+  const na = norm(a.text)
+  const nb = norm(b.quote)
+  return Math.abs(a.timestampSec - b.timestampSec) <= 8 && na.length > 0 && nb.length > 0 && (na.startsWith(nb.slice(0, 20)) || nb.startsWith(na.slice(0, 20)))
+}
 
 export function questionMixOf(questionLog: unknown, teachingMoves: unknown): MixCounts {
   const counts: MixCounts = { recall: 0, explain: 0, reasoning: 0 }
@@ -35,8 +53,16 @@ export function questionMixOf(questionLog: unknown, teachingMoves: unknown): Mix
           typeof k?.timestampSec === 'number' && typeof k?.kind === 'string',
       )
     : []
-  for (const q of questionLog as { timestampSec?: unknown; type?: unknown }[]) {
+  // A question the teacher answered before a student could is not counted,
+  // as the lesson page leaves it out.
+  const rawSelf = (teachingMoves as { selfAnswered?: unknown } | null)?.selfAnswered
+  const selfAnswered = Array.isArray(rawSelf)
+    ? rawSelf.filter((s): s is { timestampSec: number; quote: string } => typeof s?.timestampSec === 'number' && typeof s?.quote === 'string')
+    : []
+  for (const q of questionLog as { timestampSec?: unknown; type?: unknown; text?: unknown }[]) {
     if (typeof q?.timestampSec !== 'number') continue
+    const text = typeof q.text === 'string' ? q.text : ''
+    if (selfAnswered.some((sa) => sameMoment({ timestampSec: q.timestampSec as number, text }, sa))) continue
     const kind = kinds.find((k) => Math.abs(k.timestampSec - (q.timestampSec as number)) <= MATCH_WINDOW_SEC)?.kind
     const mix: MixKind = kind ? (KIND_TO_MIX[kind] ?? 'recall') : q.type === 'higher_order' ? 'explain' : 'recall'
     counts[mix]++

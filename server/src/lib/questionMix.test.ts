@@ -21,6 +21,23 @@ test('a finer kind within four seconds wins; otherwise the old split decides', (
   assert.deepEqual(questionMixOf(log, moves), { recall: 2, explain: 1, reasoning: 1 })
 })
 
+test("Bloom's kinds, stored since Oct 26, sort the way the lesson page sorts them", () => {
+  const log = [10, 30, 50, 70, 90, 110].map((timestampSec) => ({ timestampSec, type: 'recall' }))
+  const moves = {
+    questionKinds: ['remember', 'understand', 'apply', 'analyze', 'evaluate', 'create'].map((kind, i) => ({ timestampSec: 10 + i * 20, kind, quote: 'x' })),
+  }
+  assert.deepEqual(questionMixOf(log, moves), { recall: 1, explain: 2, reasoning: 3 })
+})
+
+test('a question the teacher answered themself is left out, as the lesson page leaves it out', () => {
+  const log = [
+    { timestampSec: 10, type: 'recall', text: 'What year was it? It was 1820.' },
+    { timestampSec: 40, type: 'recall', text: 'Why did the canal matter?' },
+  ]
+  const moves = { questionKinds: [{ timestampSec: 40, kind: 'understand', quote: 'x' }], selfAnswered: [{ timestampSec: 11, quote: 'What year was it?' }] }
+  assert.deepEqual(questionMixOf(log, moves), { recall: 0, explain: 1, reasoning: 0 })
+})
+
 test('lessons with no teaching-moves read, or no questions, are handled', () => {
   assert.deepEqual(questionMixOf([{ timestampSec: 1, type: 'higher_order' }], null), { recall: 0, explain: 1, reasoning: 0 })
   assert.deepEqual(questionMixOf(null, null), { recall: 0, explain: 0, reasoning: 0 })

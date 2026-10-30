@@ -7,6 +7,7 @@
 // one place rather than copied, because a second implementation of "what this
 // lesson suggests" would drift from the first and nobody would notice which
 // one a coach was reading.
+import { beyondRecall } from './questionMix'
 import type {
   AudioHighlight,
   AudioSessionWithSegments,
@@ -109,15 +110,12 @@ export function buildStrengthCandidates(
   // reading of it. It stays on the Talk & Participation page, as a
   // measurement rather than a compliment.
 
-  if (
-    higherOrderRatio &&
-    higherOrderRatio.state === 'measured' &&
-    session.higherOrderPct != null &&
-    session.higherOrderPct >= 40
-  ) {
+  // Counted as the Questioning card counts it, never the older keyword share.
+  const mix = beyondRecall(session)
+  if (higherOrderRatio && higherOrderRatio.state === 'measured' && mix && mix.total > 0 && mix.beyond / mix.total >= 0.4) {
     candidates.push({
       id: 'questioning',
-      observation: `${session.higherOrderPct}% of your questions were higher-order`,
+      observation: `${mix.beyond} of your ${mix.total} questions asked students to explain or reason`,
       whyItMatters: "That's the harder kind of question to ask on the fly — it pushes for real thinking, not just recall.",
       timestampSec: null,
       excerpt: null,

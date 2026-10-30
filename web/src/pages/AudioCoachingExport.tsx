@@ -11,6 +11,7 @@ import {
   StatTile,
   type Accent,
 } from '../components/report'
+import { beyondRecall } from '../lib/questionMix'
 import { getAudioSession, type AudioEscalationRung, type AudioQuote, type AudioSessionWithSegments } from '../lib/api'
 import { buildCorrectionBalance, coverageCaveatLine, DETECTION_CAVEAT } from '../lib/correctionBalance'
 import {
@@ -136,10 +137,9 @@ export default function AudioCoachingExport() {
       : null
 
   const questions = getCountMetric({ count: session.questionCount, recordedSec })
-  const higherOrder =
-    session.questionCount != null && rawNum('higherOrderQuestionCount') != null
-      ? formatRatio(num('higherOrderQuestionCount'), session.questionCount)
-      : null
+  // Counted as the Questioning card counts it, so paper and screen agree.
+  const mix = beyondRecall(session)
+  const higherOrder = mix && mix.total > 0 ? formatRatio(mix.beyond, mix.total) : null
   const waitTime = waitTimeMetric(session.avgWaitTimeSec, session.questionCount)
   const pace = speechRateMetric(rawNum('teacherWordsPerMinute'))
   const waitTime2 = waitTime2Metric(rawNum('waitTime2Sec'), rawNum('waitTime2SampleCount'))
@@ -284,7 +284,7 @@ export default function AudioCoachingExport() {
           <p className="text-[11px] font-bold uppercase tracking-wide text-forest">What you asked</p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <Stat label="Questions asked" metric={questions} accent={A.gold} />
-            {higherOrder && <Stat label="Higher-order" metric={higherOrder} accent={A.gold} />}
+            {higherOrder && <Stat label="Explain & reason" metric={higherOrder} accent={A.gold} />}
             <Stat label="Checks for understanding" metric={cfu} accent={A.gold} />
           </div>
 

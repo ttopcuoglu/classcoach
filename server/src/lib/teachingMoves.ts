@@ -145,7 +145,7 @@ QUESTION KINDS — for questions the teacher LEFT with students, what answering 
 - a request to do a task, however politely phrased — "does anybody want to read this out?" — also a DIRECTION, and an INVITATION if it opens the floor;
 - a discourse marker the teacher talks straight through — "right?", "okay?", "you know?".
 For the real ones, what answering would have required, in Bloom's revised terms. Judge what THIS class had to do at THIS moment, not the wording: "what is liquefaction?" is remember if they were told it, understand if they are working it out now.
-- remember — retrieving a fact, name, number, definition, or step they already have.
+- remember — retrieving a fact, name, number, definition, or step they already have. "What else?", "Anything else?" and "Are we missing something?" while the class lists what it already learned are remember, however open they sound: the answer is one more item from memory, not a judgement about the list.
 - understand — putting meaning into their own words: explaining, summarising, interpreting.
 - apply — using what they have learned on a new case or example.
 - analyze — breaking something into parts, comparing, or tracing how parts relate.

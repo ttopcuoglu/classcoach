@@ -65,6 +65,7 @@ import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { readStudentTalkFocus } from '../lib/studentTalkFocus.ts'
 import { readMomentToRevisit } from '../lib/momentToRevisit.ts'
 import { parseNextSteps, writeNextStepsFromNotes } from '../lib/nextSteps.ts'
+import { questionMixOf } from '../lib/questionMix.ts'
 import { asksForPauseAfterQuestion, focusLineKey, lineIgnoresPause, MAX_STORED_LINES, PAUSE_GOAL_SEC, rewriteWithoutPause, writeFocusLine, type FocusLine } from '../lib/focusLine.ts'
 
 /// The sections a stored Try next time line belongs to (lib/nextSteps.ts).
@@ -1854,11 +1855,11 @@ export function buildClassSummarySystemPrompt(
 - teacher talk: ${metrics.teacherTalkPct ?? 'not measured'}%
 - student talk: ${metrics.studentTalkPct ?? 'not measured'}%${metrics.studentVoiceDetected ? '' : ' (NO student voice was separately detected at all)'}${metrics.room ? `\n${roomLines(metrics.room)}` : ''}
 - questions asked: ${metrics.questionCount ?? 'not measured'}
-- of those, higher-order: ${
+- of those, asked for more than recall (to explain or reason): ${
         metrics.higherOrderCount != null && metrics.questionCount != null
           ? `${metrics.higherOrderCount} of ${metrics.questionCount}`
           : 'not measured'
-      } (a count — never restate it as a percentage)
+      } (a count — never restate it as a percentage, and never call these "higher-order")
 - average wait time after a question: ${metrics.avgWaitTimeSec ?? 'not measured'}s${metrics.studentVoiceDetected ? '' : ' (NOT reliable here: with no student voice separated, a student answer reads as the teacher still talking)'}
 - check-for-understanding moves heard: ${metrics.cfuCount ?? 'not measured'}`
     : ''
@@ -1992,8 +1993,8 @@ the numbers show, say it, because it turns a count the teacher cannot act on
 into one they can. Again the
 counts are already on screen. Say what kinds of questions these were, whether
 they built on each other or moved on, what happened after one was asked, and
-whether answers were followed up or accepted. When you mention how many were
-higher-order, give it as a count — "three of the seven" — and never as a
+whether answers were followed up or accepted. When you mention how many asked
+for more than recall, say "asked students to explain or reason" and give it as a count — "three of the seven" — and never as a
 percentage: with a handful of questions a percentage reads as a score. State
 it once, plainly, and move on to the questions themselves — do not comment on
 the count, qualify it, or explain what it is. It is not a judgement of the
@@ -2112,12 +2113,20 @@ type ClassSummarySource = {
     metricsDetail: unknown
     lessonContent: unknown
     studentTalkFocus?: unknown
+    /// For the beyond-recall count, sorted as the lesson page sorts it.
+    questionLog?: unknown
+    teachingMoves?: unknown
   }
 
 /// The model call behind the class summary, on its own so a script can see
 /// what comes back for a real lesson without writing it (scripts/tryNextSteps).
 export async function requestClassSummaryText(session: ClassSummarySource, segments: Segment[]): Promise<string> {
   const exhibits = buildContentExhibits(segments)
+  // The beyond-recall count the Questioning card shows, from the same finer
+  // read. The older keyword count ("seven of fourteen higher-order") sat
+  // beside a card showing one, so it is used only where no questions were logged.
+  const mix = Array.isArray(session.questionLog) ? questionMixOf(session.questionLog, session.teachingMoves) : null
+  const mixTotal = mix ? mix.recall + mix.explain + mix.reasoning : 0
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,
     // Three paragraphs plus four section notes, each of them longer than the
@@ -2128,9 +2137,9 @@ export async function requestClassSummaryText(session: ClassSummarySource, segme
     system: buildClassSummarySystemPrompt(exhibits, session.durationSec ?? 0, {
       teacherTalkPct: session.teacherTalkPct,
       studentTalkPct: session.studentTalkPct,
-      questionCount: session.questionCount,
+      questionCount: mix && mixTotal > 0 ? mixTotal : session.questionCount,
       higherOrderPct: session.higherOrderPct,
-      higherOrderCount: metricNumber(session.metricsDetail, 'higherOrderQuestionCount'),
+      higherOrderCount: mix && mixTotal > 0 ? mix.explain + mix.reasoning : metricNumber(session.metricsDetail, 'higherOrderQuestionCount'),
       avgWaitTimeSec: session.avgWaitTimeSec,
       cfuCount: session.cfuCount,
       studentVoiceDetected: segments.some((s) => s.speakerLabel === 'Student'),

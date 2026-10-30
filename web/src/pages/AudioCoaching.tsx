@@ -2931,13 +2931,11 @@ function SummaryTab({
   ]
 
   // Keep doing: a reasoning question, else one of the talk moves.
-  const reasoningQ = questions.find((q) => q.mix === 'higher_order') ?? questions.find((q) => q.mix === 'understand')
+  const reasoningQ = questions.find((q) => q.mix === 'reason')
   const keep: KeepLine | null = reasoningQ
     ? {
         text:
-          mixCount('higher_order') > 0
-            ? `Your “why” questions. ${mixCount('higher_order')} asked students to analyse, judge with evidence, or make something new.`
-            : `${mixCount('understand')} of your questions asked students to put an idea in their own words.`,
+          `${mixCount('reason')} of your questions asked students to explain or reason, not just recall.`,
         quote: reasoningQ.quote,
         timestampSec: reasoningQ.timestampSec,
       }
@@ -6176,34 +6174,38 @@ function withoutAddressedNames(text: string): string {
   return text.replace(ADDRESSED, (whole, lead: string, word: string) => (NOT_NAMES.has(word.toLowerCase()) ? whole : `${lead}[name]`))
 }
 
-/// Bloom's revised, grouped for display. Six levels are stored; four are
-/// shown, because a real lesson carries 8-20 questions and six cells over
-/// that many items is noise rather than a distribution.
+/// Bloom's revised, grouped for display. Six levels are stored; two are
+/// shown: recall, and everything that asked for more. Four were shown until
+/// 2026-10-30, but "Higher-order" was the hardest call to get right and the
+/// one that showed when it was wrong — "We missing something?" read as
+/// analysis — while holding one or two questions a lesson. The six stay
+/// stored, so the finer split can come back.
 const MIX = {
   recall: { label: 'Recall', color: '#A89C84', desc: 'Retrieved from memory — a fact, name or step they already had.' },
-  understand: { label: 'Understand', color: '#4F9A72', desc: 'Put meaning into their own words — explain, summarise, interpret.' },
-  apply: { label: 'Apply', color: '#2F6F66', desc: 'Used what they had learned on a new case.' },
-  higher_order: { label: 'Higher-order', color: '#173F2D', desc: 'Analysed, judged with evidence, or made something new.' },
+  reason: {
+    label: 'Explain & reason',
+    color: '#2F6F66',
+    desc: 'Asked for more than a fact: explain, interpret, apply, compare, judge or create.',
+  },
 } as const
 type MixKey = keyof typeof MIX
 /// Both vocabularies: Bloom's as stored now, and the words used before it,
 /// which are still in every row read earlier. Nothing rewrites those rows.
 const KIND_TO_MIX: Record<string, MixKey> = {
-  remember: 'recall', understand: 'understand', apply: 'apply',
-  analyze: 'higher_order', evaluate: 'higher_order', create: 'higher_order',
-  recall: 'recall', explain: 'understand', justify: 'higher_order', compare: 'higher_order',
+  remember: 'recall', understand: 'reason', apply: 'reason',
+  analyze: 'reason', evaluate: 'reason', create: 'reason',
+  recall: 'recall', explain: 'reason', justify: 'reason', compare: 'reason',
 }
 
-/// Each counted question in one of three kinds: the finer read where it found
-/// the question, else the recall / higher-order split (higher-order without a
-/// finer kind reads as explain). Shared by Questioning & Checking, Summary and
+/// Each counted question as recall or explain & reason: the finer read where
+/// it found the question, else the older recall / higher-order split. Shared by Questioning & Checking, Summary and
 /// My Growth so the three never show different numbers.
 function classifyQuestions(session: Pick<AudioSession, 'questionLog' | 'teachingMoves'>) {
   const kinds = session.teachingMoves?.questionKinds ?? []
   const kindAt = (sec: number) => kinds.find((k) => Math.abs(k.timestampSec - sec) <= 4)
   return (session.questionLog ?? []).map((q) => {
     const kind = kindAt(q.timestampSec)?.kind
-    const mix: MixKey = kind ? (KIND_TO_MIX[kind] ?? 'recall') : q.type === 'higher_order' ? 'understand' : 'recall'
+    const mix: MixKey = kind ? (KIND_TO_MIX[kind] ?? 'recall') : q.type === 'higher_order' ? 'reason' : 'recall'
     return {
       quote: withoutAddressedNames(q.text),
       timestampSec: q.timestampSec,
@@ -6251,13 +6253,11 @@ function QuestioningCheckingTab({
   const [showAlsoHeardState, setShowAlsoHeard] = useState(false)
   const showAlsoHeard = showAlsoHeardState || usePrintAll()
 
-  const reasoningFirst = questions.find((q) => q.mix === 'higher_order') ?? questions.find((q) => q.mix === 'understand')
+  const reasoningFirst = questions.find((q) => q.mix === 'reason')
   const keep: KeepLine | null = reasoningFirst
     ? {
         text:
-          count('higher_order') > 0
-            ? `Your “why” questions. ${count('higher_order')} asked students to analyse, judge with evidence, or make something new.`
-            : `${count('understand')} of your questions asked students to put an idea in their own words.`,
+          `${count('reason')} of your questions asked students to explain or reason, not just recall.`,
         quote: reasoningFirst.quote,
         timestampSec: reasoningFirst.timestampSec,
       }
@@ -6277,8 +6277,9 @@ function QuestioningCheckingTab({
         <>
           <p className="text-sm text-ink-soft">
             Questions are the ones you asked and left with students — not "okay?", "right?" or "are we ready?". Each is
-            sorted by what answering it asked for: recall, explaining why or how, or reasoning (justifying, comparing,
-            judging). A question you answered yourself before a student could, and a follow-up straight after a student answer,
+            sorted by what answering it asked for: recall (a fact, name or step students already had), or explaining and
+            reasoning (why or how, applying, comparing, judging). "What else?" and "Are we missing anything?" are recall. A
+            question you answered yourself before a student could, and a follow-up straight after a student answer,
             each have their own colour on the timeline. Tags like "right?" and housekeeping questions are listed but not counted.
           </p>
           <p className="text-sm text-ink-soft">
@@ -6412,9 +6413,9 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
     quote: withoutAddressedNames(f.text),
   }))
   const count = (k: MixKey) => questions.filter((q) => q.mix === k).length
-  const beyond = count('understand') + count('apply') + count('higher_order')
+  const beyond = count('reason')
   const [pick, setPick] = useState<QPick>(
-    count('higher_order') > 0 ? 'higher_order' : count('understand') > 0 ? 'understand' : questions.length > 0 ? 'recall' : selfAnswered.length > 0 ? 'self' : 'checks',
+    count('reason') > 0 ? 'reason' : questions.length > 0 ? 'recall' : selfAnswered.length > 0 ? 'self' : 'checks',
   )
   const [hot, setHot] = useState<number | null>(null)
   if (questions.length === 0 && checks.length === 0 && selfAnswered.length === 0 && followUps.length === 0) {
@@ -6446,19 +6447,13 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
   )
   const checkCount = checks.length + taggedChecks.length
 
-  // An empty level is hidden rather than shown as a zero, which is right — but
+  // An empty kind is hidden rather than shown as a zero, which is right — but
   // hiding it still makes a claim, because a teacher reads what is left as the
-  // whole shape of their questioning. Two things have to be said out loud
-  // before that reading is fair.
-  //
-  // 1. The levels are only read where the finer read ran. Without it the mix
-  //    falls back to the recall / higher-order split, which can only ever
-  //    produce Recall and Understand — so Apply and Higher-order are missing
-  //    by construction, not by anything the teacher did.
-  // 2. Below LOW_CAPTURE_PCT the report is reading a minority of the room, and
-  //    a level it did not hear is not a level that was not asked. The same bar
-  //    the server uses before it will say a thing was absent.
-  const levelsRead = (session.teachingMoves?.questionKinds ?? []).length > 0
+  // whole shape of their questioning. Below LOW_CAPTURE_PCT the report is
+  // reading a minority of the room, and a kind it did not hear is not a kind
+  // that was not asked — the same bar the server uses before it will say a
+  // thing was absent. (With two kinds shown, a lesson read before the finer
+  // levels existed sorts the same way as one read since.)
   // With the per-second breakdown, the share is Teacher Voice plus Student
   // Voice as the tiles show them: the older coverage read said 27% beside
   // tiles of 28% and 4%. A tagged video is not the room's words.
@@ -6467,16 +6462,14 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
     ? Math.round(roomForCapture.pct.teacher + roomForCapture.pct.student)
     : getCoverage(session.durationSec, session.phases, session.metricsDetail).capturedSharePct
   const thinCapture = capturedPct == null || capturedPct < LOW_CAPTURE_PCT
-  const mixCaveat = !levelsRead
-    ? 'The levels were not read for this lesson, so these come from a coarser split that can only tell recall from the rest — Apply and Higher-order could not appear either way.'
-    : thinCapture
+  const mixCaveat = thinCapture
       ? `${
           capturedPct == null
             ? 'How much of this room came through as speech is unknown'
             : roomForCapture
               ? `About ${capturedPct}% of this lesson came through as your words or students' words`
               : `About ${capturedPct}% of this room came through as speech`
-        }, so this is the shape of the questions that were heard. A level missing here was not necessarily a level you did not ask.`
+        }, so this is the shape of the questions that were heard. A kind missing here was not necessarily a kind you did not ask.`
       : null
 
   // Every mark's id says what it is: questions from 0, checks from 1000,
