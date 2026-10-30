@@ -885,7 +885,8 @@ struct QuestionsSection: View {
     private static let followDesc = "Right after a student answered, you pushed on what they said."
 
     var body: some View {
-        let questions = QuestionMix.classify(session)
+        // The questions the card counts: answered-yourself ones are apart.
+        let questions = ThinkingPause.detail(session).questions
         let count = { (k: QuestionMix) in questions.filter { $0.mix == k }.count }
         let heard = session.metricsDetail?["answersHeardCount"].map { Int($0) }
         let followed = session.metricsDetail?["answersFollowedUpCount"].map { Int($0) }
@@ -949,6 +950,8 @@ struct QuestionsSection: View {
         let questions = tawt.questions
         let selfAnswered = tawt.selfAnswered
         let checks = qcChecks
+        // The same total the Summary tile shows, tagged question-checks included.
+        let checkTotal = ThinkingPause.checkCount(session) ?? checks.count
         let count = { (k: QuestionMix) in questions.filter { $0.mix == k }.count }
         let current: QPick = pick ?? (count(.reason) > 0 ? .mix(.reason)
             : !questions.isEmpty ? .mix(.recall) : !selfAnswered.isEmpty ? .selfAnswered : .checks)
@@ -958,15 +961,15 @@ struct QuestionsSection: View {
                         // counted ones; said here so the pills add up.
                         count: "\(questions.count) question\(questions.count == 1 ? "" : "s")"
                             + (selfAnswered.isEmpty ? "" : " + \(selfAnswered.count) you answered")
-                            + " \u{00B7} \(checks.count) check\(checks.count == 1 ? "" : "s")")
+                            + " \u{00B7} \(checkTotal) check\(checkTotal == 1 ? "" : "s")")
             if questions.isEmpty && checks.isEmpty && selfAnswered.isEmpty && followUps.isEmpty {
                 Text("No questions or checks for understanding were heard in this lesson.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
             } else {
-                Text(qcFinding(questions, selfAnswered.count, checks, count: count))
+                Text(qcFinding(questions, selfAnswered.count, checks, checkTotal: checkTotal, count: count))
                     .font(.body.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                 qcTimeline(questions, selfAnswered, checks)
-                qcPills(questions, selfAnswered.count, checks.count, current: current, count: count)
+                qcPills(questions, selfAnswered.count, checkTotal, current: current, count: count)
                 if let caveat = qcMixCaveat {
                     Text(caveat).font(.caption).foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -987,7 +990,7 @@ struct QuestionsSection: View {
         }
     }
 
-    private func qcFinding(_ questions: [QItem], _ selfCount: Int, _ checks: [AudioCfuEntry], count: (QuestionMix) -> Int) -> String {
+    private func qcFinding(_ questions: [QItem], _ selfCount: Int, _ checks: [AudioCfuEntry], checkTotal: Int, count: (QuestionMix) -> Int) -> String {
         let beyond = count(.reason)
         let everyone = checks.filter { $0.loop?.who == "everyone" }.count
         var q: String
@@ -995,8 +998,8 @@ struct QuestionsSection: View {
         else if beyond == 0 { q = "All \(questions.count) questions asked students to recall something. " }
         else { q = "\(beyond) of \(questions.count) asked for more than recall. " }
         if selfCount > 0 { q += "Plus \(selfCount) you answered yourself before a student could. " }
-        if checks.isEmpty { return q + "No checks for understanding were heard." }
-        var c = "You checked for understanding \(checks.count) time\(checks.count == 1 ? "" : "s")"
+        if checkTotal == 0 { return q + "No checks for understanding were heard." }
+        var c = "You checked for understanding \(checkTotal) time\(checkTotal == 1 ? "" : "s")"
         if everyone > 0 { c += ", " + (everyone == checks.count ? "each" : "\(everyone) of them") + " asking everyone" }
         return q + c + "."
     }
@@ -1070,11 +1073,28 @@ struct QuestionsSection: View {
         pills.append((.followUp, Self.followLabel, followUps.count, dot(Self.followColor)))
         pills.append((.checks, "Checks for understanding", checks,
                       AnyView(Circle().strokeBorder(checksOn ? AppTheme.cream : Self.checkColor, lineWidth: 2).frame(width: 11, height: 11))))
-        return FlowLayout(spacing: 8) {
-            ForEach(pills.filter { $0.n > 0 }, id: \.key) { p in
-                qcPill(p.label, p.n, on: current == p.key, swatch: p.swatch) {
-                    pick = p.key
-                    hot = nil
+        // Two rows, so the numbers add up: the kinds make up the questions
+        // counted; the rest are other moments on the timeline, not more
+        // questions — mirrors the web.
+        let isKind = { (k: QPick) -> Bool in if case .mix = k { return true } else { return false } }
+        let kinds = pills.filter { $0.n > 0 && isKind($0.key) }
+        let others = pills.filter { $0.n > 0 && !isKind($0.key) }
+        return VStack(alignment: .leading, spacing: 8) {
+            if !kinds.isEmpty {
+                Text("YOUR \(questions.count) QUESTION\(questions.count == 1 ? "" : "S")")
+                    .font(.caption2.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+                FlowLayout(spacing: 8) {
+                    ForEach(kinds, id: \.key) { p in
+                        qcPill(p.label, p.n, on: current == p.key, swatch: p.swatch) { pick = p.key; hot = nil }
+                    }
+                }
+            }
+            if !others.isEmpty {
+                Text("ALSO ON THE TIMELINE").font(.caption2.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+                FlowLayout(spacing: 8) {
+                    ForEach(others, id: \.key) { p in
+                        qcPill(p.label, p.n, on: current == p.key, swatch: p.swatch) { pick = p.key; hot = nil }
+                    }
                 }
             }
         }
@@ -1462,7 +1482,7 @@ struct RoutinesSection: View {
     let onDiscuss: () -> Void
 
     private static let routineLabel = ["start": "Starting work", "transition": "Changing activities", "materials": "Materials",
-                                       "help": "Getting help", "finish": "Finishing", "other": "Directions"]
+                                       "help": "Getting help", "finish": "Finishing", "other": "Other directions"]
     private static let partWord = ["task": "what to do", "steps": "the steps", "time": "how long", "product": "what to hand in"]
 
     /// Routines held to the four parts; must match the server's SCORED_ROUTINES.
@@ -1508,16 +1528,22 @@ struct RoutinesSection: View {
             return EvidenceLine(tag: tag.prefix(1).uppercased() + tag.dropFirst(), quote: d.quote, timestampSec: d.timestampSec)
         }
         var byType: [(String, Int)] = []
+        // Every direction in a chip, so they add up to the category's count.
         for d in directions {
-            guard let t = typeAt(d.timestampSec), t != "other", let label = Self.routineLabel[t] else { continue }
+            let label = Self.routineLabel[typeAt(d.timestampSec) ?? "other"] ?? "Other directions"
             if let i = byType.firstIndex(where: { $0.0 == label }) { byType[i].1 += 1 } else { byType.append((label, 1)) }
         }
         let missingTime = scored.filter { !$0.parts.contains("time") }.count
         let directionFinding: String? = directions.isEmpty ? nil
             : scored.isEmpty ? "Your directions were about materials and timing, which don\u{2019}t need all four parts \u{2014} what to do, the steps, how long and what to hand in."
-            : scored.count == 1 ? "1 direction \(typed ? "started or changed the work" : "was heard"): it \(oneDirection(scored[0].parts))."
-            : "\(complete.count) of your \(scored.count) directions\(typed ? " that started or changed the work" : "") named all four: what to do, the steps, how long, and what to hand in."
-                + (missingTime > 0 && complete.count < scored.count ? " \(missingTime) didn\u{2019}t say how long." : "")
+            : scored.count == 1 ? "\(typed && directions.count > 1 ? "Of your \(directions.count) directions, 1" : "1 direction") \(typed ? "started or changed the work" : "was heard"): it \(oneDirection(scored[0].parts))."
+            : typed && scored.count < directions.count
+                // The whole count first, then the scored part, so the sentence
+                // agrees with the category's number above it.
+                ? "Of your \(directions.count) directions, \(scored.count) started or changed the work, and \(complete.isEmpty ? "none" : "\(complete.count)") of those named all four: what to do, the steps, how long, and what to hand in."
+                    + (missingTime > 0 && complete.count < scored.count ? " \(missingTime) didn\u{2019}t say how long." : "")
+                : "\(complete.count) of your \(scored.count) directions\(typed ? " that started or changed the work" : "") named all four: what to do, the steps, how long, and what to hand in."
+                    + (missingTime > 0 && complete.count < scored.count ? " \(missingTime) didn\u{2019}t say how long." : "")
 
         let redirections: [AudioTeachingMoves.Redirection] = moves?.redirections
             ?? (session.redirectionLog ?? []).map { AudioTeachingMoves.Redirection(quote: $0.text, timestampSec: $0.timestampSec, clarity: nil) }

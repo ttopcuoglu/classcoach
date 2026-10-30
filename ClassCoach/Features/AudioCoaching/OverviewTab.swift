@@ -251,6 +251,21 @@ enum ThinkingPause {
         session.segments.contains { $0.speakerLabel != "Teacher" && !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }
     }
 
+    /// THE check count, for the Summary tile and Questioning alike — mirrors
+    /// `checkCountOf` in AudioCoaching.tsx: stored checks the read did not
+    /// set aside, plus counted questions tagged as checks that the stored
+    /// list does not already hold.
+    static func checkCount(_ session: AudioSessionWithSegments) -> Int? {
+        guard let log = session.cfuLog else { return session.cfuCount }
+        let checks = log.filter { $0.loop?.who != "not_a_check" }
+        let kinds = session.teachingMoves?.questionKinds ?? []
+        let tagged = detail(session).questions.filter { q in
+            kinds.contains { abs($0.timestampSec - q.entry.timestampSec) <= 4 && $0.check != nil }
+                && !checks.contains { abs($0.timestampSec - q.entry.timestampSec) <= 4 }
+        }
+        return checks.count + tagged.count
+    }
+
     /// The average, and how many questions it rests on.
     static func tawt(_ session: AudioSessionWithSegments) -> (average: Double, count: Int)? {
         let d = detail(session)
@@ -576,7 +591,12 @@ struct OverviewTab: View {
         // Gold beside the voices, whose pink is Video/Audio's.
         out.append(Tile(label: "Pace", value: detail["teacherWordsPerMinute"].map { "\(Int($0.rounded()))" }, unit: "wpm",
                         tint: RoomBreakdown(session.roomTrace) != nil ? Color(hex: 0xF5E7C4) : Color(hex: 0xF4DFE4)))
-        out.append(Tile(label: "Questions", value: session.questionCount.map { "\($0)" }, unit: "", tint: Color(hex: 0xDCE7DF)))
+        // The questions Questioning counts, with the ones you answered
+        // yourself said beside them rather than folded in.
+        let counted = ThinkingPause.detail(session)
+        out.append(Tile(label: "Questions", value: session.questionLog != nil ? "\(counted.questions.count)" : session.questionCount.map { "\($0)" },
+                        unit: "", tint: Color(hex: 0xDCE7DF),
+                        note: counted.selfAnswered.isEmpty ? nil : "+ \(counted.selfAnswered.count) you answered"))
         let tawt = ThinkingPause.tawt(session)
         let pauseDetail = ThinkingPause.detail(session)
         out.append(Tile(label: "Teacher pause", value: tawt.map { String(format: "%.1f", $0.average) }, unit: "s", tint: Color(hex: 0xE6EBD2),
@@ -587,7 +607,7 @@ struct OverviewTab: View {
                         note: tawt.map { "from \($0.count) question\($0.count == 1 ? "" : "s")" }))
         // The checks Questioning & Checking lists, left-out non-checks and all;
         // older lessons with no log fall back to the stored count.
-        let checks = session.cfuLog.map { log in log.filter { $0.loop?.who != "not_a_check" }.count } ?? session.cfuCount
+        let checks = ThinkingPause.checkCount(session)
         let tooShort = (session.durationSec ?? 0) < 3 * 60
         out.append(Tile(label: "Checks", value: tooShort ? nil : checks.map { "\($0)" }, unit: "", tint: Color(hex: 0xD2E8E6),
                         hint: tooShort ? "Recording too short (under 3 min) to reliably detect this." : nil))
@@ -690,7 +710,8 @@ struct OverviewTab: View {
 
     /// Your strongest questions, and what the content specialist said worked.
     @ViewBuilder private var keepDoingCard: some View {
-        let questions = QuestionMix.classify(session)
+        // The questions Questioning counts: answered-yourself ones are apart.
+        let questions = ThinkingPause.detail(session).questions
         let reasoning = questions.filter { $0.mix == .reason }.count
         let q = questions.first(where: { $0.mix == .reason })
         let worked = session.contentNotes?.notes.first { $0.label == "What worked" }?.text.trimmingCharacters(in: .whitespacesAndNewlines)
