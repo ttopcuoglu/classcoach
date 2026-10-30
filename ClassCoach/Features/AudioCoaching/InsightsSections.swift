@@ -376,6 +376,9 @@ struct ParticipationMoves {
     let invitations: [EvidenceLine]
     let followUps: [EvidenceLine]
     let widening: [EvidenceLine]
+    /// The first question left with the room, for when no move was found —
+    /// mirrors the `questions` fallback of keepFrom in AudioCoaching.tsx.
+    let toRoom: EvidenceLine?
 
     init(_ session: AudioSessionWithSegments) {
         let moves = session.teachingMoves
@@ -387,6 +390,9 @@ struct ParticipationMoves {
             EvidenceLine(tag: $0.kind.flatMap { extendKindLabel[$0] } ?? "Follow-up", quote: $0.quote, timestampSec: $0.timestampSec)
         }
         widening = (p?.widening ?? []).map { EvidenceLine(tag: "Beyond volunteers", quote: $0.quote, timestampSec: $0.timestampSec) }
+        let questions = ThinkingPause.detail(session).questions
+        let q = questions.first { Redaction.withoutAddressedNames($0.entry.text) == $0.entry.text } ?? questions.first
+        toRoom = q.map { EvidenceLine(tag: "Question", quote: Redaction.withoutAddressedNames($0.entry.text), timestampSec: $0.entry.timestampSec) }
     }
 
     /// A follow-up first (building on a classmate, then reasoning, then a
@@ -401,6 +407,7 @@ struct ParticipationMoves {
             ?? line(followUps.first, "You asked a student to say more.")
             ?? line(widening.first, "You reached past the usual volunteers.")
             ?? line(invitations.first, "You opened the floor to the room.")
+            ?? line(toRoom, "You put a question to the room.")
     }
 }
 
