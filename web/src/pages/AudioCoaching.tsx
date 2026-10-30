@@ -2606,21 +2606,28 @@ function SchoolFocusDebriefIdea({ session, onUpdate }: { session: AudioSessionWi
   )
 }
 
-/// How many Try next time items show before "more ideas".
-const TRY_NEXT_SHOWN = 2
-
 /// Try next time: what the report suggests, from every section, in one list —
 /// and the hand-off to Planning Coach with the ones the teacher chooses.
+///
+/// Closed until the focus card's "Want more to try?" opens it: a list of five
+/// or six suggestions under the one focus left a teacher asking which to do.
+/// Closed, it still shows the school focus idea and the planning question,
+/// which are the way from a debrief into the next plan and must not hide
+/// behind a link. Choosing what to plan with, and paper, open it.
 function TryNextTimeList({
   session,
   focusText,
   focusId,
+  open: openProp,
+  onOpen,
   onMakeFocus,
   onUpdate,
 }: {
   session: AudioSessionWithSegments
   focusText?: string | null
   focusId?: string | null
+  open: boolean
+  onOpen: () => void
   onMakeFocus: (id: string) => void
   onUpdate: (s: AudioSessionWithSegments) => void
 }) {
@@ -2629,14 +2636,9 @@ function TryNextTimeList({
   const items = buildNextTimeItems(session).filter((item) => item.id !== focusId)
   const [choosing, setChoosing] = useState(false)
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
-  const [showAll, setShowAll] = useState(false)
   const printing = usePrintAll()
   if (items.length === 0 && !focusText) return null
-  // Two beside the one focus, the rest a tap away: six suggestions under a
-  // focus left a teacher asking which one to do. Choosing what to plan with,
-  // and the printed report, show them all.
-  const shown = showAll || choosing || printing ? items : items.slice(0, TRY_NEXT_SHOWN)
-  const hidden = items.length - shown.length
+  const open = openProp || printing
   const chosen = items.filter((item) => !skipped.has(item.id))
 
   function toggle(id: string) {
@@ -2662,6 +2664,52 @@ function TryNextTimeList({
     navigate('/lesson-planning')
   }
 
+  const planning = (
+    <div className={`print:hidden ${open ? 'border-t border-[#E8C9B4] pt-4' : ''}`}>
+      {!choosing ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <p className="text-sm font-semibold text-ink">Would you like to plan your next class with this in mind?</p>
+          <button
+            type="button"
+            onClick={() => {
+              // Choosing happens on the list, so it opens.
+              if (items.length > 0) onOpen()
+              setChoosing(true)
+            }}
+            className="rounded-full bg-forest px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-forest/90"
+          >
+            Yes, choose what to include
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <button
+            type="button"
+            onClick={planNextLesson}
+            disabled={chosen.length === 0 && !focusText}
+            className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+          >
+            {items.length === 0
+              ? 'Plan the next lesson with this focus →'
+              : `Plan the next lesson with ${chosen.length === items.length ? 'all of these' : `${chosen.length} of these`} →`}
+          </button>
+          <button type="button" onClick={() => setChoosing(false)} className="text-sm font-medium text-ink-soft hover:text-ink">
+            Not now
+          </button>
+        </div>
+      )}
+    </div>
+  )
+
+  if (!open) {
+    return (
+      <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4">
+        <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} />
+        {planning}
+      </div>
+    )
+  }
+
   return (
     <div id="try-next-time" className="flex scroll-mt-6 flex-col gap-4 rounded-3xl bg-peach-tint/70 p-5 sm:p-6">
       <div>
@@ -2671,7 +2719,7 @@ function TryNextTimeList({
         </p>
       </div>
       <ul className="flex flex-col gap-3">
-        {shown.map((item) => (
+        {items.map((item) => (
           <li key={item.id}>
             <label className={`flex items-start gap-3 ${choosing ? 'cursor-pointer' : ''}`}>
               {choosing && (
@@ -2699,45 +2747,8 @@ function TryNextTimeList({
           </li>
         ))}
       </ul>
-      {hidden > 0 && (
-        <button type="button" onClick={() => setShowAll(true)} className="-mt-1 self-start text-sm font-semibold text-[#8E3F22] hover:underline print:hidden">
-          {hidden} more idea{hidden === 1 ? '' : 's'} ›
-        </button>
-      )}
-      {showAll && items.length > TRY_NEXT_SHOWN && !choosing && (
-        <button type="button" onClick={() => setShowAll(false)} className="-mt-1 self-start text-sm font-semibold text-[#8E3F22] hover:underline print:hidden">
-          Show fewer
-        </button>
-      )}
       <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} />
-      <div className="border-t border-[#E8C9B4] pt-4 print:hidden">
-        {!choosing ? (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <p className="text-sm font-semibold text-ink">Would you like to plan your next class with this in mind?</p>
-            <button
-              type="button"
-              onClick={() => setChoosing(true)}
-              className="rounded-full bg-forest px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-forest/90"
-            >
-              Yes, choose what to include
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <button
-              type="button"
-              onClick={planNextLesson}
-              disabled={chosen.length === 0}
-              className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-            >
-              Plan the next lesson with {chosen.length === items.length ? 'all of these' : `${chosen.length} of these`} →
-            </button>
-            <button type="button" onClick={() => setChoosing(false)} className="text-sm font-medium text-ink-soft hover:text-ink">
-              Not now
-            </button>
-          </div>
-        )}
-      </div>
+      {planning}
     </div>
   )
 }
@@ -2800,6 +2811,9 @@ function SummaryTab({
   const storedLine = focusKey ? session.lessonFocus?.lines?.[focusKey] : undefined
   const focusLine = storedLine && !lineIgnoresPause(storedLine, tawt.average) ? storedLine : undefined
   const [whyOpen, setWhyOpen] = useState(false)
+  // Try next time stays closed until asked for, from the focus card.
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreCount = tryItems.filter((item) => item.id !== focus?.id).length
   const triedFocusLines = useRef(new Set<string>())
   useEffect(() => {
     if (!focus || !focusKey || focusLine || triedFocusLines.current.has(focusKey)) return
@@ -2985,20 +2999,20 @@ function SummaryTab({
               ) : (
                 <span>From {focus.from.split(' · ').pop()}</span>
               )}
-              {/* With no suggestion to go back to, the way out is to clear it. */}
-              {chosenFocus && suggested?.id !== chosenFocus.id ? (
-                <button type="button" onClick={() => void chooseFocus(null)} className="hover:underline">
-                  {suggested ? 'Back to the suggestion' : 'Clear my focus'}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => document.getElementById('try-next-time')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                  className="hover:underline"
-                >
-                  Choose a different one
-                </button>
-              )}
+              <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                {/* With no suggestion to go back to, the way out is to clear it. */}
+                {chosenFocus && suggested?.id !== chosenFocus.id && (
+                  <button type="button" onClick={() => void chooseFocus(null)} className="hover:underline">
+                    {suggested ? 'Back to the suggestion' : 'Clear my focus'}
+                  </button>
+                )}
+                {/* The rest of what the report suggests, opened right here. */}
+                {moreCount > 0 && (
+                  <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen} className="hover:underline">
+                    {moreOpen ? 'Hide the other ideas' : `Want more to try? (${moreCount}) ›`}
+                  </button>
+                )}
+              </span>
             </div>
           </div>
           {withGoal && (
@@ -3026,6 +3040,18 @@ function SummaryTab({
           )}
         </div>
       )}
+
+      {/* Try next time, right under the focus it is the alternative to:
+          closed to the planning question until "Want more to try?" opens it. */}
+      <TryNextTimeList
+        session={session}
+        focusText={focus?.text}
+        focusId={focus?.id}
+        open={moreOpen}
+        onOpen={() => setMoreOpen(true)}
+        onMakeFocus={(id) => void chooseFocus(id)}
+        onUpdate={onUpdate}
+      />
 
       {/* The lesson summary, whole: what the lesson was about, what went
           well, and what might be worth a look — three paragraphs, at the
@@ -3126,7 +3152,6 @@ function SummaryTab({
         </div>
       )}
 
-      <TryNextTimeList session={session} focusText={focus?.text} focusId={focus?.id} onMakeFocus={(id) => void chooseFocus(id)} onUpdate={onUpdate} />
 
       {/* The whole report, to keep or share. */}
       <button
