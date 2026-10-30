@@ -9,3 +9,19 @@ export function focusLineKey(text: string): string {
   }
   return h.toString(16).padStart(8, '0')
 }
+
+/// Three seconds or more after a thinking question gives most students time
+/// to think, as the report says under Teacher Pause Time.
+const PAUSE_GOAL_SEC = 3
+
+/// A stored line that tells a teacher to pause after asking, on a lesson
+/// whose Teacher Pause Time already met the goal. Shown as missing, so the
+/// card asks the server again with the pause and gets a line without it.
+/// Must match the server's lineIgnoresPause (server lib/focusLine.ts).
+export function lineIgnoresPause(line: { try: string }, pauseSec: number | null): boolean {
+  return (
+    pauseSec != null &&
+    pauseSec >= PAUSE_GOAL_SEC &&
+    /\b(pause|wait)\w*\b[^.,;]*?\bafter (asking|you ask|a question|each question|your question|the question)/i.test(line.try)
+  )
+}

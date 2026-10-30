@@ -2952,8 +2952,10 @@ export function generateMomentToRevisit(id: string): Promise<AudioSession> {
 /// suggestion says so) and one thing to do.
 export type FocusLine = { well: string | null; try: string }
 
-export function writeFocusLine(id: string, text: string, from: string): Promise<{ key: string; line: FocusLine }> {
-  return request(`/api/audio-sessions/${id}/focus-line`, { method: 'POST', body: JSON.stringify({ text, from }) })
+/// `pauseSec` is the lesson's Teacher Pause Time, so the line never asks for a
+/// pause the lesson already shows.
+export function writeFocusLine(id: string, text: string, from: string, pauseSec: number | null): Promise<{ key: string; line: FocusLine }> {
+  return request(`/api/audio-sessions/${id}/focus-line`, { method: 'POST', body: JSON.stringify({ text, from, pauseSec }) })
 }
 
 export function generateNextSteps(id: string): Promise<AudioSession> {

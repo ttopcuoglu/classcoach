@@ -500,6 +500,11 @@ function previewReport(): Json {
     teacherTalkPct: 34.3,
     studentTalkPct: 13.5,
     durationSec: 1358,
+    // `?room=1`: the per-second breakdown, so the five voices (tiles and
+    // strip) can be looked at; without it the report shows the older split.
+    ...(new URLSearchParams(window.location.search).has('room')
+      ? { metricsLogs: { roomTrace: 'q'.repeat(40) + ('t'.repeat(60) + 'g'.repeat(40) + 's'.repeat(10) + 'x'.repeat(30) + 'o'.repeat(20) + 'q'.repeat(10)).repeat(8) + 't'.repeat(78) } }
+      : {}),
     status: 'analyzed',
     classSubject: 'World history',
     metricsDetail: {

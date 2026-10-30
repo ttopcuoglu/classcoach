@@ -65,7 +65,7 @@ import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { readStudentTalkFocus } from '../lib/studentTalkFocus.ts'
 import { readMomentToRevisit } from '../lib/momentToRevisit.ts'
 import { parseNextSteps, writeNextStepsFromNotes } from '../lib/nextSteps.ts'
-import { focusLineKey, MAX_STORED_LINES, writeFocusLine, type FocusLine } from '../lib/focusLine.ts'
+import { focusLineKey, lineIgnoresPause, MAX_STORED_LINES, writeFocusLine, type FocusLine } from '../lib/focusLine.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 import { splitMetricLogs } from '../lib/metricsForClient.ts'
 
@@ -2002,7 +2002,7 @@ Then WAYS INTO THIS TOPIC: up to three real-world connections a teacher could us
 Then THE CONTENT NOTE: one warm paragraph opening the Clarity & Content section — what this lesson was about and what the teacher did with the content: the explanation, the model or representation, the examples, the vocabulary, the connections drawn. Lead with what worked; this paragraph opens the section, it does not grade it. Name the actual ideas and terms, never "the content" in the abstract.
 
 Then NEXT TIME, three separate lines: one for Talk & Participation, one for Questioning & Checking, one for Climate & Routines. Each is ONE concrete thing to do in the next lesson, following directly from what that section's note said — the words to say or the task to set, specific to this lesson's material, 30 words at most, starting with a verb. "After your next 'why' question, give pairs thirty seconds before taking an answer." Not a principle, not "consider", and not a repeat of another section's line. Where a section's evidence does not support a suggestion — too little was audible, or nothing there needs changing — write NONE: a made-up suggestion is worse than none, and most lessons will not earn all three.
-
+${metrics?.avgWaitTimeSec != null && metrics.avgWaitTimeSec >= 3 ? `The wait after a question was already about ${metrics.avgWaitTimeSec}s, and three or more is the goal, so no line may tell the teacher to pause longer after asking a question. A pause after a student's ANSWER is a different pause and may still be suggested, named as that.\n` : ''}
 WRITE ABOUT THE LESSON, NOT THE REPORT. No note explains how a number was produced. Nothing is "coded as", "logged as", "marked as", "recognised as", "counted as", "matched" or "detected by" anything, and there is no "the system" or "the figure comes from" — a teacher reading about their own lesson should never have to read about software. How the numbers are made is explained once, on the page, under "How to read these numbers". What the microphone could and could not hear is different: that is about the recording, and it stays.
 
 LENGTH OF THE FIVE NOTES. The checks, climate, talk, questions and content notes each open a section a teacher then reads the evidence under, so each has a hard limit of four sentences and 80 words, whatever the fuller descriptions above invite. Count before you answer; a fifth sentence or a long final clause is over the limit. Say the one or two things that matter most about that section in this lesson, keep any caveat about the microphone to a single clause, and leave the rest to the evidence below the note. The class summary is not shortened: it keeps its three paragraphs.
@@ -2312,7 +2312,9 @@ function focusLinesOf(lessonFocus: unknown): Record<string, FocusLine> | null {
 // when a Summary opens on a focus that has no short line yet; the text is the
 // Try next time item as the page shows it, and the line is kept under its key.
 audioSessionsRouter.post('/:id/focus-line', async (req, res) => {
-  const { text, from } = req.body ?? {}
+  const { text, from, pauseSec: rawPause } = req.body ?? {}
+  // The lesson's Teacher Pause Time, as the app shows it; older apps send none.
+  const pauseSec = typeof rawPause === 'number' && Number.isFinite(rawPause) ? Math.round(rawPause * 10) / 10 : null
   if (typeof text !== 'string' || !text.trim() || text.length > 2000) {
     res.status(400).json({ error: 'text is required' })
     return
@@ -2327,12 +2329,14 @@ audioSessionsRouter.post('/:id/focus-line', async (req, res) => {
   }
   const key = focusLineKey(text)
   const lines = focusLinesOf(session.lessonFocus) ?? {}
-  if (lines[key]) {
+  // A stored line that asks for a pause the lesson already shows is written
+  // again, and the new one replaces it under the same key.
+  if (lines[key] && !lineIgnoresPause(lines[key], pauseSec)) {
     res.json({ key, line: lines[key] })
     return
   }
 
-  const line = await writeFocusLine(text, typeof from === 'string' ? from.slice(0, 80) : null)
+  const line = await writeFocusLine(text, typeof from === 'string' ? from.slice(0, 80) : null, pauseSec)
   if (!line) {
     res.status(502).json({ error: 'Could not shorten this focus. Please try again.' })
     return

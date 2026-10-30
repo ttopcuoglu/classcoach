@@ -191,10 +191,12 @@ export function formatCandidateHeadline(candidate: NoticeCandidate): string {
 export type NextTimeItem = { id: string; from: string; text: string; lead?: string }
 
 /// Everything the report suggests, in one list: the moment to revisit's own
-/// step, one line per Insights section, and the two content notes that point
+/// step, one line per Insights section, and the content note that points
 /// forward. Each names where it came from, so a teacher can go and read the
 /// evidence behind it. "Worth double-checking" notes are left out — a caution
-/// about possible content errors is not something to build a lesson on.
+/// about possible content errors is not something to build a lesson on — and
+/// so is "What worked", which is praise: it sat under Try next time as if it
+/// were a change, and now joins Keep doing (workedNote).
 export function buildNextTimeItems(
   session: Pick<AudioSessionWithSegments, 'momentToRevisit' | 'nextSteps' | 'contentNotes'>,
 ): NextTimeItem[] {
@@ -214,6 +216,10 @@ export function buildNextTimeItems(
     'Take this further',
   )
   add('climate', 'Climate & Routines', session.nextSteps?.climate)
-  add('content-worked', 'What worked · Clarity & Content', notes.find((n) => n.label === 'What worked')?.text, 'What worked')
   return items
+}
+
+/// The content specialist's "What worked" note, for Keep doing.
+export function workedNote(session: Pick<AudioSessionWithSegments, 'contentNotes'>): string | null {
+  return session.contentNotes?.notes.find((n) => n.label === 'What worked')?.text.trim() || null
 }

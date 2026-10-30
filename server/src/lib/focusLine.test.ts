@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { focusLineKey, parseFocusLine } from './focusLine.ts'
+import { asksForPauseAfterQuestion, focusLineKey, lineIgnoresPause, parseFocusLine } from './focusLine.ts'
 
 test('the key is the same for the same text, ignoring outer spaces, and differs otherwise', () => {
   assert.equal(focusLineKey('Ask pairs first.'), focusLineKey('  Ask pairs first.\n'))
@@ -27,4 +27,20 @@ test('a line needs a try; NONE leaves out the well line', () => {
   })
   assert.equal(parseFocusLine('<well>Nice.</well><try>NONE</try>'), null)
   assert.equal(parseFocusLine('no tags'), null)
+})
+
+test('a line asking for a pause after the question is spotted, a pause after an answer is not', () => {
+  // The creative writing warm-up's focus, over a Teacher Pause Time of 5.7 s.
+  assert.equal(asksForPauseAfterQuestion('Pause several seconds after asking why, then ask one follow-up before moving on.'), true)
+  assert.equal(asksForPauseAfterQuestion('Wait three seconds after each question before calling on anyone.'), true)
+  assert.equal(asksForPauseAfterQuestion("Pause after a student's answer before you respond."), false)
+  assert.equal(asksForPauseAfterQuestion('After a student answers why, ask one follow-up.'), false)
+})
+
+test('a stored line is out of date only when the pause already met the goal', () => {
+  const line = { well: null, try: 'Pause several seconds after asking why, then ask one follow-up.' }
+  assert.equal(lineIgnoresPause(line, 5.7), true)
+  assert.equal(lineIgnoresPause(line, 1.2), false, 'a short pause is worth the advice')
+  assert.equal(lineIgnoresPause(line, null), false, 'an older app sends no pause')
+  assert.equal(lineIgnoresPause({ well: null, try: 'Ask one follow-up after a student answers.' }, 5.7), false)
 })

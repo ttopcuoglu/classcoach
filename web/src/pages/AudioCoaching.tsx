@@ -88,8 +88,8 @@ import {
   speechRateMetric,
   LOW_CAPTURE_PCT,
 } from '../lib/reportConfidence'
-import { buildNextTimeItems, type NoticeCandidate } from '../lib/reportHighlights'
-import { focusLineKey } from '../lib/focusLine'
+import { buildNextTimeItems, workedNote, type NoticeCandidate } from '../lib/reportHighlights'
+import { focusLineKey, lineIgnoresPause } from '../lib/focusLine'
 
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60)
@@ -2503,11 +2503,11 @@ const ITEM_SECTION: Record<string, InsightsSection> = {
   talk: 'talk',
   questions: 'questions',
   'content-further': 'content',
-  'content-worked': 'content',
   climate: 'routines',
 }
-/// "Keep doing" is something to keep, not a change to aim at.
-const FOCUSABLE = (id: string) => id !== 'content-worked'
+/// Every item on the list is a change to aim at; "What worked" moved to Keep
+/// doing. Kept as a function so a future non-focusable item has a home.
+const FOCUSABLE = (_id: string) => true
 
 /// The school focuses this teacher has on, read once per page.
 let schoolFocusOnce: Promise<SchoolFocusItem[]> | null = null
@@ -2608,6 +2608,9 @@ function SchoolFocusDebriefIdea({ session, onUpdate }: { session: AudioSessionWi
   )
 }
 
+/// How many Try next time items show before "more ideas".
+const TRY_NEXT_SHOWN = 2
+
 /// Try next time: what the report suggests, from every section, in one list —
 /// and the hand-off to Planning Coach with the ones the teacher chooses.
 function TryNextTimeList({
@@ -2628,7 +2631,14 @@ function TryNextTimeList({
   const items = buildNextTimeItems(session).filter((item) => item.id !== focusId)
   const [choosing, setChoosing] = useState(false)
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
+  const [showAll, setShowAll] = useState(false)
+  const printing = usePrintAll()
   if (items.length === 0 && !focusText) return null
+  // Two beside the one focus, the rest a tap away: six suggestions under a
+  // focus left a teacher asking which one to do. Choosing what to plan with,
+  // and the printed report, show them all.
+  const shown = showAll || choosing || printing ? items : items.slice(0, TRY_NEXT_SHOWN)
+  const hidden = items.length - shown.length
   const chosen = items.filter((item) => !skipped.has(item.id))
 
   function toggle(id: string) {
@@ -2663,7 +2673,7 @@ function TryNextTimeList({
         </p>
       </div>
       <ul className="flex flex-col gap-3">
-        {items.map((item) => (
+        {shown.map((item) => (
           <li key={item.id}>
             <label className={`flex items-start gap-3 ${choosing ? 'cursor-pointer' : ''}`}>
               {choosing && (
@@ -2691,6 +2701,16 @@ function TryNextTimeList({
           </li>
         ))}
       </ul>
+      {hidden > 0 && (
+        <button type="button" onClick={() => setShowAll(true)} className="-mt-1 self-start text-sm font-semibold text-[#8E3F22] hover:underline print:hidden">
+          {hidden} more idea{hidden === 1 ? '' : 's'} ›
+        </button>
+      )}
+      {showAll && items.length > TRY_NEXT_SHOWN && !choosing && (
+        <button type="button" onClick={() => setShowAll(false)} className="-mt-1 self-start text-sm font-semibold text-[#8E3F22] hover:underline print:hidden">
+          Show fewer
+        </button>
+      )}
       <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} />
       <div className="border-t border-[#E8C9B4] pt-4 print:hidden">
         {!choosing ? (
@@ -2782,18 +2802,21 @@ function SummaryTab({
   // Summary opens on it, kept with the lesson. Until then, or if it cannot be
   // written, the card shows the suggestion as it is.
   const focusKey = focus ? focusLineKey(focus.text) : null
-  const focusLine = focusKey ? session.lessonFocus?.lines?.[focusKey] : undefined
+  // Teacher Pause Time, as the Teacher pause tile below shows it.
+  const tawt = tawtOf(session)
+  const storedLine = focusKey ? session.lessonFocus?.lines?.[focusKey] : undefined
+  const focusLine = storedLine && !lineIgnoresPause(storedLine, tawt.average) ? storedLine : undefined
   const [whyOpen, setWhyOpen] = useState(false)
   const triedFocusLines = useRef(new Set<string>())
   useEffect(() => {
     if (!focus || !focusKey || focusLine || triedFocusLines.current.has(focusKey)) return
     triedFocusLines.current.add(focusKey)
-    writeFocusLine(session.id, focus.text, focus.from.split(' · ').pop() ?? focus.from)
+    writeFocusLine(session.id, focus.text, focus.from.split(' · ').pop() ?? focus.from, tawt.average)
       .then(({ key, line }) =>
         onUpdate({ ...session, lessonFocus: { ...session.lessonFocus, lines: { ...session.lessonFocus?.lines, [key]: line } } }),
       )
       .catch(() => {})
-  }, [focus, focusKey, focusLine, session, onUpdate])
+  }, [focus, focusKey, focusLine, session, onUpdate, tawt.average])
   // Saved with the lesson; shown at once, and put back if the save fails.
   async function chooseFocus(itemId: string | null) {
     const before = session.lessonFocus ?? null
@@ -2833,20 +2856,24 @@ function SummaryTab({
   // A lesson with the per-second breakdown shows that instead, the same five
   // Talk & Participation shows.
   const room = roomBreakdown(session.metricsLogs)
-  const roomPct = (n: number) => getPresenceMetric(Math.round(n * 10) / 10)
+  // Whole percentages, as Talk & Participation shows them: 28.4 here beside
+  // 28 a tab away read as two different numbers.
+  const roomPct = (n: number) => getPresenceMetric(Math.round(n))
   const wpm = session.metricsDetail?.teacherWordsPerMinute ?? null
-  const tawt = tawtOf(session)
   // How many questions the average rests on: 0.0 s from one question and
   // from eight are different findings.
   const tawtCount = tawt.pauses.filter((p) => p != null).length
-  const tiles: { label: string; metric: ConfidentMetric; unit?: string; note?: string; accent: Accent }[] = [
+  // The voices take the colours the Talk & Participation strip draws them in.
+  const tiles: { label: string; metric: ConfidentMetric; unit?: string; note?: string; accent: Accent; swatch?: string }[] = [
     ...(room
       ? [
-          { label: 'Teacher Voice', metric: roomPct(room.pct.teacher), unit: '%', accent: ACCENTS.terracotta },
-          { label: 'Student Voice', metric: roomPct(room.pct.student), unit: '%', note: 'at least', accent: ACCENTS.gold },
-          ...(room.videoSec > 0 ? [{ label: 'Video/Audio', metric: roomPct(room.pct.video), unit: '%', accent: ACCENTS.teal }] : []),
-          { label: 'Group Voice', metric: roomPct(room.pct.other), unit: '%', accent: ACCENTS.lavender },
-          { label: 'Quiet Time', metric: roomPct(room.pct.quiet), unit: '%', accent: ACCENTS.sky },
+          { label: 'Teacher Voice', metric: roomPct(room.pct.teacher), unit: '%', accent: ACCENTS.terracotta, swatch: ROOM_COLOR.teacher },
+          { label: 'Student Voice', metric: roomPct(room.pct.student), unit: '%', note: 'at least', accent: ACCENTS.gold, swatch: ROOM_COLOR.student },
+          ...(room.videoSec > 0
+            ? [{ label: 'Video/Audio', metric: roomPct(room.pct.video), unit: '%', accent: ACCENTS.teal, swatch: ROOM_COLOR.video }]
+            : []),
+          { label: 'Group Voice', metric: roomPct(room.pct.other), unit: '%', accent: ACCENTS.lavender, swatch: ROOM_COLOR.other },
+          { label: 'Quiet Time', metric: roomPct(room.pct.quiet), unit: '%', accent: ACCENTS.sky, swatch: ROOM_COLOR.quiet },
         ]
       : [
           { label: 'You spoke', metric: getPresenceMetric(teacherPct), unit: '%', accent: ACCENTS.terracotta },
@@ -2861,7 +2888,7 @@ function SummaryTab({
         ]
       : [{ label: 'Silence / other', metric: getPresenceMetric(silencePct), unit: '%', accent: ACCENTS.lavender }]),
     // Words a minute of the teacher's own speaking time, as Talk & Participation shows it.
-    { label: 'Pace', metric: speechRateMetric(wpm != null ? Math.round(wpm) : null), unit: 'wpm', accent: ACCENTS.rose },
+    { label: 'Pace', metric: speechRateMetric(wpm != null ? Math.round(wpm) : null), unit: 'wpm', accent: room ? ACCENTS.gold : ACCENTS.rose },
     { label: 'Questions', metric: getCountMetric({ count: session.questionCount, recordedSec: session.durationSec ?? 0 }), accent: ACCENTS.mint },
     // Teacher Pause Time, the same number Questioning & Checking shows. Not
     // "wait time": Rowe's wait time ends when a STUDENT responds, and this
@@ -2908,6 +2935,7 @@ function SummaryTab({
         timestampSec: reasoningQ.timestampSec,
       }
     : null
+  const worked = workedNote(session)
 
   return (
     <div className="flex flex-col gap-4">
@@ -3042,6 +3070,7 @@ function SummaryTab({
               hint={confident ? undefined : t.metric.reason}
               note={confident ? t.note : undefined}
               accent={t.accent}
+              swatch={t.swatch}
             />
           )
         })}
@@ -3070,14 +3099,25 @@ function SummaryTab({
         </dl>
       </DetailsOpenOnPaper>
 
-      {/* Keep doing. */}
-      {keep && (
+      {/* Keep doing: your strongest question, and what the content
+          specialist said worked. */}
+      {(keep || worked) && (
         <div className="flex flex-col gap-2 rounded-3xl bg-mint-tint/70 p-5">
           <p className="text-xs font-bold uppercase tracking-wide text-forest">Keep doing</p>
-          <p className="text-base text-ink">{keep.text}</p>
-          <p className="text-sm text-ink-soft">
-            “{keep.quote}” <span className="font-mono text-xs">{formatTime(keep.timestampSec)}</span>
-          </p>
+          {keep && (
+            <>
+              <p className="text-base text-ink">{keep.text}</p>
+              <p className="text-sm text-ink-soft">
+                “{keep.quote}” <span className="font-mono text-xs">{formatTime(keep.timestampSec)}</span>
+              </p>
+            </>
+          )}
+          {worked && (
+            <p className={`text-base text-ink ${keep ? 'mt-2 border-t border-forest/10 pt-3' : ''}`}>
+              {worked}
+              <span className="mt-1 block text-xs font-semibold uppercase tracking-wide text-forest/60">From Clarity &amp; Content</span>
+            </p>
+          )}
         </div>
       )}
 

@@ -151,6 +151,7 @@ export function StatTile({
   hint,
   note,
   accent,
+  swatch,
 }: {
   label: string
   value: string
@@ -159,10 +160,20 @@ export function StatTile({
   /// A line under a measured number: what it rests on.
   note?: string
   accent: Accent
+  /// A chart colour this number already has elsewhere in the report, e.g. a
+  /// voice on the Talk & Participation strip. The tile takes a tint of it and
+  /// a dot of it, so one voice is one colour across tabs.
+  swatch?: string
 }) {
   return (
-    <div className={`break-inside-avoid rounded-2xl ${accent.chip} p-5`}>
-      <p className="text-[11px] font-bold uppercase tracking-wide text-forest/60">{label}</p>
+    <div
+      className={`break-inside-avoid rounded-2xl ${swatch ? '' : accent.chip} p-5`}
+      style={swatch ? { backgroundColor: `color-mix(in srgb, ${swatch} 16%, var(--color-cream-card))` } : undefined}
+    >
+      <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-forest/60">
+        {swatch && <span aria-hidden className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: swatch }} />}
+        {label}
+      </p>
       <p className="mt-1 font-heading text-4xl font-extrabold leading-none text-forest">
         {value}
         {unit ? <span className="text-xl font-bold"> {unit}</span> : null}

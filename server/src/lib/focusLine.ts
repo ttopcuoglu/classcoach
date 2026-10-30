@@ -68,22 +68,49 @@ export function parseFocusLine(text: string): FocusLine | null {
   return { well: clean(extractTag(text, 'well'), 140), try: tryLine }
 }
 
+/// Three seconds or more after a thinking question gives most students time
+/// to think; the report says so under Teacher Pause Time.
+export const PAUSE_GOAL_SEC = 3
+
+/// A line that tells the teacher to pause after ASKING. A lesson whose
+/// Teacher Pause Time already met the goal was told "Pause several seconds
+/// after asking why" over a tile reading 5.7 s. A pause after a student's
+/// answer is a different pause and is not matched.
+export function asksForPauseAfterQuestion(line: string): boolean {
+  return /\b(pause|wait)\w*\b[^.,;]*?\bafter (asking|you ask|a question|each question|your question|the question)/i.test(line)
+}
+
+/// Shared by the route and the apps: a stored line is out of date when it
+/// asks for a pause the lesson already shows.
+export function lineIgnoresPause(line: FocusLine, pauseSec: number | null): boolean {
+  return pauseSec != null && pauseSec >= PAUSE_GOAL_SEC && asksForPauseAfterQuestion(line.try)
+}
+
+function pauseNote(pauseSec: number | null): string {
+  return pauseSec != null && pauseSec >= PAUSE_GOAL_SEC
+    ? `\n\nMeasured in this lesson: after questions that asked students to think, the teacher already paused about ${pauseSec} s, and three or more is the goal. Do not tell them to pause after asking a question. If the suggestion asks for that, keep only its other step. A pause after a student's answer is a different pause; keep it if the suggestion names it.`
+    : ''
+}
+
 /// Null when the call failed or came back unusable; nothing is stored then,
 /// and the card keeps showing the suggestion as written.
-export async function writeFocusLine(suggestion: string, from: string | null): Promise<FocusLine | null> {
+export async function writeFocusLine(suggestion: string, from: string | null, pauseSec: number | null = null): Promise<FocusLine | null> {
   try {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 200,
       thinking: { type: 'disabled' },
       system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: `${from ? `From the report's ${from} section.\n\n` : ''}Suggestion:\n${suggestion.trim()}` }],
+      messages: [{ role: 'user', content: `${from ? `From the report's ${from} section.\n\n` : ''}Suggestion:\n${suggestion.trim()}${pauseNote(pauseSec)}` }],
     })
     const text = response.content
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n')
-    return parseFocusLine(text)
+    const line = parseFocusLine(text)
+    // Checked again after the rewrite: a line that still asks for the pause
+    // is not stored, and the card shows the suggestion as written.
+    return line && !lineIgnoresPause(line, pauseSec) ? line : null
   } catch (error) {
     console.error('[focusLine] failed:', error)
     return null
