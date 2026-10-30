@@ -268,6 +268,8 @@ struct OverviewTab: View {
     /// rather than the numbers-only fallback, which would be replaced under
     /// the teacher's eyes a few seconds later.
     var summarizing = false
+    /// Fix who's who is rewriting the summary: the old one is not shown.
+    var rewritingSummary = false
     var readingMoment = false
     let onUpdate: (AudioSessionWithSegments) -> Void
     let onNavigateInsights: (InsightsSection) -> Void
@@ -350,7 +352,7 @@ struct OverviewTab: View {
         // The lesson summary, whole — what the lesson was about, what went
         // well, what might be worth a look. The short pattern headline is not
         // shown; it still picks the suggested focus, which sits above it.
-        if let text = session.classSummary {
+        if let text = session.classSummary, !rewritingSummary {
             noteCard(text)
         } else if summarizing {
             ProgressRing(

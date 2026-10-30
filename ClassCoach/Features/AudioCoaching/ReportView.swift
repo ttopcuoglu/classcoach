@@ -195,6 +195,11 @@ struct ReportView: View {
     @State private var attemptedNextSteps = false
     @State private var attemptedPauseRewrite = false
     @State private var retagging = false
+    /// Waiting for the summary Fix who's who rewrites in the background.
+    @State private var awaitingRewrite = false
+    /// Bumped by each re-tag, so the wait starts whether or not the report
+    /// was rebuilt while the lesson re-analysed.
+    @State private var retagCount = 0
 
     private var locked: Bool { session.status == "locked" }
     private var m: OverviewMetrics { OverviewMetrics(session) }
@@ -224,7 +229,8 @@ struct ReportView: View {
                 case .summary:
                     OverviewTab(
                         session: session,
-                        summarizing: summarizing,
+                        summarizing: summarizing || awaitingRewrite,
+                        rewritingSummary: awaitingRewrite,
                         readingMoment: readingMoment,
                         onUpdate: onUpdate,
                         onNavigateInsights: { target in section = target; tab = .insights }
@@ -265,6 +271,7 @@ struct ReportView: View {
 
             disclaimer
         }
+        .task(id: "\(session.id)-\(retagCount)") { await waitForRewrittenSummary() }
         .task(id: tab) {
             // The quick one first, so the card is there while the prose is
             // still being written.
@@ -277,6 +284,10 @@ struct ReportView: View {
         .sheet(isPresented: $retagging) {
             RetagSpeakersView(session: session) { updated in
                 retagging = false
+                // The re-analysis returns before the summary is rewritten;
+                // the report waits for the new one rather than keeping this.
+                if let old = session.classSummary { SummaryRewrites.pending[session.id] = old }
+                retagCount += 1
                 onUpdate(updated)
             }
         }
@@ -287,6 +298,26 @@ struct ReportView: View {
     /// so this is for the older ones, which otherwise fell back to a line
     /// assembled from the raw numbers and read nothing like the same lesson
     /// on the website.
+    /// After Fix who's who: fetch the lesson until its summary is no longer
+    /// the one it had before, then show the rewritten summary and notes —
+    /// mirrors `summaryRewrites` in AudioCoaching.tsx. Two minutes at most.
+    private func waitForRewrittenSummary() async {
+        guard let old = SummaryRewrites.pending[session.id] else { return }
+        awaitingRewrite = true
+        defer {
+            SummaryRewrites.pending[session.id] = nil
+            awaitingRewrite = false
+        }
+        let deadline = Date().addingTimeInterval(120)
+        while Date() < deadline, !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(4))
+            if let latest = try? await AudioCoachingService.getSession(id: session.id), latest.classSummary != old {
+                onUpdate(latest)
+                return
+            }
+        }
+    }
+
     private func fillMissingSummary() async {
         guard tab == .summary, !locked, session.classSummary == nil, !attemptedSummary else { return }
         attemptedSummary = true
@@ -668,4 +699,11 @@ struct SectionNextStep: View {
 func readingNote(_ text: String) -> some View {
     Text(text).font(.caption).foregroundStyle(AppTheme.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
+}
+
+/// Lessons whose summary Fix who's who is rewriting, with the summary they had
+/// before. Static because the report is rebuilt while the lesson re-analyses.
+@MainActor
+enum SummaryRewrites {
+    static var pending: [String: String] = [:]
 }
