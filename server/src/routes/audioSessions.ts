@@ -65,7 +65,10 @@ import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { readStudentTalkFocus } from '../lib/studentTalkFocus.ts'
 import { readMomentToRevisit } from '../lib/momentToRevisit.ts'
 import { parseNextSteps, writeNextStepsFromNotes } from '../lib/nextSteps.ts'
-import { focusLineKey, lineIgnoresPause, MAX_STORED_LINES, writeFocusLine, type FocusLine } from '../lib/focusLine.ts'
+import { asksForPauseAfterQuestion, focusLineKey, lineIgnoresPause, MAX_STORED_LINES, PAUSE_GOAL_SEC, rewriteWithoutPause, writeFocusLine, type FocusLine } from '../lib/focusLine.ts'
+
+/// The sections a stored Try next time line belongs to (lib/nextSteps.ts).
+const NEXT_STEP_KEYS = ['talk', 'questions', 'climate']
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 import { splitMetricLogs } from '../lib/metricsForClient.ts'
 
@@ -2387,6 +2390,42 @@ audioSessionsRouter.post('/:id/next-steps', async (req, res) => {
     include: { segments: LESSON_LINES },
   })
   res.json(updated)
+})
+
+// A stored "Try next time" line that asks the teacher to pause after asking,
+// on a lesson whose Teacher Pause Time already met the goal: written before
+// the suggestions were told the pause, it sat under a card showing 4.1 s
+// after the very question it named. Rewritten once without the pause and
+// kept; the app asks when it finds one.
+audioSessionsRouter.post('/:id/next-steps/without-pause', async (req, res) => {
+  const { key, pauseSec } = req.body ?? {}
+  if (!NEXT_STEP_KEYS.includes(key) || typeof pauseSec !== 'number' || pauseSec < PAUSE_GOAL_SEC) {
+    res.status(400).json({ error: 'key and a pause of at least three seconds are required' })
+    return
+  }
+  const session = await prisma.audioSession.findFirst({
+    where: { id: req.params.id, userId: req.user!.userId },
+    select: { id: true, nextSteps: true, status: true },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  const steps = (session.nextSteps ?? {}) as Record<string, unknown>
+  const current = steps[key]
+  // Nothing to do: already rewritten, or a line that never asked for it.
+  if (typeof current !== 'string' || !asksForPauseAfterQuestion(current) || session.status === 'locked') {
+    res.json({ nextSteps: session.nextSteps })
+    return
+  }
+  const rewritten = await rewriteWithoutPause(current)
+  if (!rewritten) {
+    res.status(502).json({ error: 'Could not rewrite this suggestion.' })
+    return
+  }
+  const nextSteps = { ...steps, [key]: rewritten }
+  await prisma.audioSession.update({ where: { id: session.id }, data: { nextSteps } })
+  res.json({ nextSteps })
 })
 
 audioSessionsRouter.delete('/:id', async (req, res) => {

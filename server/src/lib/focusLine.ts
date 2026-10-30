@@ -77,7 +77,12 @@ export const PAUSE_GOAL_SEC = 3
 /// after asking why" over a tile reading 5.7 s. A pause after a student's
 /// answer is a different pause and is not matched.
 export function asksForPauseAfterQuestion(line: string): boolean {
-  return /\b(pause|wait)\w*\b[^.,;]*?\bafter (asking|you ask|a question|each question|your question|the question)/i.test(line)
+  const asking = '(asking|you ask|a question|each question|your question|the question)'
+  // Either order: "pause after asking why" and "after asking why…, pause".
+  return (
+    new RegExp(`\\b(pause|wait)\\w*\\b[^.,;]*?\\bafter ${asking}`, 'i').test(line) ||
+    new RegExp(`\\bafter ${asking}[^.;]*?\\b(pause|wait)\\b(?! for (a|the|their) (student'?s? )?answer)`, 'i').test(line)
+  )
 }
 
 /// Shared by the route and the apps: a stored line is out of date when it
@@ -113,6 +118,36 @@ export async function writeFocusLine(suggestion: string, from: string | null, pa
     return line && !lineIgnoresPause(line, pauseSec) ? line : null
   } catch (error) {
     console.error('[focusLine] failed:', error)
+    return null
+  }
+}
+
+const WITHOUT_PAUSE_PROMPT = `Below is one suggestion from a teacher's lesson report. It asks the teacher to pause after asking a question, but this lesson shows they already did. Rewrite it without the pause, keeping every other part — the lesson's own material, the concrete move, the follow-up — in the same words where you can. Do not add anything. If nothing is left once the pause is taken out, write NONE.
+
+Write nothing outside this tag:
+<suggestion>the rewritten suggestion, or NONE</suggestion>`
+
+/// A stored section suggestion with its pause-after-asking taken out, for a
+/// lesson whose Teacher Pause Time already met the goal. Null when the
+/// rewrite failed, still asks for the pause, or left nothing: the caller keeps
+/// what it had.
+export async function rewriteWithoutPause(suggestion: string): Promise<string | null> {
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 300,
+      thinking: { type: 'disabled' },
+      system: WITHOUT_PAUSE_PROMPT,
+      messages: [{ role: 'user', content: suggestion.trim() }],
+    })
+    const text = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+    const line = clean(extractTag(text, 'suggestion'), 400)
+    return line && !asksForPauseAfterQuestion(line) ? line : null
+  } catch (error) {
+    console.error('[focusLine] pause rewrite failed:', error)
     return null
   }
 }

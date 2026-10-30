@@ -35,6 +35,12 @@ test('a line asking for a pause after the question is spotted, a pause after an 
   assert.equal(asksForPauseAfterQuestion('Wait three seconds after each question before calling on anyone.'), true)
   assert.equal(asksForPauseAfterQuestion("Pause after a student's answer before you respond."), false)
   assert.equal(asksForPauseAfterQuestion('After a student answers why, ask one follow-up.'), false)
+  // The warm-up's Questioning suggestion, pause after the "after asking".
+  assert.equal(
+    asksForPauseAfterQuestion('After asking why the memoir backtracks on Abel, pause for several seconds before calling on a student, then ask one follow-up before moving on.'),
+    true,
+  )
+  assert.equal(asksForPauseAfterQuestion("After asking, wait for a student's answer before you add anything."), false)
 })
 
 test('a stored line is out of date only when the pause already met the goal', () => {

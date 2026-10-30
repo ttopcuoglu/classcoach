@@ -31,6 +31,7 @@ import {
   type SchoolFocusItem,
   generateMomentToRevisit,
   generateNextSteps,
+  rewriteNextStepWithoutPause,
   writeFocusLine,
   generateRubricLens,
   getAudioSession,
@@ -89,7 +90,7 @@ import {
   LOW_CAPTURE_PCT,
 } from '../lib/reportConfidence'
 import { buildNextTimeItems, workedNote, type NoticeCandidate } from '../lib/reportHighlights'
-import { focusLineKey, lineIgnoresPause } from '../lib/focusLine'
+import { focusLineKey, lineIgnoresPause, stepIgnoresPause } from '../lib/focusLine'
 
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60)
@@ -2019,6 +2020,23 @@ function ReportPanel({
       .then((updated) => onUpdate({ ...session, ...updated }))
       .catch(() => {})
   }, [locked, session, onUpdate])
+
+  // A stored "Try next time" line that asks for a pause after asking, on a
+  // lesson whose Teacher Pause Time already met the goal, is rewritten
+  // without it: one written before the lines were told the pause sat under a
+  // card showing the pause it asked for. Once per section per page.
+  const pauseSec = useMemo(() => tawtOf(session).average, [session])
+  const triedPauseRewriteRef = useRef(new Set<string>())
+  useEffect(() => {
+    if (locked || pauseSec == null) return
+    for (const key of ['talk', 'questions', 'climate'] as const) {
+      if (!stepIgnoresPause(session.nextSteps?.[key], pauseSec) || triedPauseRewriteRef.current.has(key)) continue
+      triedPauseRewriteRef.current.add(key)
+      rewriteNextStepWithoutPause(session.id, key, pauseSec)
+        .then(({ nextSteps }) => onUpdate({ ...session, nextSteps }))
+        .catch(() => {})
+    }
+  }, [locked, pauseSec, session, onUpdate])
 
   // The hard read of one section, as the last row under the evidence it was
   // drawn from. Null on a locked report that never had one.
@@ -6491,12 +6509,24 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
   //    a level it did not hear is not a level that was not asked. The same bar
   //    the server uses before it will say a thing was absent.
   const levelsRead = (session.teachingMoves?.questionKinds ?? []).length > 0
-  const capturedPct = getCoverage(session.durationSec, session.phases, session.metricsDetail).capturedSharePct
+  // With the per-second breakdown, the share is Teacher Voice plus Student
+  // Voice as the tiles show them: the older coverage read said 27% beside
+  // tiles of 28% and 4%. A tagged video is not the room's words.
+  const roomForCapture = roomBreakdown(session.metricsLogs)
+  const capturedPct = roomForCapture
+    ? Math.round(roomForCapture.pct.teacher + roomForCapture.pct.student)
+    : getCoverage(session.durationSec, session.phases, session.metricsDetail).capturedSharePct
   const thinCapture = capturedPct == null || capturedPct < LOW_CAPTURE_PCT
   const mixCaveat = !levelsRead
     ? 'The levels were not read for this lesson, so these come from a coarser split that can only tell recall from the rest — Apply and Higher-order could not appear either way.'
     : thinCapture
-      ? `${capturedPct == null ? 'How much of this room came through as speech is unknown' : `About ${capturedPct}% of this room came through as speech`}, so this is the shape of the questions that were heard. A level missing here was not necessarily a level you did not ask.`
+      ? `${
+          capturedPct == null
+            ? 'How much of this room came through as speech is unknown'
+            : roomForCapture
+              ? `About ${capturedPct}% of this lesson came through as your words or students' words`
+              : `About ${capturedPct}% of this room came through as speech`
+        }, so this is the shape of the questions that were heard. A level missing here was not necessarily a level you did not ask.`
       : null
 
   // Every mark's id says what it is: questions from 0, checks from 1000,
@@ -6597,7 +6627,10 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
       <div className="flex items-baseline justify-between gap-3">
         <p className="font-heading text-xl font-bold text-forest">Your questions and checks</p>
         <span className="text-sm text-ink-soft">
-          {questions.length} question{questions.length === 1 ? '' : 's'} · {checks.length} check{checks.length === 1 ? '' : 's'}
+          {questions.length} question{questions.length === 1 ? '' : 's'}
+          {/* Answered-yourself questions are not among the counted ones; said
+              here so the chips below add up to what this line says. */}
+          {selfAnswered.length > 0 && ` + ${selfAnswered.length} you answered`} · {checks.length} check{checks.length === 1 ? '' : 's'}
         </span>
       </div>
       <p className="text-base font-semibold text-ink">
@@ -6607,7 +6640,7 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
             ? `All ${questions.length} questions asked students to recall something. `
             : `${beyond} of ${questions.length} asked for more than recall. `}
         {selfAnswered.length > 0 &&
-          `${selfAnswered.length === 1 ? 'Once' : `${selfAnswered.length} times`} you answered your own question. `}
+          `Plus ${selfAnswered.length} you answered yourself before a student could. `}
         {checks.length === 0
           ? 'No checks for understanding were heard.'
           : `You checked for understanding ${checks.length} time${checks.length === 1 ? '' : 's'}${

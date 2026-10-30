@@ -19,9 +19,21 @@ const PAUSE_GOAL_SEC = 3
 /// card asks the server again with the pause and gets a line without it.
 /// Must match the server's lineIgnoresPause (server lib/focusLine.ts).
 export function lineIgnoresPause(line: { try: string }, pauseSec: number | null): boolean {
+  return pauseSec != null && pauseSec >= PAUSE_GOAL_SEC && asksForPauseAfterQuestion(line.try)
+}
+
+/// Must match the server's asksForPauseAfterQuestion (server lib/focusLine.ts).
+export function asksForPauseAfterQuestion(line: string): boolean {
+  const asking = '(asking|you ask|a question|each question|your question|the question)'
+  // Either order: "pause after asking why" and "after asking why…, pause".
   return (
-    pauseSec != null &&
-    pauseSec >= PAUSE_GOAL_SEC &&
-    /\b(pause|wait)\w*\b[^.,;]*?\bafter (asking|you ask|a question|each question|your question|the question)/i.test(line.try)
+    new RegExp(`\\b(pause|wait)\\w*\\b[^.,;]*?\\bafter ${asking}`, 'i').test(line) ||
+    new RegExp(`\\bafter ${asking}[^.;]*?\\b(pause|wait)\\b(?! for (a|the|their) (student'?s? )?answer)`, 'i').test(line)
   )
+}
+
+/// A stored Try next time line the server should rewrite without its pause:
+/// the lesson's Teacher Pause Time already met the goal.
+export function stepIgnoresPause(text: string | null | undefined, pauseSec: number | null): boolean {
+  return !!text && pauseSec != null && pauseSec >= PAUSE_GOAL_SEC && asksForPauseAfterQuestion(text)
 }

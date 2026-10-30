@@ -2958,6 +2958,16 @@ export function writeFocusLine(id: string, text: string, from: string, pauseSec:
   return request(`/api/audio-sessions/${id}/focus-line`, { method: 'POST', body: JSON.stringify({ text, from, pauseSec }) })
 }
 
+/// Rewrites a stored Try next time line that asks for a pause the lesson's
+/// Teacher Pause Time already shows.
+export function rewriteNextStepWithoutPause(
+  id: string,
+  key: 'talk' | 'questions' | 'climate',
+  pauseSec: number,
+): Promise<{ nextSteps: AudioSession['nextSteps'] }> {
+  return request(`/api/audio-sessions/${id}/next-steps/without-pause`, { method: 'POST', body: JSON.stringify({ key, pauseSec }) })
+}
+
 export function generateNextSteps(id: string): Promise<AudioSession> {
   return request(`/api/audio-sessions/${id}/next-steps`, { method: 'POST' })
 }
