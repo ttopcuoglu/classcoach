@@ -1043,6 +1043,9 @@ function TagSpeakersPanel({
     setError(null)
     try {
       await tagSpeakers(session.id, Array.from(selected), Array.from(videos))
+      // A re-tag rewrites the summary after the numbers are ready; the report
+      // waits for it rather than keeping the one written before.
+      if (session.classSummary != null) summaryRewrites.set(session.id, session.classSummary)
       // Straight into the analyzing panel, which polls. The request only
       // starts the work now, so there is nothing left to wait for here.
       onUpdate({ ...session, status: 'analyzing', failureReason: null })
@@ -1743,6 +1746,17 @@ function nonSpeechSplit(
   return { quietPct: (quiet / durationSec) * 100, unresolvedPct: (unresolved / durationSec) * 100 }
 }
 
+/// Lessons whose summary is being rewritten after Fix who's who, with the
+/// summary they had before. The re-analysis brings the report back as soon as
+/// the numbers are ready and writes the prose a minute later in the
+/// background, so the page showed the old summary until a manual reload.
+/// Module-level because the report unmounts while the lesson re-analyses.
+const summaryRewrites = new Map<string, string>()
+/// How long to wait for the rewritten summary before giving up and showing
+/// what is stored: one summary call runs well under a minute.
+const SUMMARY_REWRITE_WAIT_MS = 120_000
+const SUMMARY_REWRITE_POLL_MS = 4_000
+
 function ReportPanel({
   session,
   onUpdate,
@@ -1978,6 +1992,43 @@ function ReportPanel({
       setHardLookSending(false)
     }
   }
+
+  // After Fix who's who: fetch the lesson until its summary is no longer the
+  // one it had before, then show the rewritten summary and notes.
+  const previousSummary = summaryRewrites.get(session.id)
+  const awaitingRewrite = previousSummary != null && session.classSummary === previousSummary
+  useEffect(() => {
+    if (previousSummary == null) return
+    if (session.classSummary !== previousSummary) {
+      summaryRewrites.delete(session.id)
+      return
+    }
+    let stopped = false
+    const started = Date.now()
+    const timer = window.setInterval(async () => {
+      if (stopped) return
+      if (Date.now() - started > SUMMARY_REWRITE_WAIT_MS) {
+        summaryRewrites.delete(session.id)
+        window.clearInterval(timer)
+        onUpdate({ ...session })
+        return
+      }
+      try {
+        const latest = await getAudioSession(session.id)
+        if (!stopped && latest.classSummary !== previousSummary) {
+          summaryRewrites.delete(session.id)
+          window.clearInterval(timer)
+          onUpdate(latest)
+        }
+      } catch {
+        // keep waiting; the timeout above ends it
+      }
+    }, SUMMARY_REWRITE_POLL_MS)
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+    }
+  }, [previousSummary, session, onUpdate])
 
   // Auto-generates the class content summary once, the first time the
   // teacher lands on Summary — no button, but capped at one attempt per
@@ -2262,8 +2313,10 @@ function ReportPanel({
           talkInsight={talkInsight}
           questioningInsight={questioningInsight}
           cfuInsight={cfuInsight}
-          classSummary={session.classSummary}
-          classSummarySending={classSummarySending}
+          // While a re-tag's summary is being rewritten, the old one is not
+          // shown: the ring says it is on its way.
+          classSummary={awaitingRewrite ? null : session.classSummary}
+          classSummarySending={classSummarySending || awaitingRewrite}
           onNavigateInsights={(section) => handleViewSource('insights', '', section)}
           onDiscussWithCoach={handleDiscussWithCoach}
           onSavePdf={() => setPrinting(true)}
