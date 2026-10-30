@@ -70,7 +70,7 @@ const TABS = [
   },
   {
     name: 'Insights',
-    body: 'Four sections when you want the detail: Talk & Participation, Questioning & Checking, Clarity & Content, Climate & Routines — each shown in your own words, with the times you said them. Ask for the Hard Look on any of them when you want the least generous reading the evidence supports.',
+    body: 'Four sections when you want the detail: Talk & Participation, Questioning & Checking, Clarity & Content, Climate & Routines — each shown in your own words, with the times you said them.',
   },
   {
     name: 'Content Specialist',
@@ -78,7 +78,7 @@ const TABS = [
   },
   {
     name: 'Rubric lens',
-    body: 'On request, the same lesson sorted under the Danielson rubric, with one next step for each component. Never a level or a score.',
+    body: 'On request, the same lesson sorted under the Danielson rubric, with one next step for each component. Never a level or a score. Below it, the Hard Look, when you want the least generous reading the evidence supports.',
   },
   {
     name: 'Reflect',

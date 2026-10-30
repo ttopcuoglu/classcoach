@@ -1782,7 +1782,6 @@ function ReportPanel({
     }
   }, [printing, session])
   const [insightsSection, setInsightsSection] = useState<InsightsSection>('talk')
-  const [hardLookOpen, setHardLookOpen] = useState(false)
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
   const locked = session.status === 'locked'
   const [strengths, setStrengths] = useState(session.strengths ?? '')
@@ -2037,20 +2036,6 @@ function ReportPanel({
     }
   }, [locked, pauseSec, session, onUpdate])
 
-  // The hard read of one section, as the last row under the evidence it was
-  // drawn from. Null on a locked report that never had one.
-  const sectionHardLook =
-    locked && !session.hardLook ? null : (
-      <SectionHardLook
-        section={insightsSection}
-        hardLook={session.hardLook}
-        locked={locked}
-        sending={hardLookSending}
-        error={hardLookError}
-        onGenerate={handleGenerateHardLook}
-      />
-    )
-
   // Discuss the section on screen with the coach, opened about THIS page.
   const discussSection = (section: InsightsSection) =>
     handleDiscussWithCoach({
@@ -2279,34 +2264,6 @@ function ReportPanel({
           cfuInsight={cfuInsight}
           classSummary={session.classSummary}
           classSummarySending={classSummarySending}
-          hardLookDoor={
-            printing ? null : locked && !session.hardLook ? null : (
-              <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4">
-                <button
-                  type="button"
-                  onClick={() => setHardLookOpen((open) => !open)}
-                  className="flex items-center justify-between gap-3 text-left"
-                >
-                  <span>
-                    <span className="text-sm font-semibold text-forest">The Hard Look</span>
-                    <span className="ml-2 text-xs text-ink-soft">
-                      The least generous honest reading of the whole lesson. For when you want it straight.
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-sm font-semibold text-terracotta-600">{hardLookOpen ? 'Hide' : 'Show'}</span>
-                </button>
-                {hardLookOpen && (
-                  <HardLookTab
-                    hardLook={session.hardLook}
-                    locked={locked}
-                    sending={hardLookSending}
-                    error={hardLookError}
-                    onGenerate={handleGenerateHardLook}
-                  />
-                )}
-              </div>
-            )
-          }
           onNavigateInsights={(section) => handleViewSource('insights', '', section)}
           onDiscussWithCoach={handleDiscussWithCoach}
           onSavePdf={() => setPrinting(true)}
@@ -2411,7 +2368,7 @@ function ReportPanel({
                 session={session}
                 silencePct={silencePct}
                 talkInsight={talkInsight}
-                lastRow={sectionHardLook}
+                lastRow={null}
                 onDiscuss={discussThisSection}
                 onRetag={locked ? undefined : () => void handleRetag()}
               />
@@ -2422,7 +2379,7 @@ function ReportPanel({
                 session={session}
                 questioningInsight={questioningInsight}
                 nextStep={session.nextSteps?.questions}
-                lastRow={sectionHardLook}
+                lastRow={null}
                 onDiscuss={discussThisSection}
               />
             )}
@@ -2434,7 +2391,7 @@ function ReportPanel({
                 teachingMoves={session.teachingMoves ?? null}
                 narrative={session.contentNarrative ?? null}
                 noStudents={!studentVoiceSeparated(session)}
-                lastRow={sectionHardLook}
+                lastRow={null}
                 onDiscuss={discussThisSection}
               />
             )}
@@ -2444,7 +2401,7 @@ function ReportPanel({
                 session={session}
                 climateNarrative={session.climateNarrative ?? null}
                 nextStep={session.nextSteps?.climate}
-                lastRow={sectionHardLook}
+                lastRow={null}
                 onDiscuss={discussThisSection}
               />
             )}
@@ -2477,14 +2434,35 @@ function ReportPanel({
           them. Nothing is collapsed here — a teacher who opened this tab has
           already said what they want. */}
       {tab === 'rubric' && !printing && (
-        <RubricLensTab
-          rubricLens={session.rubricLens}
-          locked={locked}
-          isShort={coverage.isShort}
-          sending={rubricLensSending}
-          error={rubricLensError}
-          onGenerate={handleGenerateRubricLens}
-        />
+        <div className="flex flex-col gap-8">
+          <RubricLensTab
+            rubricLens={session.rubricLens}
+            locked={locked}
+            isShort={coverage.isShort}
+            sending={rubricLensSending}
+            error={rubricLensError}
+            onGenerate={handleGenerateRubricLens}
+          />
+          {/* The Hard Look lives here, with the other on-demand reading of
+              the whole lesson, rather than on the Summary and under each
+              Insights section, where it crowded reports a teacher reads to be
+              encouraged. Never on paper: the export is the page a teacher
+              brings to evaluation. A locked report that never had one shows
+              nothing. */}
+          {!(locked && !session.hardLook) && (
+            <div className="flex flex-col gap-3 border-t border-dashed border-hairline pt-6">
+              <p className="font-heading text-xl font-bold text-forest">The Hard Look</p>
+              <p className="-mt-2 text-sm text-ink-soft">The least generous honest reading of the whole lesson. For when you want it straight.</p>
+              <HardLookTab
+                hardLook={session.hardLook}
+                locked={locked}
+                sending={hardLookSending}
+                error={hardLookError}
+                onGenerate={handleGenerateHardLook}
+              />
+            </div>
+          )}
+        </div>
       )}
 
       </PrintAllContext.Provider>
@@ -2771,7 +2749,6 @@ function SummaryTab({
   cfuInsight,
   classSummary,
   classSummarySending,
-  hardLookDoor,
   onNavigateInsights,
   onDiscussWithCoach,
   onUpdate,
@@ -2786,10 +2763,6 @@ function SummaryTab({
   cfuInsight: string | null
   classSummary: string | null
   classSummarySending: boolean
-  /// The whole-lesson Hard Look. It used to open the Insights tab, above the
-  /// section a teacher had just chosen; each section still carries its own
-  /// part, and the whole of it is asked for here, once.
-  hardLookDoor: React.ReactNode
   onNavigateInsights: (section: InsightsSection) => void
   onDiscussWithCoach: (candidate: NoticeCandidate) => void
 }) {
@@ -3156,8 +3129,6 @@ function SummaryTab({
       )}
 
       <TryNextTimeList session={session} focusText={focus?.text} focusId={focus?.id} onMakeFocus={(id) => void chooseFocus(id)} onUpdate={onUpdate} />
-
-      {hardLookDoor}
 
       {/* The whole report, to keep or share. */}
       <button
@@ -5002,127 +4973,6 @@ function RubricLensTab({
   )
 }
 
-/// The hard read of one section, shown under that section's own evidence.
-///
-/// The findings are grouped by section already, so a teacher who had just read
-/// Questioning & Checking had to scroll back up the page to a collapsed card
-/// and find the questioning group inside it. This puts each section's
-/// criticism directly beneath the numbers and quotes it was drawn from.
-///
-/// Collapsed by default, like the whole-lesson entry: a teacher who has not
-/// chosen this should not meet it on the way past. Opening it before one
-/// exists offers to build it, so any section is a way in — it is one call and
-/// one document either way.
-function SectionHardLook({
-  section,
-  hardLook,
-  locked,
-  sending,
-  error,
-  onGenerate,
-  bare,
-}: {
-  section: InsightsSection
-  hardLook: AudioHardLook | null
-  locked: boolean
-  sending: boolean
-  error: string | null
-  onGenerate: () => void
-  /// Shown already open, with no row of its own — when a button elsewhere
-  /// (Talk & Participation's footer) is what opened it.
-  bare?: boolean
-}) {
-  const [open, setOpen] = useState(!!bare)
-  const critiques = (hardLook?.critiques ?? []).filter((c) => c.section === section)
-  const cleared = (hardLook?.cleared ?? []).find((c) => c.section === section)
-
-  // Nothing to offer and nothing to show: a locked report can't gain one.
-  if (locked && !hardLook) return null
-
-  return (
-    // The last row of the section's list, like the evidence rows above it:
-    // a card of its own made the hard reading the loudest thing on a page it
-    // is meant to be an option on.
-    <div className={`flex flex-col ${bare ? 'pt-4' : ''}`}>
-      {!bare && <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex items-center justify-between gap-3 py-3 text-left text-sm font-semibold text-forest hover:text-terracotta-600"
-      >
-        <span>The hard look on this section</span>
-        <RowChevron className={open ? 'rotate-180' : ''} />
-      </button>}
-
-      {open && !hardLook && (
-        <div className="flex flex-col gap-3 pb-5">
-          <p className="text-sm text-ink">
-            This reads the same evidence again as a demanding reader looking for what could have been better, across
-            the whole lesson. Every criticism has to point at something you actually said, it can come back with
-            nothing, and only you see it.
-          </p>
-          <button
-            type="button"
-            onClick={onGenerate}
-            disabled={sending}
-            className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
-          >
-            {sending ? 'Taking the hard look...' : 'Give it to me straight'}
-          </button>
-          <WorkingRing
-            active={sending}
-            estimatedMs={30000}
-            label="Looking for what could be better"
-            className="text-forest"
-          />
-          {error && <p className="text-sm text-terracotta-600">{error}</p>}
-        </div>
-      )}
-
-      {open && hardLook && (
-        <div className="flex flex-col gap-3 pb-5">
-          {critiques.map((critique, i) => (
-            <div key={`${critique.section}-${i}`} className="rounded-xl border border-hairline p-4">
-              <p className="font-heading text-base font-bold leading-snug text-forest">{critique.headline}</p>
-              <p className="mt-2 text-sm text-ink">{critique.critique}</p>
-              {critique.evidence.length > 0 && (
-                <div className="mt-3 flex flex-col gap-2">
-                  {critique.evidence.map((item, j) => (
-                    <div key={j} className="border-l-2 border-terracotta/50 pl-3">
-                      <p className="text-sm text-ink">"{item.text}"</p>
-                      <p className="mt-0.5 text-xs text-ink-soft">
-                        {formatTime(item.timestampSec)} · {item.kind}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {critique.likelyCost && (
-                <div className="mt-3 rounded-xl bg-cream p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">What it likely cost</p>
-                  <p className="mt-1 text-sm text-ink">{critique.likelyCost}</p>
-                </div>
-              )}
-              {critique.nextStep && (
-                <div className="mt-2 rounded-xl bg-gold-tint/50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Try instead</p>
-                  <p className="mt-1 text-sm text-ink">{critique.nextStep}</p>
-                </div>
-              )}
-            </div>
-          ))}
-          {critiques.length === 0 && (
-            <p className="text-sm text-ink">
-              {cleared?.reason ??
-                'It had no reading for this section. That is a gap in the hard look rather than a verdict on your lesson.'}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // On demand only, and written once (see the /:id/hard-look route). The
 // teacher asked for the unsentimental version, so this does not soften what
 // it found — but it also shows, by name, every section where it could not
@@ -5557,7 +5407,7 @@ function ClimateRoutinesTab({
           </p>
           <p className="text-sm text-ink-soft">
             Tone isn't judged on this page: a transcript can't hear warmth or sarcasm, and a student's line can be filed as
-            yours. The hard look is where a stricter reading lives, if you want one.
+            yours. The Hard Look, under Rubric lens, is where a stricter reading lives, if you want one.
           </p>
         </>
       }

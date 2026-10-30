@@ -93,7 +93,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'What is the Hard Look?',
-        a: 'An optional second reading of a Lesson Debrief that says the least generous thing the evidence can support, with the moments it is based on — for the whole lesson from the Summary, or for one section from the foot of that section. You ask for it; it never appears on its own. Where the recording cannot carry a criticism it says so, and it is left out of the PDF, so it stays between you and Coach.',
+        a: 'An optional second reading of a Lesson Debrief that says the least generous thing the evidence can support, with the moments it is based on — for the whole lesson, from the Rubric lens tab. You ask for it; it never appears on its own. Where the recording cannot carry a criticism it says so, and it is left out of the PDF, so it stays between you and Coach.',
       },
       {
         q: 'Does the Rubric lens rate my lesson?',
