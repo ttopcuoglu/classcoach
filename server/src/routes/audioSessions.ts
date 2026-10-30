@@ -1887,19 +1887,15 @@ ${exhibits.map((e, i) => `[${i + 1}] ${e.text}`).join('\n')}
 
 Write in plain text, no markdown, no headings. Separate paragraphs with a blank line. Address the teacher as "you".
 
-Then, separately, write THE CHECKS NOTE: one paragraph for a section of
-the report that shows two numbers — how many spoken checks for understanding
-were heard, and how often feedback named something specific. The numbers are
-already on that screen, so do not restate them. Say what they cannot: WHEN the
-checks happened and whether they were spread through the lesson or clustered;
-what the teacher's feedback actually did with a student's answer; and, if
-there is a long stretch with no check, name it as a question rather than a
-fault. Same microphone caveat applies — a check made by looking at faces or
-reading over shoulders leaves no trace here, and you must not imply its
-absence means it did not happen. If there is too little to say, say one honest
-sentence and stop. Otherwise write one paragraph that covers both: what
-the checks actually were and when they fell, and what the feedback
-did with what students said.
+Then, separately, write THE CHECKS NOTE: one paragraph, at most four sentences,
+for the section about checking for understanding and feedback. Open with
+something worth noticing: a check that stopped to find out where the class
+was, or feedback that named exactly what was right in a student's answer,
+named with its moment. Then when the checks fell across the lesson, and what
+the feedback did with students' answers. If there is a long stretch with no
+check, name it as a question for the teacher, never a fault. The numbers are
+on the card; do not restate them. If there is genuinely little here, one warm,
+honest sentence is the right answer.
 
 ${
     metrics?.cfuMoments?.length
@@ -1913,15 +1909,16 @@ ${
       : 'No feedback moments were detected.'
   }
 
-Then THE CLIMATE NOTE: one paragraph for a section about routines,
-directions and classroom language, covering both how the class was moved
-between activities and how the teacher spoke to students. These moments are
-read from the transcript, so they are the teacher's own words rather than
-matches against a phrase list — write about what was said and how it worked,
-and never explain the detector to the teacher. A zero still means only that
-nothing of that kind was heard: encouragement carried by tone, a look that
-settles a room, and anything said too quietly for the mic leave no trace. If
-there is genuinely nothing to say, one honest sentence is the right answer.
+Then THE CLIMATE NOTE: one paragraph, at most four sentences, for the section
+about routines, directions and classroom language. Open with something worth
+noticing: a direction that set up the work cleanly, a transition that moved
+the class along, specific praise, a brief and calm redirection — the
+teacher's own words, with the moment. Then how the class was moved between
+activities and how the teacher spoke to students. These moments are the
+teacher's own words, so write about what was said and how it worked, and
+never explain how anything was found. If there is genuinely little here, one
+warm, honest sentence is the right answer — never open by saying there is not
+much to point to.
 
 ${
     metrics?.directionMoments?.length
@@ -1956,32 +1953,19 @@ ${(() => {
       : 'What the student talk was about: not measured for this lesson (too few audible student turns to characterise).'
   })()}
 
-Then THE TALK NOTE: one paragraph about who was heard and for how long,
-covering both the shape of the teacher's talk and where students got
-the floor, and what that does and does not tell us.
-The numbers — ${metrics?.room ? 'teacher voice, student voice, group voice, video and quiet time' : 'teacher talk, student talk, silence'} — are on that screen, so do
-not restate them. Pace is on the card too: mention it only where the reading
-given with the pace above says it is well above the usual range, and then only
-in words ("you moved quickly through the setup"), never as a number — not as a
-verdict, since there is no correct rate and a fast stretch of storytelling is
-not a fault. Never call a pace inside or a little above the range quick. Say
-nothing about the start of the recording beyond what the line about it above
-says, and never stretch seconds into "minutes". Say what they cannot: where the long teacher stretches fell
-and what they were doing (explaining, setting up, recapping), where students
-got the floor, and whether the shape changed across the lesson. The caveat
-governs this section more than any other, and it cuts both ways. A room
-microphone hears the teacher clearly and students poorly, so a low student
-number may be a quiet room or a mic that could not reach it. And a HIGH
-student number is not praise either: a recording cannot tell a discussion from
-a room talking over itself, since both raise the student share and both
-produce many short student turns. Never call a high student share strong
-participation, real back-and-forth, or student-centred on the strength of the
-number alone. The one thing that does separate those two rooms is what the
-student talk was ABOUT, and when that is given above you may use it: say so
-plainly, in proportions rather than percentages, and treat a large unclear
-share as the microphone's limit rather than the students'. When it is not
-given, say what was audible and leave the reading of it to the teacher, who
-was in the room.
+Then THE TALK NOTE: one paragraph, at most four sentences, for the section about
+who was heard. Open with something worth noticing about how this lesson used
+talk, named in the lesson's own content: a place students got the floor and
+what they offered, a connection you drew aloud that pulled the class in, an
+explanation that set up the work well. Then where the longer stretches of your
+talk fell and what they were doing (explaining, setting up, recapping), as a
+plain observation, and whether the shape changed across the lesson. The
+numbers are on the card beside this note; do not restate or explain them, and
+do not call a high student share strong participation on its own. Where the
+student talk was ABOUT is given above, you may say in words whether it stayed
+on the lesson. Pace only in words, and only where the reading above says it is
+well above the usual range. Say nothing about the start of the recording
+beyond what the line about it above says.
 
 Then THE QUESTIONS NOTE: one paragraph about the questioning, covering both
 what was asked and what happened after it was asked. Two pauses matter here

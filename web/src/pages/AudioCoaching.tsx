@@ -5704,7 +5704,7 @@ function TalkParticipationTab({
     <SectionShell
       section="talk"
       note={talkInsight}
-      keep={keepFrom(followUps, widening, invitations)}
+      keep={keepFrom(followUps, widening, invitations, tawtOf(session).questions)}
       tryNext={session.nextSteps?.talk}
       lastRow={lastRow}
       onDiscuss={onDiscuss}
@@ -5876,7 +5876,12 @@ function keepFrom(
   followUps: { quote: string; timestampSec: number; tag: string }[],
   widening: { quote: string; timestampSec: number }[],
   invitations: { quote: string; timestampSec: number }[],
+  /// The questions left with students, for when no move was found: the card
+  /// vanished on a lesson whose re-read counted no invitation, though the
+  /// teacher had plainly asked the room.
+  questions: { quote: string; timestampSec: number; byName: boolean }[] = [],
 ): KeepLine | null {
+  const toRoom = questions.find((q) => !q.byName) ?? questions[0]
   const byTag = (tag: string) => followUps.find((f) => f.tag === tag)
   const pick =
     (byTag('Building on a classmate') && { line: byTag('Building on a classmate')!, text: 'You asked students to build on each other’s ideas.' }) ||
@@ -5884,6 +5889,7 @@ function keepFrom(
     (followUps[0] && { line: followUps[0], text: 'You asked a student to say more.' }) ||
     (widening[0] && { line: widening[0], text: 'You reached past the usual volunteers.' }) ||
     (invitations[0] && { line: invitations[0], text: 'You opened the floor to the room.' }) ||
+    (toRoom && { line: toRoom, text: 'You put a question to the room.' }) ||
     null
   return pick ? { text: pick.text, quote: pick.line.quote, timestampSec: pick.line.timestampSec } : null
 }
