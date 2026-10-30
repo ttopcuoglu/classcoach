@@ -1483,67 +1483,37 @@ struct RoutinesSection: View {
 
     private static let routineLabel = ["start": "Starting work", "transition": "Changing activities", "materials": "Materials",
                                        "help": "Getting help", "finish": "Finishing", "other": "Other directions"]
-    private static let partWord = ["task": "what to do", "steps": "the steps", "time": "how long", "product": "what to hand in"]
 
     /// Routines held to the four parts; must match the server's SCORED_ROUTINES.
     private static let scoredRoutines = ["start", "transition"]
-
-    /// "a, b and c", for a finding that reads as a sentence.
-    private func list(_ parts: [String], joiner: String) -> String {
-        let words = parts.map { Self.partWord[$0] ?? $0 }
-        return words.count <= 1 ? words.joined() : words.dropLast().joined(separator: ", ") + " \(joiner) " + words.last!
-    }
-
-    /// What the one scored direction named, and what it left out.
-    private func oneDirection(_ parts: [String]) -> String {
-        if parts.isEmpty { return "named none of the four parts" }
-        if parts.count == 4 { return "named all four \u{2014} what to do, the steps, how long and what to hand in" }
-        let missing = ["task", "steps", "time", "product"].filter { !parts.contains($0) }
-        return "named \(list(parts, joiner: "and")), but not \(list(missing, joiner: "or"))"
-    }
-
-    private func named(_ parts: [String]) -> String {
-        parts.isEmpty ? "named none of the four" : "named " + parts.map { Self.partWord[$0] ?? $0 }.joined(separator: ", ")
-    }
 
     var body: some View {
         let moves = session.teachingMoves
         let directions = moves?.directions ?? []
         let typeAt = { (sec: Double) in moves?.routines?.directionTypes.first { $0.timestampSec == sec }?.type }
         // Only directions that start or change work are held to the four
-        // parts (server lib/routines.ts scoredDirections): "grab a book" and
-        // "one more minute" need no time limit or hand-in. A lesson read
-        // before routines were typed keeps every direction scored.
+        // parts, and they are judged per activity, not per sentence — mirrors
+        // directionActivities in server lib/routines.ts and the web.
         let typed = !(moves?.routines?.directionTypes.isEmpty ?? true)
         let isScored = { (d: AudioTeachingMoves.Direction) in !typed || Self.scoredRoutines.contains(typeAt(d.timestampSec) ?? "") }
-        let scored = directions.filter(isScored)
-        let complete = scored.filter { $0.parts.count == 4 }
-        let directionRows = directions.sorted {
-            (isScored($0) ? 1 : 0, $0.parts.count, -$0.timestampSec) > (isScored($1) ? 1 : 0, $1.parts.count, -$1.timestampSec)
-        }.map { d -> EvidenceLine in
-            let label = typeAt(d.timestampSec).flatMap { Self.routineLabel[$0] }
-            // A materials or time cue is listed for what it was, with no parts.
-            guard isScored(d) else { return EvidenceLine(tag: label ?? "Directions", quote: d.quote, timestampSec: d.timestampSec) }
-            let tag = (label.map { "\($0) \u{00B7} " } ?? "") + named(d.parts)
-            return EvidenceLine(tag: tag.prefix(1).uppercased() + tag.dropFirst(), quote: d.quote, timestampSec: d.timestampSec)
+        let activities = Self.activities(directions.filter(isScored), all: directions, arc: moves?.arc ?? [])
+        // How you set up each activity: one line per activity, in your own
+        // launch words, then the shorter cues. The four-part score and grid
+        // were removed (as on the web): the board and slides are invisible
+        // to a recording, so "none said how long" could be wrong.
+        let launchRows = activities.compactMap { a -> EvidenceLine? in
+            guard let first = a.directions.first else { return nil }
+            return EvidenceLine(tag: "Set up \u{00B7} \(a.name)", quote: first.quote, timestampSec: first.timestampSec)
         }
-        var byType: [(String, Int)] = []
-        // Every direction in a chip, so they add up to the category's count.
-        for d in directions {
-            let label = Self.routineLabel[typeAt(d.timestampSec) ?? "other"] ?? "Other directions"
-            if let i = byType.firstIndex(where: { $0.0 == label }) { byType[i].1 += 1 } else { byType.append((label, 1)) }
+        let cueRows = directions.filter { !isScored($0) }.sorted { $0.timestampSec < $1.timestampSec }.map { d in
+            EvidenceLine(tag: typeAt(d.timestampSec).flatMap { Self.routineLabel[$0] } ?? "Directions", quote: d.quote, timestampSec: d.timestampSec)
         }
-        let missingTime = scored.filter { !$0.parts.contains("time") }.count
-        let directionFinding: String? = directions.isEmpty ? nil
-            : scored.isEmpty ? "Your directions were about materials and timing, which don\u{2019}t need all four parts \u{2014} what to do, the steps, how long and what to hand in."
-            : scored.count == 1 ? "\(typed && directions.count > 1 ? "Of your \(directions.count) directions, 1" : "1 direction") \(typed ? "started or changed the work" : "was heard"): it \(oneDirection(scored[0].parts))."
-            : typed && scored.count < directions.count
-                // The whole count first, then the scored part, so the sentence
-                // agrees with the category's number above it.
-                ? "Of your \(directions.count) directions, \(scored.count) started or changed the work, and \(complete.isEmpty ? "none" : "\(complete.count)") of those named all four: what to do, the steps, how long, and what to hand in."
-                    + (missingTime > 0 && complete.count < scored.count ? " \(missingTime) didn\u{2019}t say how long." : "")
-                : "\(complete.count) of your \(scored.count) directions\(typed ? " that started or changed the work" : "") named all four: what to do, the steps, how long, and what to hand in."
-                    + (missingTime > 0 && complete.count < scored.count ? " \(missingTime) didn\u{2019}t say how long." : "")
+        let directionRows = launchRows + cueRows
+        let n = activities.count
+        let directionFinding: String? = directionRows.isEmpty ? nil
+            : n == 0 ? "Your directions were about materials, help and timing."
+            : "You set up \(n) activit\(n == 1 ? "y" : "ies")"
+                + (cueRows.isEmpty ? "" : ", and gave \(cueRows.count) shorter direction\(cueRows.count == 1 ? "" : "s") about materials, help or timing") + "."
 
         let redirections: [AudioTeachingMoves.Redirection] = moves?.redirections
             ?? (session.redirectionLog ?? []).map { AudioTeachingMoves.Redirection(quote: $0.text, timestampSec: $0.timestampSec, clarity: nil) }
@@ -1605,7 +1575,6 @@ struct RoutinesSection: View {
 
         let keep = specific.first.map { KeepLine(text: "You named what was right, not just \u{201C}good\u{201D}.", quote: $0.text, timestampSec: $0.timestampSec) }
             ?? actionable.first.map { KeepLine(text: "Your redirection told students what to do.", quote: $0.quote, timestampSec: $0.timestampSec) }
-            ?? complete.first.map { KeepLine(text: "Your directions named what to do, the steps, how long, and what to hand in.", quote: $0.quote, timestampSec: $0.timestampSec) }
         // Repeated redirections: the read the section shows when the report
         // has it; older reports keep the Keeping learning on track view until
         // they are re-read.
@@ -1622,7 +1591,7 @@ struct RoutinesSection: View {
         return SectionCard(
             section: .routines, note: session.climateNarrative, keep: keep, tryNext: session.nextSteps?.climate,
             howToRead: [
-                "Everything here is from your own words. A direction is counted once however many sentences it runs to, and each says which of the four parts it named: what to do, the steps, how long, and what to hand in.",
+                "Everything here is from your own words. Each activity you set up is shown once, with the words you launched it with; anything written on the board or a slide isn\u{2019}t part of the recording.",
                 "Tone isn\u{2019}t judged on this page: a transcript can\u{2019}t hear warmth or sarcasm, and a student\u{2019}s line can be filed as yours. The hard look is where a stricter reading lives, if you want one.",
             ],
             hardLook: hardLook, onDiscuss: onDiscuss
@@ -1638,8 +1607,8 @@ struct RoutinesSection: View {
                 } else {
                     CategoryPickerView(options: [
                         PickOption(key: "directions", label: "Directions & routines",
-                                   desc: "Directions for starting work, changing activities, materials, getting help and finishing \u{2014} and which of the four parts each named.",
-                                   items: directionRows, finding: directionFinding, chips: byType),
+                                   desc: "How you set up each activity, in your own words, then the shorter directions about materials, help and timing.",
+                                   items: directionRows, finding: directionFinding, chips: []),
                         repeated.map { r in
                             PickOption(key: "redirection", label: "Repeated redirections",
                                        desc: "Your words correcting behavior, each filed under what it was about. One correction tells little; the same one coming back is worth a second look.",
@@ -1656,7 +1625,6 @@ struct RoutinesSection: View {
                     ], hint: "Tap a category")
                 }
             }
-            if !scored.isEmpty { directionsGrid(scored, typed: typed) }
         }
     }
 
@@ -1670,41 +1638,45 @@ struct RoutinesSection: View {
         return e.state == "confirmed_none" ? "Your asks held: none needed repeating." : nil
     }
 
-    /// Each direction that started or changed the work against the four parts.
-    /// The finding above gives the count, so the summary says what the grid
-    /// holds rather than repeating it.
-    private func directionsGrid(_ directions: [AudioTeachingMoves.Direction], typed: Bool) -> some View {
-        OptionalBlock(
-            title: "Your directions, part by part",
-            summary: "\(typed ? "Each direction that started or changed the work" : "Each set of directions"), against what to do, the steps, how long and what to hand in."
-        ) {
-            Grid(horizontalSpacing: 6, verticalSpacing: 6) {
-                GridRow {
-                    Text("")
-                    ForEach(["What to do", "Steps", "How long", "Hand in"], id: \.self) {
-                        Text($0).font(.caption2.weight(.bold)).foregroundStyle(AppTheme.textSecondary).multilineTextAlignment(.center)
-                    }
-                }
-                ForEach(Array(directions.sorted { $0.timestampSec < $1.timestampSec }.enumerated()), id: \.offset) { _, d in
-                    GridRow {
-                        Text(mmss(d.timestampSec)).font(.caption.monospacedDigit()).foregroundStyle(AppTheme.textSecondary)
-                        ForEach(["task", "steps", "time", "product"], id: \.self) { part in
-                            Group {
-                                if d.parts.contains(part) {
-                                    RoundedRectangle(cornerRadius: 5).fill(AppTheme.forest)
-                                } else {
-                                    RoundedRectangle(cornerRadius: 5).strokeBorder(Color(hex: 0xC9BFAD), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
-                                }
-                            }
-                            .frame(height: 22)
-                            .accessibilityLabel("\(Self.partWord[part]!): \(d.parts.contains(part) ? "named" : "not named")")
-                        }
-                    }
-                }
+    /// One activity's setup: its stage title (or time range), and every part
+    /// named anywhere in it.
+    struct Activity {
+        let name: String
+        let directions: [AudioTeachingMoves.Direction]
+        let parts: Set<String>
+    }
+
+    /// Starting directions this close together are one activity's setup when
+    /// the stages were not read; must match the server's ACTIVITY_GAP_SEC.
+    private static let activityGapSec = 180.0
+
+    /// The scored directions grouped into activities — must match
+    /// directionActivities in server lib/routines.ts.
+    static func activities(_ scored: [AudioTeachingMoves.Direction], all: [AudioTeachingMoves.Direction],
+                           arc: [AudioTeachingMoves.ArcStage]) -> [Activity] {
+        let stages = arc.filter { $0.endSec > $0.startSec }
+        var groups: [(title: String?, start: Double, end: Double, dirs: [AudioTeachingMoves.Direction])] = []
+        for d in scored.sorted(by: { $0.timestampSec < $1.timestampSec }) {
+            let t = d.timestampSec
+            let stage = stages.enumerated().first { i, s in t >= s.startSec && (t < s.endSec || i == stages.count - 1) }?.element
+            if let stage {
+                if let i = groups.firstIndex(where: { $0.title == stage.title && $0.start == stage.startSec }) { groups[i].dirs.append(d) }
+                else { groups.append((stage.title, stage.startSec, stage.endSec, [d])) }
+            } else if let last = groups.last, last.title == nil, t - last.end <= activityGapSec {
+                groups[groups.count - 1].dirs.append(d)
+                groups[groups.count - 1].end = t
+            } else {
+                groups.append((nil, t, t, [d]))
             }
-            Text("A filled square is a part the direction named.").font(.caption).foregroundStyle(AppTheme.textSecondary)
+        }
+        return groups.map { g in
+            let end = g.title == nil ? g.end + 60 : g.end
+            let inSpan = all.filter { $0.timestampSec >= g.start && $0.timestampSec <= end }
+            return Activity(name: g.title ?? "\(mmss(g.start))\u{2013}\(mmss(g.end))", directions: g.dirs,
+                            parts: Set((g.dirs + inSpan).flatMap(\.parts)))
         }
     }
+
 }
 
 /// Keeping learning on track — mirrors `AudioCoaching.tsx`'s
