@@ -19,6 +19,9 @@ import type {
   ToneLogEntry,
 } from './audioAnalysis.ts'
 import { extractTag } from './extractTag.ts'
+import { checkCount, countedQuestions } from './questionMix.ts'
+import { roomFacts } from './roomTrace.ts'
+import { directionActivities } from './routines.ts'
 
 export type RubricAudibility = 'strong' | 'partial'
 
@@ -166,6 +169,10 @@ type SessionEvidenceSource = {
   toneLog: unknown
   redirectionLog: unknown
   lessonContent: unknown
+  /// The teaching-moves read: question kinds, self-answered questions,
+  /// directions and redirections — the same reads the cards count from.
+  teachingMoves?: unknown
+  cfuCount?: number | null
   segments: Segment[]
 }
 
@@ -193,37 +200,52 @@ export function buildRubricEvidence(session: SessionEvidenceSource): { items: Ru
     if (text.trim()) items.push({ kind, timestampSec, text: clip(text) })
   }
 
-  const questions = asArray<QuestionLogEntry>(session.questionLog)
-  const higherOrder = questions.filter((q) => q.type === 'higher_order')
-  const recall = questions.filter((q) => q.type === 'recall')
-  for (const q of spread(higherOrder, 6)) {
-    const wait = q.waitTimeSec != null ? `, about ${q.waitTimeSec.toFixed(1)}s before a student answered` : ''
-    push(`Higher-order question${wait}`, q.timestampSec, q.text)
+  // Every count here is the one the report's cards show (lib/questionMix,
+  // roomTrace, routines), so the Hard Look and the Rubric Lens cannot argue
+  // with the page. The older keyword counts — "higher-order" by phrase, the
+  // stored wait and follow-up tallies, phrase-matched directions — are gone.
+  const moves = (session.teachingMoves ?? {}) as {
+    directions?: { quote: string; timestampSec: number; parts: string[] }[]
+    redirections?: { quote: string; timestampSec: number }[]
+    routines?: { directionTypes?: { timestampSec: number; type: string }[] }
+    arc?: { title: string; startSec: number; endSec: number }[]
   }
-  for (const q of spread(recall, 4)) {
-    const wait = q.waitTimeSec != null ? `, about ${q.waitTimeSec.toFixed(1)}s before a student answered` : ''
-    push(`Recall question${wait}`, q.timestampSec, q.text)
-  }
-  for (const q of spread(questions.filter((q) => q.followUps?.length), 3)) {
-    const followUp = q.followUps[0]
-    push('Follow-up question after a student response', followUp.timestampSec, followUp.text)
-  }
+  const { questions, selfAnswered } = countedQuestions(session.questionLog, session.teachingMoves)
+  const reasoning = questions.filter((q) => q.mix !== 'recall')
+  const recall = questions.filter((q) => q.mix === 'recall')
+  for (const q of spread(reasoning, 6)) push('Question asking students to explain or reason', q.timestampSec, q.text)
+  for (const q of spread(recall, 4)) push('Recall question', q.timestampSec, q.text)
 
-  for (const c of spread(asArray<CfuLogEntry>(session.cfuLog), 5)) {
-    push(`Check for understanding (${c.whatItChecked})`, c.timestampSec, c.text)
-  }
+  const detail = (session.metricsDetail ?? {}) as Record<string, unknown>
+  const noStudents = !session.segments.some((x) => x.speakerLabel !== 'Teacher' && x.text.trim() !== '')
+  // Follow-ups as the Questioning card shows them: a push on an answer a
+  // student was heard giving.
+  const followUps = asArray<{ timestampSec: number; text: string }>(detail.followUpLog)
+  for (const f of spread(followUps, 3)) push('Follow-up after a student answer', f.timestampSec, f.text)
+
+  const checks = asArray<CfuLogEntry & { loop?: { who?: string } }>(session.cfuLog).filter((c) => c.loop?.who !== 'not_a_check')
+  for (const c of spread(checks, 5)) push(`Check for understanding (${c.whatItChecked})`, c.timestampSec, c.text)
+  for (const q of spread(questions.filter((q) => q.check), 3)) push('Question that was also a check for understanding', q.timestampSec, q.text)
 
   const feedback = asArray<FeedbackLogEntry>(session.feedbackLog)
   for (const f of spread(feedback.filter((f) => f.kind === 'specific'), 4)) push('Specific feedback', f.timestampSec, f.text)
   for (const f of spread(feedback.filter((f) => f.kind === 'generic'), 2)) push('General praise', f.timestampSec, f.text)
 
-  for (const d of spread(asArray<DirectiveLogEntry>(session.directiveLog), 4)) push('Task instruction', d.timestampSec, d.text)
+  // Directions as Climate shows them: how each activity was set up.
+  const directions = moves.directions ?? []
+  const activities = directionActivities(directions, moves.routines?.directionTypes, moves.arc)
+  if (directions.length > 0) {
+    for (const a of spread(activities, 4)) push(`How an activity was set up${a.title ? ` (${a.title})` : ''}`, a.directions[0].timestampSec, a.directions[0].quote)
+  } else {
+    for (const d of spread(asArray<DirectiveLogEntry>(session.directiveLog), 4)) push('Task instruction', d.timestampSec, d.text)
+  }
 
   const tone = asArray<ToneLogEntry>(session.toneLog)
   for (const t of spread(tone.filter((t) => t.kind === 'positive'), 3)) push('Encouraging language', t.timestampSec, t.text)
   for (const t of spread(tone.filter((t) => t.kind === 'corrective'), 3)) push('Corrective language', t.timestampSec, t.text)
 
-  for (const r of spread(asArray<RedirectionLogEntry>(session.redirectionLog), 4)) push('Redirection', r.timestampSec, r.text)
+  const redirections = moves.redirections ?? asArray<RedirectionLogEntry>(session.redirectionLog).map((r) => ({ quote: r.text, timestampSec: r.timestampSec }))
+  for (const r of spread(redirections, 4)) push('Redirection', r.timestampSec, r.quote)
 
   const content = session.lessonContent as {
     statedObjective?: { found: boolean | null; quote: string | null; timestampSec: number | null }
@@ -255,32 +277,46 @@ export function buildRubricEvidence(session: SessionEvidenceSource): { items: Ru
   }
   const moments = [...merged.values()].sort((a, b) => a.timestampSec - b.timestampSec)
 
-  const detail = (session.metricsDetail ?? {}) as Record<string, number | null | undefined>
   const facts: string[] = []
   if (session.durationSec) facts.push(`Recording length: about ${Math.round(session.durationSec / 60)} minutes.`)
-  if (session.teacherTalkPct != null && session.studentTalkPct != null && (detail.studentVoiceSegments ?? 0) > 0) {
+  const trace = detail.roomTrace
+  if (typeof trace === 'string' && trace.length > 0) {
+    const room = roomFacts(trace)
+    const total = room.teacherSec + room.studentSec + room.groupSec + room.videoSec + room.quietSec
+    const pct = (n: number) => `${total > 0 ? Math.round((n / total) * 100) : 0}%`
+    facts.push(
+      noStudents
+        ? `The recording, second by second: teacher voice ${pct(room.teacherSec)}, group voice (sound with no transcribed words, most often students together) ${pct(room.groupSec)}, a video ${pct(room.videoSec)}, quiet ${pct(room.quietSec)}.`
+        : `The recording, second by second: teacher voice ${pct(room.teacherSec)}, student voice ${pct(room.studentSec)} (at least — students the microphone could not make out are not in it), group voice (sound with no transcribed words, most often students together) ${pct(room.groupSec)}, a video ${pct(room.videoSec)}, quiet ${pct(room.quietSec)}.`,
+    )
+  } else if (session.teacherTalkPct != null && session.studentTalkPct != null && !noStudents) {
     facts.push(
       `Estimated talk time: teacher about ${Math.round(session.teacherTalkPct)}%, students about ${Math.round(session.studentTalkPct)}% (students far from the microphone are often under-counted).`,
     )
   }
+  if (noStudents) {
+    facts.push(
+      "No student voice was told apart from the teacher's in this recording: students' answers sit inside the teacher's lines, so how long students talked, the pause after a question, the longest stretch of teacher talk and follow-ups cannot be measured. Do not build anything on them.",
+    )
+  }
   if (questions.length > 0) {
-    facts.push(`Questions detected: ${questions.length} (${higherOrder.length} higher-order, ${recall.length} recall).`)
+    facts.push(
+      `Questions left with students: ${questions.length} (${reasoning.length} asking students to explain or reason, ${recall.length} recall)${selfAnswered > 0 ? `, plus ${selfAnswered} the teacher answered before a student could` : ''}.`,
+    )
   }
-  if ((detail.waitTimeSampleCount ?? 0) >= 3) {
-    const waits = questions.map((q) => q.waitTimeSec).filter((w): w is number => w != null)
-    if (waits.length > 0) {
-      const avg = waits.reduce((sum, w) => sum + w, 0) / waits.length
-      facts.push(`Average wait time after a question: about ${avg.toFixed(1)}s across ${waits.length} questions.`)
-    }
+  const checkTotal = checkCount({ cfuLog: session.cfuLog, cfuCount: session.cfuCount, questionLog: session.questionLog, teachingMoves: session.teachingMoves })
+  if (checkTotal != null) facts.push(`Checks for understanding: ${checkTotal}.`)
+  const heard = typeof detail.answersHeardCount === 'number' ? detail.answersHeardCount : null
+  const followed = typeof detail.answersFollowedUpCount === 'number' ? detail.answersFollowedUpCount : null
+  if (!noStudents && heard != null && followed != null && heard > 0) facts.push(`Student answers followed up: ${followed} of ${heard} heard.`)
+  if (feedback.length > 0) {
+    facts.push(`Responses to students: ${feedback.filter((f) => f.kind === 'specific').length} of ${feedback.length} named what was right or wrong.`)
   }
-  if (detail.followUpQuestionCount != null) facts.push(`Follow-up questions after student responses: ${detail.followUpQuestionCount}.`)
-  if (detail.specificFeedbackCount != null && detail.genericFeedbackCount != null) {
-    facts.push(`Feedback moments: ${detail.specificFeedbackCount} specific, ${detail.genericFeedbackCount} general praise.`)
-  }
-  if (detail.transitionCount != null) facts.push(`Spoken transitions between activities: ${detail.transitionCount}.`)
-  if (detail.redirectionCount != null) facts.push(`Redirections detected: ${detail.redirectionCount}.`)
-  if (detail.longestTeacherMonologueSec != null && detail.longestTeacherMonologueSec >= 60) {
-    facts.push(`Longest stretch of uninterrupted teacher talk: about ${Math.round(detail.longestTeacherMonologueSec / 60)} minutes.`)
+  if (activities.length > 0) facts.push(`Activities set up with directions: ${activities.length}.`)
+  if (redirections.length > 0) facts.push(`Redirections: ${redirections.length}.`)
+  const longest = typeof detail.longestTeacherMonologueSec === 'number' ? detail.longestTeacherMonologueSec : null
+  if (!noStudents && longest != null && longest >= 60) {
+    facts.push(`Longest stretch of uninterrupted teacher talk: about ${Math.round(longest / 60)} minutes.`)
   }
 
   return { items: moments, facts }

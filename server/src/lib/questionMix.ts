@@ -36,38 +36,79 @@ export type MixCounts = Record<MixKind, number>
 
 /// The lesson page's test for a question the teacher answered themself
 /// (sameMoment in AudioCoaching.tsx): close in time, same opening words.
+/// A name set off by commas the way direct address is — mirrors
+/// withoutAddressedNames in web lib/keepDoing.ts, so a logged question and a
+/// stored quote that already reads "[name]" compare the same way here as on
+/// the card. Without it the server counted 14 questions where the card showed
+/// 13 plus 2 answered.
+const NOT_NAMES = new Set(['okay', 'ok', 'so', 'now', 'well', 'yes', 'yeah', 'alright', 'right', 'and', 'but', 'guys', 'everyone', 'everybody', 'class', 'folks', 'friends', 'sure', 'wait', 'really', 'hmm', 'um', 'good', 'great', 'perfect', 'exactly', 'nice'])
+const ADDRESSED = /(^|[,.!?]\s*)(\p{Lu}\p{Ll}+(?:['’-]\p{L}+)*)(?=\s*[,?])/gu
+function withoutAddressedNames(text: string): string {
+  return text.replace(ADDRESSED, (whole, lead: string, word: string) => (NOT_NAMES.has(word.toLowerCase()) ? whole : `${lead}[name]`))
+}
+
 function sameMoment(a: { timestampSec: number; text: string }, b: { timestampSec: number; quote: string }): boolean {
-  const norm = (q: string) => q.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim()
+  const norm = (q: string) => withoutAddressedNames(q).toLowerCase().replace(/[^a-z0-9 ]/g, '').trim()
   const na = norm(a.text)
   const nb = norm(b.quote)
   return Math.abs(a.timestampSec - b.timestampSec) <= 8 && na.length > 0 && nb.length > 0 && (na.startsWith(nb.slice(0, 20)) || nb.startsWith(na.slice(0, 20)))
 }
 
-export function questionMixOf(questionLog: unknown, teachingMoves: unknown): MixCounts {
-  const counts: MixCounts = { recall: 0, explain: 0, reasoning: 0 }
-  if (!Array.isArray(questionLog)) return counts
+export type CountedQuestion = { timestampSec: number; text: string; type?: unknown; mix: MixKind; check: boolean }
+
+/// THE question list every number on a lesson is counted from — the server
+/// mirror of countedQuestions in AudioCoaching.tsx: each logged question takes
+/// the finer kind the teaching-moves read gave it (else the older split), and
+/// the ones the teacher answered themself are set apart. The cards, the
+/// summary, the Hard Look and the Rubric Lens all count from this.
+export function countedQuestions(questionLog: unknown, teachingMoves: unknown): { questions: CountedQuestion[]; selfAnswered: number } {
+  if (!Array.isArray(questionLog)) return { questions: [], selfAnswered: 0 }
   const rawKinds = (teachingMoves as { questionKinds?: unknown } | null)?.questionKinds
   const kinds = Array.isArray(rawKinds)
     ? rawKinds.filter(
-        (k): k is { timestampSec: number; kind: string } =>
+        (k): k is { timestampSec: number; kind: string; check?: unknown } =>
           typeof k?.timestampSec === 'number' && typeof k?.kind === 'string',
       )
     : []
-  // A question the teacher answered before a student could is not counted,
-  // as the lesson page leaves it out.
   const rawSelf = (teachingMoves as { selfAnswered?: unknown } | null)?.selfAnswered
-  const selfAnswered = Array.isArray(rawSelf)
-    ? rawSelf.filter((s): s is { timestampSec: number; quote: string } => typeof s?.timestampSec === 'number' && typeof s?.quote === 'string')
+  const selfList = Array.isArray(rawSelf)
+    ? rawSelf.filter((x): x is { timestampSec: number; quote: string } => typeof x?.timestampSec === 'number' && typeof x?.quote === 'string')
     : []
+  const questions: CountedQuestion[] = []
+  let selfAnswered = 0
   for (const q of questionLog as { timestampSec?: unknown; type?: unknown; text?: unknown }[]) {
     if (typeof q?.timestampSec !== 'number') continue
+    const at = q.timestampSec
     const text = typeof q.text === 'string' ? q.text : ''
-    if (selfAnswered.some((sa) => sameMoment({ timestampSec: q.timestampSec as number, text }, sa))) continue
-    const kind = kinds.find((k) => Math.abs(k.timestampSec - (q.timestampSec as number)) <= MATCH_WINDOW_SEC)?.kind
-    const mix: MixKind = kind ? (KIND_TO_MIX[kind] ?? 'recall') : q.type === 'higher_order' ? 'explain' : 'recall'
-    counts[mix]++
+    // A question the teacher answered before a student could is not counted,
+    // as the lesson page leaves it out.
+    if (selfList.some((sa) => sameMoment({ timestampSec: at, text }, sa))) {
+      selfAnswered++
+      continue
+    }
+    const k = kinds.find((x) => Math.abs(x.timestampSec - at) <= MATCH_WINDOW_SEC)
+    const mix: MixKind = k ? (KIND_TO_MIX[k.kind] ?? 'recall') : q.type === 'higher_order' ? 'explain' : 'recall'
+    questions.push({ timestampSec: at, text, type: q.type, mix, check: k?.check != null && k.check !== false })
   }
+  return { questions, selfAnswered }
+}
+
+export function questionMixOf(questionLog: unknown, teachingMoves: unknown): MixCounts {
+  const counts: MixCounts = { recall: 0, explain: 0, reasoning: 0 }
+  for (const q of countedQuestions(questionLog, teachingMoves).questions) counts[q.mix]++
   return counts
+}
+
+/// THE check count — mirrors checkCount in web lib/questionMix.ts: stored
+/// checks the read did not set aside, plus counted questions tagged as checks
+/// that the stored list does not already hold.
+export function checkCount(session: { cfuLog: unknown; cfuCount?: number | null; questionLog: unknown; teachingMoves: unknown }): number | null {
+  if (!Array.isArray(session.cfuLog)) return session.cfuCount ?? null
+  const checks = (session.cfuLog as { timestampSec: number; loop?: { who?: string } }[]).filter((c) => c.loop?.who !== 'not_a_check')
+  const tagged = countedQuestions(session.questionLog, session.teachingMoves).questions.filter(
+    (q) => q.check && !checks.some((c) => Math.abs(c.timestampSec - q.timestampSec) <= MATCH_WINDOW_SEC),
+  )
+  return checks.length + tagged.length
 }
 
 /// Every lesson's questions added together, and how many lessons had any.

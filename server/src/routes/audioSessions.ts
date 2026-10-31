@@ -1654,11 +1654,14 @@ audioSessionsRouter.post('/:id/hard-look', async (req, res) => {
     return
   }
 
+  // With no student told apart, a stretch runs through every answer; the
+  // card hides it, so the Hard Look is not handed it either.
+  const studentsHeard = session.segments.some((s) => s.speakerLabel !== 'Teacher' && s.text.trim() !== '')
   const system = buildHardLookSystemPrompt(
     evidence,
     eligible,
     withheld,
-    longestTeacherStretch(
+    !studentsHeard ? null : longestTeacherStretch(
       session.segments.map((s) => ({
         speakerLabel: s.speakerLabel,
         startSec: s.startSec,

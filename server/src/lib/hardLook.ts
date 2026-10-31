@@ -29,6 +29,8 @@ import { capturedShare as sharedCapturedShare, MIN_SHARE_FOR_WHOLE_LESSON_CLAIM 
 import type { Segment } from './audioAnalysis.ts'
 import { extractTag } from './extractTag.ts'
 import { longestTeacherStretch as measureLongestTeacherStretch } from './teacherStretch.ts'
+import { countedQuestions } from './questionMix.ts'
+import { roomFacts } from './roomTrace.ts'
 import {
   buildRubricEvidence,
   stripMomentReferences,
@@ -65,7 +67,7 @@ export const HARD_LOOK_SECTIONS: HardLookSectionDef[] = [
     key: 'questions',
     label: 'Questioning & Checking',
     pushOn:
-      'the balance of recall against higher-order questions, how long the teacher waited after asking, whether questions were followed up or dropped, whether checks sampled the room or only the one student who answered, and whether feedback named anything specific',
+      'the balance of recall against questions asking students to explain or reason, whether answers were followed up or dropped, whether checks sampled the room or only the one student who answered, and whether feedback named anything specific',
   },
   {
     key: 'content',
@@ -77,7 +79,7 @@ export const HARD_LOOK_SECTIONS: HardLookSectionDef[] = [
     key: 'routines',
     label: 'Climate & Routines',
     pushOn:
-      'whether directions were given once and clearly or repeated and restated, whether transitions were announced or simply happened, how much of the talk was spent on behaviour rather than the work, and whether praise named what a student actually did',
+      'how each activity was set up — whether the launch was clear or repeated and restated — whether transitions were announced or simply happened, how much of the talk was spent on behaviour rather than the work, and whether praise named what a student actually did. Never fault a launch for not saying how long or what to hand in: the board or a slide may have said it',
   },
 ]
 
@@ -105,6 +107,11 @@ type EligibilitySource = {
   metricsDetail: unknown
   questionLog: unknown
   lessonContent: unknown
+  /// The reads the cards count from, so a section is judged on the same
+  /// evidence the page shows (see buildRubricEvidence).
+  teachingMoves?: unknown
+  redirectionLog?: unknown
+  segments?: { speakerLabel: string; text: string }[]
 }
 
 /// How much of a recording has to be audible speech before the airtime split is
@@ -121,7 +128,11 @@ export function sectionEligibility(source: EligibilitySource): {
   withheld: HardLookClear[]
 } {
   const detail = (source.metricsDetail ?? {}) as Record<string, number | null | undefined>
-  const questions = Array.isArray(source.questionLog) ? source.questionLog.length : 0
+  const moves = (source.teachingMoves ?? {}) as { directions?: unknown[]; redirections?: unknown[] }
+  // The questions the Questioning card counts.
+  const questions = countedQuestions(source.questionLog, source.teachingMoves).questions.length
+  const noStudents = source.segments != null && !source.segments.some((x) => x.speakerLabel !== 'Teacher' && x.text.trim() !== '')
+  const trace = (source.metricsDetail as { roomTrace?: unknown } | null)?.roomTrace
   const content = source.lessonContent as {
     statedObjective?: { found?: boolean | null }
     connections?: unknown[]
@@ -130,9 +141,19 @@ export function sectionEligibility(source: EligibilitySource): {
 
   // One definition of coverage, in transcriptCoverage.ts, shared with the
   // escalation read and the report's own caveat.
-  const capturedShare = sharedCapturedShare(detail, source.durationSec) ?? 0
-  const routineMoments =
-    (detail.directiveCount ?? 0) + (detail.transitionCount ?? 0) + (detail.redirectionCount ?? 0)
+  // With the per-second breakdown, coverage is Teacher + Student Voice as the
+  // tiles show them; older lessons keep the shared coverage read.
+  let capturedShare = sharedCapturedShare(detail, source.durationSec) ?? 0
+  if (typeof trace === 'string' && trace.length > 0) {
+    const room = roomFacts(trace)
+    const total = room.teacherSec + room.studentSec + room.groupSec + room.videoSec + room.quietSec
+    if (total > 0) capturedShare = (room.teacherSec + room.studentSec) / total
+  }
+  // Directions and redirections as Climate counts them, where the moves read
+  // has them; older lessons keep the phrase counts.
+  const routineMoments = Array.isArray(moves.directions)
+    ? moves.directions.length + (Array.isArray(moves.redirections) ? moves.redirections.length : 0)
+    : (detail.directiveCount ?? 0) + (detail.transitionCount ?? 0) + (detail.redirectionCount ?? 0)
   const contentSignals =
     (content?.statedObjective?.found ? 1 : 0) +
     (content?.connections?.length ?? 0) +
@@ -140,7 +161,10 @@ export function sectionEligibility(source: EligibilitySource): {
 
   const reasons: Partial<Record<HardLookSectionKey, string>> = {}
 
-  if (capturedShare < MIN_CAPTURED_TALK_SHARE) {
+  if (noStudents) {
+    reasons.talk =
+      "No student voice was told apart from yours in this recording, so students' answers are counted as your talk — there is no fair way to judge airtime or participation from it."
+  } else if (capturedShare < MIN_CAPTURED_TALK_SHARE) {
     reasons.talk = `Only about ${Math.round(capturedShare * 100)}% of this recording came through as speech the microphone could resolve, so the airtime split isn't solid enough to press on. A low student share here is a limit of the recording, not a finding about your room.`
   } else if ((detail.studentVoiceSegments ?? 0) < MIN_STUDENT_VOICE_SEGMENTS) {
     reasons.talk =

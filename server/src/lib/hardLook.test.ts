@@ -113,7 +113,7 @@ test('a lesson with evidence everywhere is judged on all four sections', () => {
   const { eligible, withheld } = sectionEligibility({
     durationSec: 1200,
     metricsDetail: fullMetrics,
-    questionLog: [{}, {}, {}, {}],
+    questionLog: [{ timestampSec: 0, text: 'Why does it matter?' }, { timestampSec: 30, text: 'Why does it matter?' }, { timestampSec: 60, text: 'Why does it matter?' }, { timestampSec: 90, text: 'Why does it matter?' }],
     lessonContent: fullContent,
   })
   assert.deepEqual(eligible.map((s) => s.key), ['talk', 'questions', 'content', 'routines'])
@@ -127,7 +127,7 @@ test('talk is withheld when the microphone caught little of the room', () => {
   const { eligible, withheld } = sectionEligibility({
     durationSec: 2000,
     metricsDetail: { ...fullMetrics, totalDurationSec: 2000, teacherTalkSec: 220, studentTalkSec: 40 },
-    questionLog: [{}, {}, {}],
+    questionLog: [{ timestampSec: 0, text: 'Why does it matter?' }, { timestampSec: 30, text: 'Why does it matter?' }, { timestampSec: 60, text: 'Why does it matter?' }],
     lessonContent: fullContent,
   })
   assert.ok(!eligible.some((s) => s.key === 'talk'))
@@ -139,7 +139,7 @@ test('a section with too little of its own evidence is withheld, never cleared a
   const { eligible, withheld } = sectionEligibility({
     durationSec: 1200,
     metricsDetail: { ...fullMetrics, directiveCount: 0, transitionCount: 0, redirectionCount: 0 },
-    questionLog: [{}],
+    questionLog: [{ timestampSec: 0, text: 'Why does it matter?' }],
     lessonContent: {},
   })
   assert.deepEqual(eligible.map((s) => s.key), ['talk'])

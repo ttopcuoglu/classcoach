@@ -7,6 +7,7 @@
 // The server mirror is server/src/lib/questionMix.ts.
 
 import type { AudioSession } from './api'
+import { withoutAddressedNames } from './keepDoing'
 
 const RECALL_KINDS = new Set(['remember', 'recall'])
 const MATCH_WINDOW_SEC = 4
@@ -14,7 +15,9 @@ const MATCH_WINDOW_SEC = 4
 /// The card's own test for a self-answered question (sameMoment in
 /// AudioCoaching.tsx): close in time and the same opening words.
 function sameMoment(a: { timestampSec: number; text: string }, b: { timestampSec: number; quote: string }) {
-  const norm = (q: string) => q.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim()
+  // Names hidden on both sides first, as the card compares them: a stored
+  // quote can already read "[name]" where the logged question has the name.
+  const norm = (q: string) => withoutAddressedNames(q).toLowerCase().replace(/[^a-z0-9 ]/g, '').trim()
   const na = norm(a.text)
   const nb = norm(b.quote)
   return Math.abs(a.timestampSec - b.timestampSec) <= 8 && na.length > 0 && nb.length > 0 && (na.startsWith(nb.slice(0, 20)) || nb.startsWith(na.slice(0, 20)))
