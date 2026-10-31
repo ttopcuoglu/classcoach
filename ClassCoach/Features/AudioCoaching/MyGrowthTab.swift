@@ -93,17 +93,18 @@ private struct LessonFocusLink: View {
     private var resolved: Resolved? {
         let dated = sessions.map { (session: $0, date: LessonMonth.parseDate($0.sessionDate)) }
         let newestFirst = dated.sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
-        guard let start = newestFirst.firstIndex(where: { $0.session.lessonFocus?.next?.itemId != nil }),
-              let itemId = newestFirst[start].session.lessonFocus?.next?.itemId else { return nil }
+        // The latest lesson with a focus at all, chosen or suggested — the
+        // banner follows the newest lesson, not the last one a focus was
+        // picked on (mirrors the web).
+        let focusOf = { (s: AudioSession) in NextTimeItem.focus(for: AudioSessionWithSegments(session: s, segments: [])) }
+        guard let start = newestFirst.firstIndex(where: { focusOf($0.session) != nil }),
+              let item = focusOf(newestFirst[start].session) else { return nil }
         let chosen = newestFirst[start]
-        guard let item = NextTimeItem.items(for: AudioSessionWithSegments(session: chosen.session, segments: []))
-            .first(where: { $0.id == itemId }) else { return nil }
         let section = item.insightsSection
-        // How many lessons in a row, newest first, chose a focus in this same part.
+        // How many lessons in a row, newest first, had a focus in this same part.
         var streak = 0
         for entry in newestFirst[start...] {
-            guard let id = entry.session.lessonFocus?.next?.itemId,
-                  NextTimeItem(id: id, from: "", text: "").insightsSection == section else { break }
+            guard let f = focusOf(entry.session), f.insightsSection == section else { break }
             streak += 1
         }
         let metrics = section.flatMap { s in FocusMetrics.groups.first { $0.category == s.title }?.metrics } ?? []

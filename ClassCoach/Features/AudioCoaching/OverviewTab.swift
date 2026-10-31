@@ -85,6 +85,20 @@ struct NextTimeItem: Identifiable, Equatable {
         }
     }
 
+    /// A lesson's one focus: the item the teacher chose, else the one in the
+    /// section the headline points to, else questioning, talk, climate —
+    /// mirrors `focusOf` in AudioCoaching.tsx; Summary and My Growth both use it.
+    static func focus(for session: AudioSessionWithSegments) -> NextTimeItem? {
+        let all = items(for: session)
+        if let id = session.lessonFocus?.next?.itemId, let item = all.first(where: { $0.id == id && $0.focusable }) { return item }
+        let headlineItem = ["talk": "talk", "questions": "questions", "content": "content-further", "routines": "climate"]
+        if let s = session.teachingMoves?.headline?.section, let id = headlineItem[s], let item = all.first(where: { $0.id == id }) { return item }
+        for id in ["questions", "talk", "climate"] {
+            if let item = all.first(where: { $0.id == id }) { return item }
+        }
+        return nil
+    }
+
     /// Everything the report suggests, in one list — mirrors
     /// `buildNextTimeItems`. "Worth double-checking" notes are left out: a
     /// caution about possible content errors is not something to build a

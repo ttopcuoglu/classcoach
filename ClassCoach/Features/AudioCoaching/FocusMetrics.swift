@@ -29,7 +29,7 @@ enum FocusMetrics {
         case .talkRatio: return "Your share of the talk"
         case .longestMonologue: return "Longest unbroken stretch"
         case .waitTime2: return "Pause after an answer"
-        case .followUpQuestionCount: return "Follow-up questions"
+        case .followUpQuestionCount: return "Answers followed up"
         case .higherOrderPct: return "Questions beyond recall"
         case .cfuCount: return "Checks for understanding"
         // Retired from the picker, kept so an account that chose one renders.
@@ -53,7 +53,7 @@ enum FocusMetrics {
         case .talkRatio: return "Your share of the talk (%)"
         case .longestMonologue: return "Longest unbroken stretch (min)"
         case .waitTime2: return "Pause after an answer (s)"
-        case .followUpQuestionCount: return "Follow-up questions (/10min)"
+        case .followUpQuestionCount: return "Answers followed up (%)"
         case .higherOrderPct: return "Questions beyond recall"
         case .cfuCount: return "Checks for understanding (/10min)"
         case .avgWaitTime: return "Avg. wait time (s)"
@@ -67,7 +67,7 @@ enum FocusMetrics {
 
     static func unit(_ metric: FocusMetric) -> String {
         switch metric {
-        case .talkRatio, .higherOrderPct, .toneRatio, .feedbackSpecificity: return "%"
+        case .talkRatio, .higherOrderPct, .toneRatio, .feedbackSpecificity, .followUpQuestionCount: return "%"
         case .avgWaitTime, .waitTime2: return "s"
         case .teacherPace: return " wpm"
         case .longestMonologue: return " min"
@@ -84,7 +84,25 @@ enum FocusMetrics {
     /// them — nil when the lesson has no question log at all.
     static func questionMix(_ session: AudioSession) -> [QuestionMix]? {
         guard session.questionLog != nil else { return nil }
-        return QuestionMix.classify(AudioSessionWithSegments(session: session, segments: [])).map(\.mix)
+        // The questions the card counts: answered-yourself ones are apart.
+        return ThinkingPause.detail(AudioSessionWithSegments(session: session, segments: [])).questions.map(\.mix)
+    }
+
+    /// No student was told apart from the teacher — from the stored count of
+    /// student lines, since a list row has no segments. Trends that need
+    /// student voice leave a gap there, as the cards hide those numbers.
+    static func noStudentVoice(_ session: AudioSession) -> Bool {
+        session.metricsDetail?["studentVoiceSegments"] == 0
+    }
+
+    /// Teacher Voice as the Talk & Participation tile shows it, from the
+    /// stored per-second totals; older lessons keep the old split.
+    static func teacherVoicePct(_ session: AudioSession) -> Double? {
+        let d = session.metricsDetail ?? [:]
+        guard let teacher = d["roomTeacherSec"] else { return session.teacherTalkPct }
+        let total = ["roomTeacherSec", "roomStudentSec", "roomGroupSec", "roomVideoSec", "roomUnclearSec", "roomOtherSec", "roomQuietSec"]
+            .reduce(0) { $0 + (d[$1] ?? 0) }
+        return total > 0 ? (teacher / total * 100).rounded() : session.teacherTalkPct
     }
 
     /// One named series, or two where a single number would mislead.
@@ -97,21 +115,28 @@ enum FocusMetrics {
             // reliable number in this report — diarization folds student
             // speech into teacher segments — so trending it would draw a line
             // through measurement noise.
-            return [("You", sessions.map(\.teacherTalkPct))]
+            return [("You", sessions.map { noStudentVoice($0) ? nil : teacherVoicePct($0) })]
         case .longestMonologue:
             return [("Minutes", sessions.map { session in
-                guard let sec = session.metricsDetail?["longestTeacherMonologueSec"] else { return nil }
+                guard !noStudentVoice(session), let sec = session.metricsDetail?["longestTeacherMonologueSec"] else { return nil }
                 return ((sec / 60) * 10).rounded() / 10
             })]
         case .waitTime2:
             // Below the sample floor the average is a reading of one or two
             // exchanges, which the rest of the report refuses to call a habit.
             return [("Seconds", sessions.map { session in
-                guard (session.metricsDetail?["waitTime2SampleCount"] ?? 0) >= AudioInsights.minWaitTimeSamples else { return nil }
+                guard !noStudentVoice(session), (session.metricsDetail?["waitTime2SampleCount"] ?? 0) >= AudioInsights.minWaitTimeSamples else { return nil }
                 return session.metricsDetail?["waitTime2Sec"]
             })]
         case .followUpQuestionCount:
-            return [("Follow-ups", sessions.map { perTenMin($0.metricsDetail?["followUpQuestionCount"], durationSec: $0.durationSec) })]
+            // Answers followed up, of the answers heard — what the focus card
+            // and Questioning use. Under three answers it is one or two
+            // exchanges; with no student voice there are none.
+            return [("Of the answers heard", sessions.map { session in
+                guard !noStudentVoice(session), let heard = session.metricsDetail?["answersHeardCount"],
+                      let followed = session.metricsDetail?["answersFollowedUpCount"], heard >= 3 else { return nil }
+                return (followed / heard * 100).rounded()
+            })]
         case .higherOrderPct:
             // Count AND total rather than a share: a share reads 100% when one
             // question was asked and it happened to be a good one, and 0% when
@@ -128,7 +153,7 @@ enum FocusMetrics {
         case .cfuCount:
             return [("Checks", sessions.map {
                 $0.durationSec ?? 0 >= ReportConfidence.minDurationForCFUDetectionSec
-                    ? perTenMin($0.cfuCount.map(Double.init), durationSec: $0.durationSec) : nil
+                    ? perTenMin(ThinkingPause.checkCount(AudioSessionWithSegments(session: $0, segments: [])).map(Double.init), durationSec: $0.durationSec) : nil
             })]
         // --- retired: still rendered if an account's stored focus is one ---
         case .avgWaitTime:
