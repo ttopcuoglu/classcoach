@@ -7,7 +7,7 @@ export const FOCUS_METRIC_LABELS: Record<FocusMetric, string> = {
   teacherPace: 'Your pace',
   longestMonologue: 'Longest unbroken stretch',
   waitTime2: 'Pause after an answer',
-  followUpQuestionCount: 'Follow-up questions',
+  followUpQuestionCount: 'Answers followed up',
   higherOrderPct: 'Questions beyond recall',
   cfuCount: 'Checks for understanding',
   // Retired from the picker, kept so an account that chose one still renders.

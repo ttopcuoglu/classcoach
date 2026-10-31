@@ -2557,6 +2557,25 @@ const ITEM_SECTION: Record<string, InsightsSection> = {
   'content-further': 'content',
   climate: 'routines',
 }
+/// A lesson's one focus: the Try the teacher made their focus; else the one in
+/// the section the headline's pattern points to; else questioning, talk,
+/// climate in that order. The Summary card and My Growth's banner both use
+/// this, so the banner shows the latest lesson's focus whether it was chosen
+/// or suggested.
+function focusOf(session: Pick<AudioSessionWithSegments, 'momentToRevisit' | 'nextSteps' | 'contentNotes' | 'teachingMoves' | 'lessonFocus'>) {
+  const items = buildNextTimeItems(session)
+  const headlineSection = session.teachingMoves?.headline?.section
+  const suggested =
+    (headlineSection && items.find((item) => item.id === HEADLINE_SECTION_ITEM[headlineSection])) ||
+    items.find((item) => item.id === 'questions') ||
+    items.find((item) => item.id === 'talk') ||
+    items.find((item) => item.id === 'climate') ||
+    null
+  const chosenId = session.lessonFocus?.next?.itemId
+  const chosen = items.find((item) => item.id === chosenId && FOCUSABLE(item.id)) ?? null
+  return { suggested, chosen, focus: chosen ?? suggested }
+}
+
 /// Every item on the list is a change to aim at; "What worked" moved to Keep
 /// doing. Kept as a function so a future non-focusable item has a home.
 const FOCUSABLE = (_id: string) => true
@@ -2861,16 +2880,7 @@ function SummaryTab({
   // section the headline's pattern points to; else questioning, talk, climate
   // in that order. Any Try next time item but "keep doing" can be the focus.
   const tryItems = buildNextTimeItems(session)
-  const headlineSection = session.teachingMoves?.headline?.section
-  const suggested =
-    (headlineSection && tryItems.find((item) => item.id === HEADLINE_SECTION_ITEM[headlineSection])) ||
-    tryItems.find((item) => item.id === 'questions') ||
-    tryItems.find((item) => item.id === 'talk') ||
-    tryItems.find((item) => item.id === 'climate') ||
-    null
-  const chosenId = session.lessonFocus?.next?.itemId
-  const chosenFocus = tryItems.find((item) => item.id === chosenId && FOCUSABLE(item.id)) ?? null
-  const focus = chosenFocus ?? suggested
+  const { suggested, chosen: chosenFocus, focus } = focusOf(session)
   const focusSection = focus ? ITEM_SECTION[focus.id] : undefined
   const withGoal = focus?.id === 'questions' && heard != null && followed != null && heard >= 3 && followed < heard
   const goalTarget = withGoal ? Math.min(heard!, followed! + 2) : 0
@@ -3373,11 +3383,13 @@ function LessonFocusLink({
   const newestFirst = sessions
     .slice()
     .sort((a, b) => new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime())
-  const chosen = newestFirst.find((s) => s.lessonFocus?.next?.itemId)
-  const itemId = chosen?.lessonFocus?.next?.itemId
-  if (!chosen || !itemId) return null
-  const item = buildNextTimeItems(chosen).find((i) => i.id === itemId)
-  if (!item) return null
+  // The latest lesson that has a focus at all — chosen or suggested — so the
+  // banner follows the teacher's newest lesson rather than the last one they
+  // happened to pick a focus on (a fortnight-old one, once).
+  const chosen = newestFirst.find((s) => focusOf(s).focus != null)
+  const item = chosen ? focusOf(chosen).focus : null
+  if (!chosen || !item) return null
+  const itemId = item.id
 
   const section = ITEM_SECTION[itemId]
   const sectionLabel = section ? INSIGHTS_SECTIONS.find((s) => s.key === section)?.label : undefined
@@ -3388,7 +3400,7 @@ function LessonFocusLink({
   // How many lessons in a row, newest first, chose a focus in this same part.
   let streak = 0
   for (const s of newestFirst.slice(newestFirst.indexOf(chosen))) {
-    const id = s.lessonFocus?.next?.itemId
+    const id = focusOf(s).focus?.id
     if (!id || ITEM_SECTION[id] !== section) break
     streak++
   }
@@ -3472,25 +3484,36 @@ function MyGrowthTab({
     new Date(s.sessionDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
   )
 
-  const teacherTalk = analyzed.map((s) => s.teacherTalkPct)
+  // Every trend counts the way that lesson's own cards count, so a point on
+  // a chart is the number the teacher saw on the report. A lesson where no
+  // student voice was told apart leaves a gap in the trends that need it.
+  const teacherTalk = analyzed.map((s) => (noStudentVoice(s) ? null : teacherVoicePct(s)))
 
   const cfuFrequency = analyzed.map((s) => {
     const duration = s.durationSec ?? 0
     if (duration < MIN_DURATION_FOR_CFU_DETECTION_SEC) return null
-    return Math.round(((s.cfuCount ?? 0) / (duration / 600)) * 10) / 10
+    return Math.round(((checkCount(s) ?? 0) / (duration / 600)) * 10) / 10
   })
   const cfuMax = Math.max(4, ...cfuFrequency.filter((v): v is number => v != null)) * 1.2
 
-  // Plain per-10-minute frequency for phrase-matched counts — none of these
-  // have an established minimum-duration detection floor elsewhere in the
-  // app (unlike CFUs), so no exclusion beyond having a real duration.
-  const followUpFrequency = analyzed.map((s) => perTenMin(s, metricsNum(s, 'followUpQuestionCount')))
-  const followUpMax = frequencyMax(followUpFrequency)
+  // Answers followed up, of the student answers heard — the number the
+  // focus card and Questioning use. Below three answers a share is one or
+  // two exchanges; with no student voice there are none to follow up.
+  const followUpFrequency = analyzed.map((s) => {
+    const heard = metricsNum(s, 'answersHeardCount')
+    const followed = metricsNum(s, 'answersFollowedUpCount')
+    if (noStudentVoice(s) || heard == null || followed == null || heard < 3) return null
+    return Math.round((followed / heard) * 100)
+  })
+  const followUpMax = 100
 
 
   const teacherPace = analyzed.map((s) => metricsNum(s, 'teacherWordsPerMinute'))
   const paceMax = Math.max(220, ...teacherPace.filter((v): v is number => v != null)) * 1.1
   const longestMonologue = analyzed.map((s) => {
+    // A stretch ends when a student is heard; with none separated it runs
+    // through every answer, so the card hides it and so does this.
+    if (noStudentVoice(s)) return null
     const sec = metricsNum(s, 'longestTeacherMonologueSec')
     return sec == null ? null : Math.round((sec / 60) * 10) / 10
   })
@@ -3498,7 +3521,7 @@ function MyGrowthTab({
   // Below the sample floor the average is a reading of one or two exchanges,
   // which the rest of the report refuses to treat as a habit — so does this.
   const waitTime2 = analyzed.map((s) =>
-    (metricsNum(s, 'waitTime2SampleCount') ?? 0) >= MIN_WAIT_TIME_SAMPLES ? metricsNum(s, 'waitTime2Sec') : null,
+    !noStudentVoice(s) && (metricsNum(s, 'waitTime2SampleCount') ?? 0) >= MIN_WAIT_TIME_SAMPLES ? metricsNum(s, 'waitTime2Sec') : null,
   )
   const waitTime2Max = Math.max(4, ...waitTime2.filter((v): v is number => v != null)) * 1.2
   // Count AND total on one chart rather than a share on its own: a share is
@@ -3578,12 +3601,12 @@ function MyGrowthTab({
       key: 'followUpQuestionCount',
       node: (
         <TrendChart
-          title="Follow-up questions"
-          unit=" per 10 min"
+          title="Answers followed up"
+          unit="%"
           maxValue={followUpMax}
           labels={labels}
-          series={[{ label: 'Follow-ups', colorVar: '--color-terracotta', values: followUpFrequency }]}
-          emptyMessage="Not enough follow-up questions detected yet to trend this."
+          series={[{ label: 'Of the answers heard', colorVar: '--color-terracotta', values: followUpFrequency }]}
+          emptyMessage="Not enough student answers heard yet to trend this."
         />
       ),
     },
@@ -6496,6 +6519,31 @@ function countedQuestions(session: Pick<AudioSession, 'questionLog' | 'teachingM
   return { questions, selfAnswered }
 }
 
+/// No student was told apart from the teacher in this lesson — from the list
+/// payload, which has no segments: the analysis counts student lines.
+function noStudentVoice(s: Pick<AudioSession, 'metricsDetail'>): boolean {
+  return (s.metricsDetail as Record<string, unknown> | null)?.studentVoiceSegments === 0
+}
+
+/// Teacher Voice as the Talk & Participation tile shows it, from the stored
+/// per-second totals (server roomShares); older lessons keep the old split.
+function teacherVoicePct(s: Pick<AudioSession, 'metricsDetail' | 'teacherTalkPct'>): number | null {
+  return voicePct(s, ['roomTeacherSec']) ?? s.teacherTalkPct
+}
+
+/// Student Voice the same way: a student's words, alone or in a crowd.
+function studentVoicePct(s: Pick<AudioSession, 'metricsDetail' | 'studentTalkPct'>): number | null {
+  return voicePct(s, ['roomStudentSec', 'roomGroupSec']) ?? s.studentTalkPct
+}
+
+function voicePct(s: Pick<AudioSession, 'metricsDetail'>, keys: string[]): number | null {
+  const d = (s.metricsDetail ?? {}) as Record<string, unknown>
+  if (typeof d.roomTeacherSec !== 'number') return null
+  const n = (k: string) => (typeof d[k] === 'number' ? (d[k] as number) : 0)
+  const total = ['roomTeacherSec', 'roomStudentSec', 'roomGroupSec', 'roomVideoSec', 'roomUnclearSec', 'roomOtherSec', 'roomQuietSec'].reduce((a, k) => a + n(k), 0)
+  return total > 0 ? Math.round((keys.reduce((a, k) => a + n(k), 0) / total) * 100) : null
+}
+
 /// THE check count lives in lib/questionMix (checkCount), shared with the
 /// printable report.
 const checkCountOf = checkCount
@@ -6988,16 +7036,6 @@ function metricsNum(s: AudioSession, key: string): number | null {
   return typeof v === 'number' ? v : null
 }
 
-function perTenMin(s: AudioSession, count: number | null): number | null {
-  const duration = s.durationSec ?? 0
-  return count == null || duration <= 0 ? null : Math.round((count / (duration / 600)) * 10) / 10
-}
-
-function frequencyMax(values: (number | null)[]): number {
-  const nums = values.filter((v): v is number => v != null)
-  return Math.max(4, ...nums) * 1.2
-}
-
 function buildTrendInsight(sessions: AudioSession[]): string | null {
   if (sessions.length < 3) return null
 
@@ -7005,12 +7043,17 @@ function buildTrendInsight(sessions: AudioSession[]): string | null {
   // drops when more of a recording is silence or goes uncaptured (once shown
   // as "more room for student voice" with students at 0% in every session).
   // Only credit students when their own share actually rose.
-  const withTalk = sessions.filter((s) => s.teacherTalkPct != null && s.studentTalkPct != null)
+  // Shares as each lesson's tiles show them, skipping lessons where no
+  // student voice was told apart.
+  const withTalk = sessions
+    .filter((s) => !noStudentVoice(s))
+    .map((s) => ({ teacher: teacherVoicePct(s), student: studentVoicePct(s) }))
+    .filter((t): t is { teacher: number; student: number } => t.teacher != null && t.student != null)
   if (withTalk.length >= 3) {
     const first = withTalk[0]
     const last = withTalk[withTalk.length - 1]
-    const teacherDelta = last.teacherTalkPct! - first.teacherTalkPct!
-    const studentDelta = last.studentTalkPct! - first.studentTalkPct!
+    const teacherDelta = last.teacher - first.teacher
+    const studentDelta = last.student - first.student
     if (teacherDelta <= -8 && studentDelta >= 5) {
       return `Your talk time is down ${Math.abs(Math.round(teacherDelta))} points since your first tracked session, and students' is up ${Math.round(studentDelta)} — more room for student voice.`
     }
