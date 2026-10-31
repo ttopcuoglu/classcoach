@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import type { ChatMessage } from '../lib/api'
 import { ThinkingIndicator } from './ProgressRing'
+import { SpeakInBox, speakingBoxClass } from './SpeakInBox'
+import { useSpeechToText } from '../hooks/useSpeechToText'
 
 // Shared follow-up chat thread for the one-shot feedback surfaces (Practice,
 // Debrief, Difficult Conversations, Parent Messages). Visually mirrors
@@ -20,6 +22,7 @@ export default function CoachingChat({
   disabled,
   disabledMessage,
   placeholder = 'Ask a follow-up...',
+  speakable,
 }: {
   messages: ChatMessage[]
   sending: boolean
@@ -30,8 +33,16 @@ export default function CoachingChat({
   disabled?: boolean
   disabledMessage?: string
   placeholder?: string
+  /// Shows a Speak button inside the box; spoken words are added to the draft.
+  speakable?: boolean
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+  const speech = useSpeechToText((text) =>
+    onDraftChange(draftRef.current.trim() ? `${draftRef.current.trim()} ${text}` : text),
+  )
+  const canSpeak = speakable && speech.supported
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
@@ -66,18 +77,31 @@ export default function CoachingChat({
         className={messages.length > 0 || sending ? 'border-t border-hairline p-4' : 'p-4'}
         onSubmit={(e) => {
           e.preventDefault()
+          if (speech.listening) speech.stop()
           onSend()
         }}
       >
         <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={draft}
-            onChange={(e) => onDraftChange(e.target.value)}
-            placeholder={placeholder}
-            disabled={sending || disabled}
-            className="flex-1 rounded-lg border border-hairline bg-cream px-4 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
-          />
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={draft}
+              onChange={(e) => onDraftChange(e.target.value)}
+              placeholder={placeholder}
+              disabled={sending || disabled}
+              className={`w-full rounded-lg border bg-cream py-2.5 pl-4 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60 ${
+                !canSpeak ? 'pr-4' : speech.listening ? 'pr-48' : 'pr-24'
+              } ${speech.listening ? speakingBoxClass : 'border-hairline'}`}
+            />
+            {canSpeak && (
+              <SpeakInBox
+                listening={speech.listening}
+                onClick={speech.toggleListening}
+                disabled={sending || disabled}
+                place="right-1.5 top-1/2 -translate-y-1/2"
+              />
+            )}
+          </div>
           <button
             type="submit"
             disabled={sending || disabled || !draft.trim()}

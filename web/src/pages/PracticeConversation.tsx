@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import AnswerSection, { NumberedCard } from '../components/AnswerSection'
-import { MicIcon, StarIcon } from '../components/icons'
+import { StarIcon } from '../components/icons'
 import PastList from '../components/PastList'
 import { usePastItems } from '../hooks/usePastItems'
 import SafetyAdvisoryBanner, { PrivacyReminder } from '../components/SafetyAdvisoryBanner'
@@ -9,6 +9,7 @@ import { UpgradeMessage } from '../components/UpgradeMessage'
 import { PanelHeader } from '../components/PanelHeader'
 import { ProgressRing, WorkingRing } from '../components/ProgressRing'
 import { useSpeechToText } from '../hooks/useSpeechToText'
+import { SpeakInBox, speakingBoxClass } from '../components/SpeakInBox'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import {
   CHALLENGE_TYPES,
@@ -301,30 +302,20 @@ export default function PracticeConversation() {
                 )}
                 <label className="flex flex-col gap-1.5">
                   <span className="text-sm font-medium text-ink">How would you respond?</span>
-                  <textarea
-                    value={responseText}
-                    onChange={(e) => setResponseText(e.target.value)}
-                    disabled={submitting}
-                    rows={5}
-                    placeholder="Draft what you'd say or write..."
-                    className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={responseText}
+                      onChange={(e) => setResponseText(e.target.value)}
+                      disabled={submitting}
+                      rows={5}
+                      placeholder="Draft what you'd say or write..."
+                      className={`w-full rounded-xl border bg-cream px-4 pb-12 pt-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60 ${
+                        listening ? speakingBoxClass : 'border-hairline'
+                      }`}
+                    />
+                    {speechSupported && <SpeakInBox listening={listening} onClick={toggleListening} disabled={submitting} />}
+                  </div>
                 </label>
-                {speechSupported && (
-                  <button
-                    type="button"
-                    onClick={toggleListening}
-                    disabled={submitting}
-                    className={`flex w-fit items-center gap-2 rounded-full border-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
-                      listening
-                        ? 'border-terracotta bg-peach-tint text-terracotta-600'
-                        : 'border-mint-tint bg-mint-tint/60 text-forest hover:border-terracotta/40 hover:bg-mint-tint'
-                    }`}
-                  >
-                    <MicIcon className="h-5 w-5" />
-                    {listening ? 'Listening... tap to stop' : 'Speak your response'}
-                  </button>
-                )}
                 <SafetyAdvisoryBanner text={responseText} />
                 <PrivacyReminder />
                 <div className="flex items-center justify-between">

@@ -1703,6 +1703,9 @@ function previewRealAttempt(body: Json): Json {
 function answer(path: string, method: string, body: Json): Json | Json[] | null {
   // Practice's "Something real", end to end: the situation is stored, then
   // coached and classified on the first response.
+  if (path === '/api/conversation-prep/generate-scenario' && method === 'POST') {
+    return { situationText: 'A parent emails asking why their child got a C on the last essay when they worked on it all weekend.', gradeBand: String(body.gradeBand ?? '6-8') }
+  }
   // "Make one up for me": a fixed scenario, so the response box can be seen.
   if (path === '/api/scenarios/generate' && method === 'POST') {
     return {

@@ -782,6 +782,7 @@ export default function TryItOut({
                   draft={chatDraft}
                   onDraftChange={setChatDraft}
                   onSend={handleSendChat}
+                  speakable
                   placeholder={walkedThrough ? 'Try saying it in your own words...' : 'Ask a follow-up about this feedback...'}
                 />
 

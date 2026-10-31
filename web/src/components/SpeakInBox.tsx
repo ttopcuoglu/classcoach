@@ -6,14 +6,25 @@
 
 import { MicIcon } from './icons'
 
-export function SpeakInBox({ listening, onClick, disabled }: { listening: boolean; onClick: () => void; disabled?: boolean }) {
+/// `place` positions it; the default is a multi-line box's bottom-right corner.
+export function SpeakInBox({
+  listening,
+  onClick,
+  disabled,
+  place = 'bottom-3 right-5',
+}: {
+  listening: boolean
+  onClick: () => void
+  disabled?: boolean
+  place?: string
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       aria-pressed={listening}
-      className={`absolute bottom-3 right-5 flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${
+      className={`absolute ${place} flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${
         listening
           ? 'border-terracotta bg-peach-tint text-terracotta-600'
           : 'border-forest/30 bg-mint-tint text-forest hover:border-forest'
