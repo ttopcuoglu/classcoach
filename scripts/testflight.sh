@@ -45,10 +45,13 @@ fi
 VERSION=$(grep -m1 -o 'MARKETING_VERSION = [0-9.]*' "$PBXPROJ" | grep -o '[0-9.]*$')
 echo "Building Wivoza $VERSION ($BUILD)…"
 
-ARCHIVE=build/ClassCoach-$BUILD.xcarchive
+# Saved where Xcode's Organizer looks, so every upload shows up there next to
+# archives made from Xcode itself.
+ARCHIVE_DIR="$HOME/Library/Developer/Xcode/Archives/$(date +%Y-%m-%d)"
+ARCHIVE="$ARCHIVE_DIR/ClassCoach $VERSION ($BUILD).xcarchive"
 EXPORT=build/export-$BUILD
 rm -rf "$ARCHIVE" "$EXPORT"
-mkdir -p build
+mkdir -p build "$ARCHIVE_DIR"
 
 LOG=build/testflight-$BUILD.log
 if ! xcodebuild -project "$PROJECT" -scheme ClassCoach -configuration Release \
