@@ -695,6 +695,34 @@ private struct MetricsLogs: Decodable {
     let roomTrace: String?
 }
 
+/// Read on its own, so a teacherPause this build cannot read costs only the
+/// pause and never the answer log or room trace beside it.
+private struct TeacherPauseLog: Decodable {
+    let teacherPause: StoredTeacherPause?
+}
+
+/// Teacher Pause Time as the server stored it when the lesson was analysed
+/// (server/src/lib/teacherPause.ts). Shown as stored and never worked out
+/// on the phone, so it reads the same on the web, here, and on every visit.
+struct StoredTeacherPause: Decodable {
+    /// One thinking question's pause. `sec` is nil where it could not be
+    /// timed; `folded`: a student's answer was transcribed inside the
+    /// teacher's line, so where the teacher stopped is unknown.
+    struct Question: Decodable {
+        let timestampSec: Double
+        let text: String
+        let sec: Double?
+        let answered: Bool
+        let keptTalking: Bool?
+        let folded: Bool?
+    }
+    let average: Double?
+    /// no_thinking_questions, no_student_voice, answers_in_teacher_voice,
+    /// none_timed — or nil when there is an average.
+    let reason: String?
+    let thinking: [Question]
+}
+
 struct AudioSession: Decodable, Identifiable {
     let id: String
     let teacherName: String?
@@ -725,6 +753,8 @@ struct AudioSession: Decodable, Identifiable {
     /// What each second of the lesson was, one character a second — see
     /// RoomBreakdown. metricsLogs.roomTrace; absent on older lessons.
     let roomTrace: String?
+    /// metricsLogs.teacherPause; absent on lessons not yet worked out.
+    let teacherPause: StoredTeacherPause?
     let highlights: [AudioHighlight]?
     let phases: [AudioPhase]?
     let questionLog: [AudioQuestionLogEntry]?
@@ -828,6 +858,7 @@ struct AudioSession: Decodable, Identifiable {
         answerLog = logs?.answerLog
         followUpLog = logs?.followUpLog
         roomTrace = logs?.roomTrace
+        teacherPause = (try? container.decodeIfPresent(TeacherPauseLog.self, forKey: .metricsLogs))?.teacherPause
         highlights = try container.decodeIfPresent([AudioHighlight].self, forKey: .highlights)
         phases = try container.decodeIfPresent([AudioPhase].self, forKey: .phases)
         questionLog = try container.decodeIfPresent([AudioQuestionLogEntry].self, forKey: .questionLog)
@@ -918,6 +949,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var answerLog: [AudioAnswer]? { session.answerLog }
     var followUpLog: [AudioFollowUpLine]? { session.followUpLog }
     var roomTrace: String? { session.roomTrace }
+    var teacherPause: StoredTeacherPause? { session.teacherPause }
     var highlights: [AudioHighlight]? { session.highlights }
     var phases: [AudioPhase]? { session.phases }
     var questionLog: [AudioQuestionLogEntry]? { session.questionLog }

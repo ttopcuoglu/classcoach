@@ -12,6 +12,7 @@ import { enrichClassroomMoves } from '../lib/classroomMoves.ts'
 import { readEscalation } from '../lib/escalation.ts'
 import { readTeachingMoves } from '../lib/teachingMoves.ts'
 import { parseLevelTrace, splitNonSpeech, teacherIntervals } from '../lib/settleTime.ts'
+import { storedTeacherPause, teacherPauseOf } from '../lib/teacherPause.ts'
 import { buildRoomTrace, openingWasRecorderOnly, roomFacts, roomShares, type RoomFacts } from '../lib/roomTrace.ts'
 import { buildSoundTimeline } from '../lib/soundTimeline.ts'
 import { enrichLessonContent } from '../lib/lessonObjective.ts'
@@ -998,6 +999,9 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
         ...(nonSpeech ? { quietSec: nonSpeech.quietSec, unresolvedSec: nonSpeech.unresolvedSec } : {}),
         ...voiceClasses,
         ...(roomTrace ? { roomTrace, ...roomShares(roomTrace) } : {}),
+        // Worked out once, here, and only shown by the web and the iPhone,
+        // so the figure a teacher sees cannot move after the fact.
+        teacherPause: teacherPauseOf(segments, analysis.questionLog, teachingMoves) as unknown as Prisma.InputJsonValue,
       },
       highlights: analysis.highlights,
       phases: analysis.phases,
@@ -2325,20 +2329,23 @@ function focusLinesOf(lessonFocus: unknown): Record<string, FocusLine> | null {
 // Try next time item as the page shows it, and the line is kept under its key.
 audioSessionsRouter.post('/:id/focus-line', async (req, res) => {
   const { text, from, pauseSec: rawPause } = req.body ?? {}
-  // The lesson's Teacher Pause Time, as the app shows it; older apps send none.
-  const pauseSec = typeof rawPause === 'number' && Number.isFinite(rawPause) ? Math.round(rawPause * 10) / 10 : null
   if (typeof text !== 'string' || !text.trim() || text.length > 2000) {
     res.status(400).json({ error: 'text is required' })
     return
   }
   const session = await prisma.audioSession.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
-    select: { id: true, lessonFocus: true },
+    select: { id: true, lessonFocus: true, metricsDetail: true },
   })
   if (!session) {
     res.status(404).json({ error: 'Session not found' })
     return
   }
+  // The lesson's Teacher Pause Time: the stored one, else what the app sent
+  // (lessons analysed before it was stored); older apps send none.
+  const stored = storedTeacherPause(session.metricsDetail)
+  const pauseSec =
+    stored !== undefined ? stored : typeof rawPause === 'number' && Number.isFinite(rawPause) ? Math.round(rawPause * 10) / 10 : null
   const key = focusLineKey(text)
   const lines = focusLinesOf(session.lessonFocus) ?? {}
   // A stored line that asks for a pause the lesson already shows is written
@@ -2407,17 +2414,25 @@ audioSessionsRouter.post('/:id/next-steps', async (req, res) => {
 // after the very question it named. Rewritten once without the pause and
 // kept; the app asks when it finds one.
 audioSessionsRouter.post('/:id/next-steps/without-pause', async (req, res) => {
-  const { key, pauseSec } = req.body ?? {}
-  if (!NEXT_STEP_KEYS.includes(key) || typeof pauseSec !== 'number' || pauseSec < PAUSE_GOAL_SEC) {
+  const { key, pauseSec: sentPause } = req.body ?? {}
+  if (!NEXT_STEP_KEYS.includes(key)) {
     res.status(400).json({ error: 'key and a pause of at least three seconds are required' })
     return
   }
   const session = await prisma.audioSession.findFirst({
     where: { id: req.params.id, userId: req.user!.userId },
-    select: { id: true, nextSteps: true, status: true },
+    select: { id: true, nextSteps: true, status: true, metricsDetail: true },
   })
   if (!session) {
     res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  // The stored pause decides; what the app sent only counts for a lesson
+  // analysed before the pause was stored.
+  const stored = storedTeacherPause(session.metricsDetail)
+  const pauseSec = stored !== undefined ? stored : typeof sentPause === 'number' ? sentPause : null
+  if (pauseSec == null || pauseSec < PAUSE_GOAL_SEC) {
+    res.status(400).json({ error: 'key and a pause of at least three seconds are required' })
     return
   }
   const steps = (session.nextSteps ?? {}) as Record<string, unknown>

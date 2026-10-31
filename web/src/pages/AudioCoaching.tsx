@@ -14,7 +14,6 @@ import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { UPLOAD_STAGE, transcribeEstimateSec, transcribeHint, transcribeStage } from '../lib/transcribeStages'
 import { FOCUS_METRIC_GROUPS, FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import { questionTags } from '../lib/questionTags'
-import { averagePause, pausesAfter } from '../lib/thinkingPause'
 import { PrintAllContext, usePrintAll } from '../lib/printAll'
 import { setPlanningPrefill } from '../lib/communicationsPrefill'
 import { MIN_STRETCH_TO_SHOW_SEC, longestTeacherStretch } from '../lib/teacherStretch'
@@ -59,6 +58,8 @@ import {
   type FocusMetric,
   type ReflectChatErrorKind,
   type SpeakerSample,
+  type StoredQuestionPause,
+  type StoredTeacherPause,
   type TalkVoice,
   type TranscriptSegment,
 } from '../lib/api'
@@ -2953,7 +2954,7 @@ function SummaryTab({
   const wpm = session.metricsDetail?.teacherWordsPerMinute ?? null
   // How many questions the average rests on: 0.0 s from one question and
   // from eight are different findings.
-  const tawtCount = tawt.pauses.filter((p) => p != null).length
+  const tawtCount = tawt.pauses.filter((p) => p.sec != null).length
   // The voices take the colours the Talk & Participation strip draws them in.
   const tiles: { label: string; metric: ConfidentMetric; unit?: string; note?: string; accent: Accent; swatch?: string }[] = [
     ...(room
@@ -3007,16 +3008,7 @@ function SummaryTab({
       metric:
         tawt.average != null
           ? { state: 'measured', display: tawt.average.toFixed(1) }
-          : {
-              state: 'not_measurable',
-              display: '—',
-              reason:
-                tawt.thinking.length === 0
-                  ? 'No question asked students to explain or reason.'
-                  : tawt.noStudents
-                    ? 'Needs student voice told apart from yours.'
-                    : 'No pause after a thinking question could be timed.',
-            },
+          : { state: 'not_measurable', display: '—', reason: tawt.why ?? PAUSE_NOT_SHOWN.none_timed },
       unit: 's',
       note: tawt.average != null ? `from ${tawtCount} question${tawtCount === 1 ? '' : 's'}` : undefined,
       accent: ACCENTS.olive,
@@ -5957,8 +5949,7 @@ function PauseMoments({
           // The question's own line, then the first line said after it.
           const own = lines.find((l) => l.endSec > q.timestampSec)
           const next = own ? lines.find((l) => l.startSec >= own.endSec - 0.01 && l !== own) : undefined
-          const waited =
-            p == null ? 'could not be timed' : p.keptTalking ? 'you kept talking' : `${p.sec.toFixed(1)} s${p.answered ? ' · a student answered' : ''}`
+          const waited = pauseLabel(p)
           return (
             <div key={`${q.timestampSec}-${i}`} className="flex flex-col gap-1 border-b border-hairline pb-2 last:border-b-0">
               <p className="text-sm text-ink">
@@ -6081,24 +6072,20 @@ function TalkNumbers({
         })}
         {pace}
         {pause && (() => {
-          const timed = pause.pauses.filter((p) => p != null).length
+          const timed = pause.pauses.filter((p) => p.sec != null).length
           const sub =
             pause.average != null
               ? `average after ${timed} thinking question${timed === 1 ? '' : 's'}`
-              : pause.noStudents && pause.thinking.length > 0
-                ? NEEDS_STUDENT_VOICE
-                : pause.thinking.length === 0
-                ? 'no question asked students to explain or reason'
-                : 'no pause after a thinking question could be timed'
+              : (pause.why ?? PAUSE_NOT_SHOWN.none_timed).replace(/\.$/, '').replace(/^./, (c) => c.toLowerCase())
           const inner = (
             <>
               <p className="text-xs font-semibold text-ink-soft">Teacher pause</p>
               <p className="font-heading text-2xl font-extrabold leading-tight text-ink">{pause.average != null ? `${pause.average.toFixed(1)} s` : '—'}</p>
               <p className="text-xs text-ink-soft">{sub}</p>
-              {pause.thinking.length > 0 && !pause.noStudents && <p className="mt-1 text-xs font-semibold text-terracotta-600">See the questions</p>}
+              {pause.thinking.length > 0 && <p className="mt-1 text-xs font-semibold text-terracotta-600">See the questions</p>}
             </>
           )
-          return pause.thinking.length > 0 && !pause.noStudents ? (
+          return pause.thinking.length > 0 ? (
             <button
               type="button"
               onClick={onPause}
@@ -6505,9 +6492,6 @@ function studentVoiceSeparated(session: Pick<AudioSessionWithSegments, 'segments
   return (session.segments ?? []).some((s) => s.speakerLabel !== 'Teacher' && s.text.trim() !== '')
 }
 
-/// Shown wherever a measure needs student voice and the lesson has none.
-const NEEDS_STUDENT_VOICE = 'needs student voice told apart from yours'
-
 /// THE question count, for every card that shows one: the questions left with
 /// students, sorted Recall / Explain & reason, with the ones the teacher
 /// answered themself apart. The Summary tile once counted all fifteen logged
@@ -6548,13 +6532,54 @@ function voicePct(s: Pick<AudioSession, 'metricsDetail'>, keys: string[]): numbe
 /// printable report.
 const checkCountOf = checkCount
 
+/// Why there is no Teacher Pause Time, in the words every card uses.
+const PAUSE_NOT_SHOWN: Record<NonNullable<StoredTeacherPause['reason']>, string> = {
+  no_thinking_questions: 'No question asked students to explain or reason.',
+  no_student_voice: 'Needs student voice told apart from yours.',
+  answers_in_teacher_voice: 'Students’ answers were recorded as your voice, so where you stopped talking isn’t known.',
+  none_timed: 'No pause after a thinking question could be timed.',
+}
+
+/// Teacher Pause Time as the server stored it when the lesson was analysed —
+/// never worked out here, so it is the same on every visit, on the web and
+/// the iPhone, and no change to this page can move it. The thinking
+/// questions are matched back to the page's own list for their kind and
+/// wording.
 function tawtOf(session: AudioSessionWithSegments) {
   const { questions, selfAnswered } = countedQuestions(session)
-  const thinking = questions.filter((q) => q.mix !== 'recall')
-  const pauses = pausesAfter(session.segments ?? [], thinking)
-  // With no student separated, an answer reads as the teacher still talking.
   const noStudents = !studentVoiceSeparated(session)
-  return { selfAnswered, questions, thinking, pauses, average: noStudents ? null : averagePause(pauses), noStudents }
+  const stored = session.metricsLogs?.teacherPause
+  if (!stored) {
+    return { selfAnswered, questions, thinking: [], pauses: [], average: null, noStudents, why: 'Not worked out for this lesson yet.' }
+  }
+  const thinking = stored.thinking.map(
+    (p) =>
+      questions.find((q) => Math.abs(q.timestampSec - p.timestampSec) < 0.05) ?? {
+        quote: withoutAddressedNames(p.text),
+        timestampSec: p.timestampSec,
+        mix: 'reason' as MixKey,
+        byName: null,
+        check: undefined,
+      },
+  )
+  return {
+    selfAnswered,
+    questions,
+    thinking,
+    pauses: stored.thinking,
+    average: stored.average,
+    noStudents,
+    why: stored.average == null ? PAUSE_NOT_SHOWN[stored.reason ?? 'none_timed'] : null,
+  }
+}
+
+/// What one question's pause says, wherever it is listed.
+function pauseLabel(p: StoredQuestionPause | undefined): string {
+  if (!p) return 'not measured'
+  if (p.folded) return 'an answer was recorded as your voice · not timed'
+  if (p.sec == null) return 'not measured'
+  if (p.keptTalking) return p.sec > 0 ? `you went on after ${p.sec.toFixed(1)} s` : 'you kept talking'
+  return `${p.sec.toFixed(1)} s${p.answered ? ' · a student answered' : ''}`
 }
 
 /// Your questions and checks for understanding on one lesson timeline: each
@@ -6567,7 +6592,7 @@ function tawtOf(session: AudioSessionWithSegments) {
 /// Never a claim that students understood.
 function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments }) {
   const checks = (session.cfuLog ?? []).filter((c) => c.loop?.who !== 'not_a_check')
-  const { selfAnswered, questions, thinking: thinkingQuestions, pauses: thinkingPauses, average: thinkingPause, noStudents } = tawtOf(session)
+  const { selfAnswered, questions, thinking: thinkingQuestions, pauses: thinkingPauses, average: thinkingPause, why: pauseWhy } = tawtOf(session)
   // The follow-ups the answer log paired with a student answer — the same
   // ones the follow-up count rests on.
   const detail = (session.metricsDetail ?? {}) as Record<string, unknown>
@@ -6847,10 +6872,9 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
 
       {/* Teacher Pause Time: how long you left a question that asked
           students to explain or reason with the class, until you spoke again. */}
-      {thinkingPause == null && noStudents && thinkingQuestions.length > 0 && (
+      {thinkingPause == null && thinkingQuestions.length > 0 && (
         <p className="rounded-2xl border border-hairline bg-cream-card px-4 py-3 text-sm text-ink-soft">
-          <span className="font-semibold text-ink">Teacher Pause Time</span> isn’t shown: no student voice was told apart from
-          yours, so an answer would read as you still talking.
+          <span className="font-semibold text-ink">Teacher Pause Time</span> isn’t shown. {pauseWhy}
         </p>
       )}
       {thinkingPause != null && (
@@ -6861,7 +6885,7 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
               {thinkingPause.toFixed(1)}
               <small className="ml-1 font-sans text-base font-bold">s</small>
               <small className="ml-1.5 font-sans text-sm font-medium text-ink-soft">
-                average of {thinkingPauses.filter((p) => p != null).length}
+                average of {thinkingPauses.filter((p) => p.sec != null).length}
               </small>
             </span>
           </div>
@@ -6886,13 +6910,13 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
                     “{q.quote}”
                   </div>
                   <span className="shrink-0 text-right text-xs text-ink-soft">
-                    {p ? (
+                    {p?.sec != null && !p.folded ? (
                       <>
                         <b className="font-heading text-base text-forest">{p.sec.toFixed(1)} s</b>
                         <span className="block">{p.keptTalking ? 'you kept talking' : p.answered ? 'a student answered' : 'no one answered'}</span>
                       </>
                     ) : (
-                      'not measured'
+                      pauseLabel(p)
                     )}
                   </span>
                 </div>

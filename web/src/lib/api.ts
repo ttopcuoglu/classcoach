@@ -775,6 +775,27 @@ export type AssignmentCoachSession = {
 
 // status is one of: setup, recording, paused, transcribing, tagging,
 // analyzed, locked
+/// One thinking question's pause. `sec` is null where it could not be
+/// timed; `folded`: a student's answer was transcribed inside the teacher's
+/// line, so where the teacher stopped is unknown.
+export type StoredQuestionPause = {
+  timestampSec: number
+  text: string
+  sec: number | null
+  answered: boolean
+  keptTalking?: true
+  folded?: true
+}
+
+export type StoredTeacherPause = {
+  version: number
+  average: number | null
+  reason: 'no_thinking_questions' | 'no_student_voice' | 'answers_in_teacher_voice' | 'none_timed' | null
+  foldedCount: number
+  questionCount: number
+  thinking: StoredQuestionPause[]
+}
+
 export type AudioSessionStatus =
   | 'setup'
   | 'recording'
@@ -1147,6 +1168,10 @@ export type AudioSession = {
     followUpLog?: { timestampSec: number; text: string }[]
     /// What each second was; see lib/roomBreakdown.ts.
     roomTrace?: string
+    /// Teacher Pause Time, worked out once by the server when the lesson was
+    /// analysed (server lib/teacherPause.ts). Shown as stored, never worked
+    /// out again here, so it reads the same on every visit and every device.
+    teacherPause?: StoredTeacherPause
   } | null
   /// The one focus for next lesson the teacher picked from Try next time.
   /// `lines`: the focus said simply, one per item made the focus, keyed by

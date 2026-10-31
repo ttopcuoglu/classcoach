@@ -157,24 +157,12 @@ enum QuestionMix: String, CaseIterable {
     }
 }
 
-/// Teacher Pause Time — mirrors `pausesAfter`/`averagePause` in
-/// web/src/lib/thinkingPause.ts and `tawtOf` in AudioCoaching.tsx: after each
-/// question that asked students to explain or reason (not one the teacher
-/// answered themselves), the time from the end of the teacher's turn to the
-/// teacher speaking again, averaged to a tenth of a second.
+/// Teacher Pause Time as the server stored it when the lesson was analysed
+/// (server/src/lib/teacherPause.ts) — never worked out on the phone, so the
+/// web and the iPhone show the same figure on every visit. Also the counted
+/// question list the Summary tile and Questioning & Checking share —
+/// mirrors `tawtOf` in AudioCoaching.tsx.
 enum ThinkingPause {
-    private static let maxJoinGapSec = 2.0
-    private static let maxPauseSec = 30.0
-    private static let maxWordsAfter = 3
-    /// A gap this long between two teacher lines, straight after the question,
-    /// is a pause even though the turn carries on; under it is a breath.
-    private static let minPauseInTurnSec = 1.0
-
-    private static func words(_ t: String) -> [String] {
-        let cleaned = t.lowercased().map { $0.isLetter || $0.isNumber || $0 == "'" || $0 == " " ? $0 : " " }
-        return String(cleaned).split(separator: " ").map(String.init)
-    }
-
     private static func norm(_ q: String) -> String {
         String(q.lowercased().filter { $0.isLetter || $0.isNumber || $0 == " " }).trimmingCharacters(in: .whitespaces)
     }
@@ -184,77 +172,77 @@ enum ThinkingPause {
         return abs(aSec - bSec) <= 8 && !na.isEmpty && !nb.isEmpty && (na.hasPrefix(String(nb.prefix(20))) || nb.hasPrefix(String(na.prefix(20))))
     }
 
-    /// `answered`: a student was heard before the teacher spoke again.
-    /// `keptTalking`: the teacher talked straight past the question.
-    struct Pause {
-        let sec: Double
-        let answered: Bool
-        var keptTalking = false
+    /// The reason as a tile's small line: no capital, no full stop.
+    static func lowercasedReason(_ why: String?) -> String {
+        let text = why ?? whyNotShown(nil)
+        return text.prefix(1).lowercased() + text.dropFirst().trimmingCharacters(in: CharacterSet(charactersIn: "."))
     }
 
-    static func pause(after t: Double, quote: String, in ordered: [TranscriptSegment]) -> Pause? {
-        guard let idx = ordered.firstIndex(where: { $0.endSec > t }), ordered[idx].speakerLabel == "Teacher" else { return nil }
-        var end = idx
-        while end + 1 < ordered.count, ordered[end + 1].speakerLabel == "Teacher", ordered[end + 1].startSec - ordered[end].endSec <= maxJoinGapSec {
-            end += 1
+    /// Why there is no Teacher Pause Time, in the words every card uses.
+    static func whyNotShown(_ reason: String?) -> String {
+        switch reason {
+        case "no_thinking_questions": return "No question asked students to explain or reason."
+        case "no_student_voice": return "Needs student voice told apart from yours."
+        case "answers_in_teacher_voice": return "Students\u{2019} answers were recorded as your voice, so where you stopped talking isn\u{2019}t known."
+        default: return "No pause after a thinking question could be timed."
         }
-        let turn = words(ordered[idx...end].map(\.text).joined(separator: " "))
-        let tail = words(quote).suffix(3).joined(separator: " ")
-        var at = -1
-        if turn.count >= 3 { for i in 0...(turn.count - 3) where turn[i..<(i + 3)].joined(separator: " ") == tail { at = i + 3 } }
-        if at != -1 && turn.count - at > maxWordsAfter {
-            // The line the question ends in, and how many words it still had.
-            var k = idx
-            var upTo = words(ordered[idx].text).count
-            while upTo < at && k < end { k += 1; upTo += words(ordered[k].text).count }
-            if upTo - at > maxWordsAfter || k == end { return Pause(sec: 0, answered: false, keptTalking: true) }
-            let inTurn = ordered[k + 1].startSec - ordered[k].endSec
-            if inTurn < minPauseInTurnSec { return Pause(sec: 0, answered: false, keptTalking: true) }
-            return Pause(sec: (inTurn * 10).rounded() / 10, answered: false)
+    }
+
+    /// `answered`: a student was heard before the teacher spoke again.
+    /// `keptTalking`: the teacher went on with no real gap (`sec` is the gap
+    /// there was). `folded`: an answer was transcribed as the teacher, so
+    /// the pause could not be timed. `sec` is nil wherever it was not timed.
+    struct Pause {
+        let sec: Double?
+        let answered: Bool
+        var keptTalking = false
+        var folded = false
+
+        /// What this pause says, wherever a question is listed.
+        var label: String {
+            if folded { return "an answer was recorded as your voice \u{00B7} not timed" }
+            guard let sec else { return "could not be timed" }
+            if keptTalking { return sec > 0 ? String(format: "you went on after %.1f s", sec) : "you kept talking" }
+            return String(format: "%.1f s", sec) + (answered ? " \u{00B7} a student answered" : "")
         }
-        let rest = ordered[(end + 1)...]
-        guard let next = rest.first(where: { $0.speakerLabel == "Teacher" }) else { return nil }
-        let gap = next.startSec - ordered[end].endSec
-        guard gap >= 0, gap <= maxPauseSec else { return nil }
-        let answered = rest.contains { $0.speakerLabel != "Teacher" && $0.startSec < next.startSec }
-        return Pause(sec: (gap * 10).rounded() / 10, answered: answered)
     }
 
     typealias Question = (entry: AudioQuestionLogEntry, mix: QuestionMix)
 
-    /// Worked out once for the Summary tile and the Questioning & Checking
-    /// card so the two never disagree — mirrors `tawtOf`: the questions left
-    /// with students (one you answered yourself is not one), the thinking ones
-    /// among them, each one's pause, and their average.
     struct Detail {
         let selfAnswered: [AudioTeachingMoves.Quoted]
         let questions: [Question]
         let thinking: [Question]
         let pauses: [Pause?]
-        /// No student was told apart from the teacher, so an answer reads as
-        /// the teacher still talking and no pause is shown.
+        /// No student was told apart from the teacher.
         var noStudents = false
-        var measured: Int { pauses.compactMap { $0 }.count }
-        var average: Double? {
-            guard !noStudents else { return nil }
-            let secs = pauses.compactMap { $0?.sec }
-            guard !secs.isEmpty else { return nil }
-            return ((secs.reduce(0, +) / Double(secs.count)) * 10).rounded() / 10
-        }
+        /// The stored average; nil with `why` set.
+        var average: Double?
+        var why: String?
+        var measured: Int { pauses.compactMap { $0?.sec }.count }
     }
 
     static func detail(_ session: AudioSessionWithSegments) -> Detail {
         let selfAnswered = session.teachingMoves?.selfAnswered ?? []
-        let ordered = session.segments.filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }.sorted { $0.startSec < $1.startSec }
         let questions = QuestionMix.classify(session).filter { q in
             !selfAnswered.contains { sa in
                 sameMoment(q.entry.timestampSec, Redaction.withoutAddressedNames(q.entry.text), sa.timestampSec, Redaction.withoutAddressedNames(sa.quote))
             }
         }
-        let thinking = questions.filter { $0.mix != .recall }
-        let pauses = thinking.map { pause(after: $0.entry.timestampSec, quote: Redaction.withoutAddressedNames($0.entry.text), in: ordered) }
-        return Detail(selfAnswered: selfAnswered, questions: questions, thinking: thinking, pauses: pauses,
-                      noStudents: !studentVoiceSeparated(session))
+        let noStudents = !studentVoiceSeparated(session)
+        guard let stored = session.teacherPause else {
+            return Detail(selfAnswered: selfAnswered, questions: questions, thinking: [], pauses: [], noStudents: noStudents,
+                          average: nil, why: "Not worked out for this lesson yet.")
+        }
+        // Each stored question matched back to the counted list for its kind
+        // and wording.
+        let matched: [(Question, Pause)] = stored.thinking.compactMap { p in
+            guard let q = questions.first(where: { abs($0.entry.timestampSec - p.timestampSec) < 0.05 }) else { return nil }
+            return (q, Pause(sec: p.sec, answered: p.answered, keptTalking: p.keptTalking ?? false, folded: p.folded ?? false))
+        }
+        return Detail(selfAnswered: selfAnswered, questions: questions, thinking: matched.map(\.0), pauses: matched.map(\.1),
+                      noStudents: noStudents, average: stored.average,
+                      why: stored.average == nil ? whyNotShown(stored.reason) : nil)
     }
 
     /// Whether the transcript told any student apart from the teacher —
@@ -612,12 +600,8 @@ struct OverviewTab: View {
                         unit: "", tint: Color(hex: 0xDCE7DF),
                         note: counted.selfAnswered.isEmpty ? nil : "+ \(counted.selfAnswered.count) you answered"))
         let tawt = ThinkingPause.tawt(session)
-        let pauseDetail = ThinkingPause.detail(session)
         out.append(Tile(label: "Teacher pause", value: tawt.map { String(format: "%.1f", $0.average) }, unit: "s", tint: Color(hex: 0xE6EBD2),
-                        hint: tawt != nil ? nil
-                            : pauseDetail.thinking.isEmpty ? "No question asked students to explain or reason."
-                            : pauseDetail.noStudents ? "Needs student voice told apart from yours."
-                            : "No pause after a thinking question could be timed.",
+                        hint: tawt != nil ? nil : counted.why,
                         note: tawt.map { "from \($0.count) question\($0.count == 1 ? "" : "s")" }))
         // The checks Questioning & Checking lists, left-out non-checks and all;
         // older lessons with no log fall back to the stored count.

@@ -540,9 +540,24 @@ function previewReport(): Json {
     durationSec: 1358,
     // `?room=1`: the per-second breakdown, so the five voices (tiles and
     // strip) can be looked at; without it the report shows the older split.
-    ...(new URLSearchParams(window.location.search).has('room')
-      ? { metricsLogs: { roomTrace: 'q'.repeat(40) + ('t'.repeat(60) + 'g'.repeat(40) + 's'.repeat(10) + 'x'.repeat(30) + 'o'.repeat(20) + 'q'.repeat(10)).repeat(8) + 't'.repeat(78) } }
-      : {}),
+    metricsLogs: {
+      ...(new URLSearchParams(window.location.search).has('room')
+        ? { roomTrace: 'q'.repeat(40) + ('t'.repeat(60) + 'g'.repeat(40) + 's'.repeat(10) + 'x'.repeat(30) + 'o'.repeat(20) + 'q'.repeat(10)).repeat(8) + 't'.repeat(78) }
+        : {}),
+      // As the server stores it (server lib/teacherPause.ts); the page only
+      // shows it.
+      teacherPause: {
+        version: 1,
+        average: 3.7,
+        reason: null,
+        foldedCount: 1,
+        questionCount: 7,
+        thinking: [
+          { timestampSec: 1127.2749, text: 'Based on the past, what do you think was the main cause for the fall of the bromine business?', sec: 4.2, answered: true },
+          { timestampSec: 1154.435, text: 'So of the six right here, which one would you think would fall under earthquakes?', sec: 3.1, answered: false },
+        ],
+      },
+    },
     status: 'analyzed',
     classSubject: 'World history',
     metricsDetail: {
@@ -567,10 +582,6 @@ function previewReport(): Json {
       teacherWordsPerMinute: 214,
       waitTime2Sec: 2,
       waitTime2SampleCount: 24,
-      // Median silence held after a question nobody answered aloud. The real
-      // lessons this was built against sit at 3.9s across 65 such questions.
-      heldSilenceSec: 3.9,
-      heldSilenceSampleCount: 9,
       firstWordSec: 270,
       // `home=split` shows the quiet / could-not-make-out breakdown that a
       // recording with a loudness envelope produces. Without the flag the

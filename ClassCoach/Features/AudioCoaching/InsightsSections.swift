@@ -496,8 +496,7 @@ struct TalkSection: View {
         ]
         let pauseSub = pause.average != nil
             ? "average after \(pause.measured) thinking question\(pause.measured == 1 ? "" : "s")"
-            : pause.thinking.isEmpty ? "no question asked students to explain or reason"
-            : pause.noStudents ? "needs student voice told apart from yours" : "no pause after a thinking question could be timed"
+            : ThinkingPause.lowercasedReason(pause.why)
         return LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
             ForEach(kinds, id: \.0) { kind, sub in
                 if kind == .student && noStudents {
@@ -514,8 +513,8 @@ struct TalkSection: View {
             tile("Your pace", wpm.map { "\(Int($0.rounded()))" } ?? "\u{2014}",
                  wpm != nil ? "words a minute \u{00B7} conversation usually runs \(AudioInsights.conversationalWpmRange)" : "unavailable", nil)
             tile("Teacher pause", pause.average.map { String(format: "%.1f s", $0) } ?? "\u{2014}", pauseSub, nil,
-                 link: pause.thinking.isEmpty || pause.noStudents ? nil : "See the questions")
-                .onTapGesture { if !pause.thinking.isEmpty && !pause.noStudents { moments = .pause } }
+                 link: pause.thinking.isEmpty ? nil : "See the questions")
+                .onTapGesture { if !pause.thinking.isEmpty { moments = .pause } }
         }
     }
 
@@ -976,9 +975,9 @@ struct QuestionsSection: View {
                 }
                 qcList(current, questions, selfAnswered, checks)
                 if let average = tawt.average { tawtCard(tawt, average: average) }
-                else if tawt.noStudents && !tawt.thinking.isEmpty {
+                else if !tawt.thinking.isEmpty, let why = tawt.why {
                     (Text("Teacher Pause Time").fontWeight(.semibold).foregroundStyle(AppTheme.textPrimary)
-                        + Text(" isn\u{2019}t shown: no student voice was told apart from yours, so an answer would read as you still talking."))
+                        + Text(" isn\u{2019}t shown. \(why)"))
                         .font(.footnote).foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(12)
@@ -1216,11 +1215,11 @@ struct QuestionsSection: View {
                     }
                     Spacer(minLength: 0)
                     VStack(alignment: .trailing, spacing: 2) {
-                        if let p {
-                            Text(String(format: "%.1f s", p.sec)).font(.heading(.subheadline)).foregroundStyle(AppTheme.forest)
+                        if let p, let sec = p.sec, !p.folded {
+                            Text(String(format: "%.1f s", sec)).font(.heading(.subheadline)).foregroundStyle(AppTheme.forest)
                             Text(p.keptTalking ? "you kept talking" : p.answered ? "a student answered" : "no one answered")
                         } else {
-                            Text("not measured")
+                            Text(p?.label ?? "not measured")
                         }
                     }
                     .font(.caption).foregroundStyle(AppTheme.textSecondary)
@@ -2000,7 +1999,7 @@ struct TalkMomentsSheet: View {
                 let own = lines.first { $0.endSec > q.entry.timestampSec }
                 let next = own.flatMap { own in lines.first { $0.startSec >= own.endSec - 0.01 && $0.id != own.id } }
                 let p = detail.pauses[i]
-                let waited = p.map { $0.keptTalking ? "you kept talking" : String(format: "%.1f s", $0.sec) + ($0.answered ? " \u{00B7} a student answered" : "") } ?? "could not be timed"
+                let waited = p?.label ?? "could not be timed"
                 VStack(alignment: .leading, spacing: 6) {
                     said(q.entry.timestampSec, teacher: true, Redaction.withoutAddressedNames(q.entry.text), who: true)
                     Text("Pause: \(waited)").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary).padding(.leading, 44)
