@@ -25,7 +25,10 @@ final class APIClient {
     static let shared = APIClient()
 
     private let baseURL: URL = {
-        #if DEBUG
+        // Simulator only: on a real phone "localhost" is the phone itself, so
+        // a Debug build run from Xcode onto a device could not reach anything
+        // and sign-in failed with "could not connect to the server".
+        #if DEBUG && targetEnvironment(simulator)
         return URL(string: "http://localhost:3001")!
         #else
         return URL(string: "https://classcoach.onrender.com")!
