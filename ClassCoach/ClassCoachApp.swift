@@ -7,6 +7,17 @@ import GoogleSignIn
 /// iOS waiting on us — it relaunches the app in the background purely to be
 /// told we are done. See `BackgroundUploader`.
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    /// WatchConnectivity has to be activated at launch, not when a screen
+    /// appears: iOS relaunches the app in the background to deliver a lesson
+    /// recorded on the watch, and no view exists then to activate it.
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        WatchRecordingReceiver.shared.activate()
+        return true
+    }
+
     func application(
         _ application: UIApplication,
         handleEventsForBackgroundURLSession identifier: String,
@@ -21,6 +32,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 struct ClassCoachApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var authManager = AuthManager.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -34,6 +46,14 @@ struct ClassCoachApp: App {
                     // so its result arrives rather than being lost.
                     BackgroundUploader.shared.reconnect()
                     await authManager.restoreSession()
+                    await WatchRecordingReceiver.shared.processInbox()
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    // A watch lesson that arrived with the phone locked waits
+                    // in the inbox until the token can be read again.
+                    if phase == .active {
+                        Task { await WatchRecordingReceiver.shared.processInbox() }
+                    }
                 }
         }
     }

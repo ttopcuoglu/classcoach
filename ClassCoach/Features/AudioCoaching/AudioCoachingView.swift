@@ -145,6 +145,9 @@ struct AudioCoachingView: View {
                 }
                 Task { await loadHistory() }
             }
+            .onReceive(NotificationCenter.default.publisher(for: WatchRecordingReceiver.didStartUpload)) { _ in
+                Task { await loadHistory() }
+            }
         }
     }
 

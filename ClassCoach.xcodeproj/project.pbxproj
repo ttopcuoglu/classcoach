@@ -90,6 +90,16 @@
 		53577577DFA091A33335FDBA /* FirstThirtyDaysView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A081C11A01F67A71E1D5CD9 /* FirstThirtyDaysView.swift */; };
 		CF2B154D27D2E37F373C723C /* PracticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 025582038E0B9691AAD788E6 /* PracticeView.swift */; };
 		E7A2D94C1F5B48E3A62C0B77 /* TeachingContextFields.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C8F35A2D9E41F7C830A166 /* TeachingContextFields.swift */; };
+		23293F6CA5FCD6B6BDB98E61 /* WatchRecordingTransfer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8356709078652135982AB966 /* WatchRecordingTransfer.swift */; };
+		693ED75CFF6DF1FE3CD6FC2D /* WatchRecordingReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90C5504DBFC097019C17F24C /* WatchRecordingReceiver.swift */; };
+		F4AF42388039E252FDD9AA6B /* WatchRecordingTransfer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8356709078652135982AB966 /* WatchRecordingTransfer.swift */; };
+		2E33C7D70ABB4658DC49C3F1 /* WivozaWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B80102BABA38A2DAB4A9DD05 /* WivozaWatchApp.swift */; };
+		EAB2FC1C00E4EA6543ACC57A /* WatchRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16EE9CB41B56B0087D9FEF87 /* WatchRecorder.swift */; };
+		879B835EBD94F8FBFC655C1F /* WatchRecordingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 753AFC3FA17CD7A154C99746 /* WatchRecordingStore.swift */; };
+		022F00058917211539D2D314 /* WatchSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBC472AC7AD72077F66C9F85 /* WatchSender.swift */; };
+		14C64C3562176A71CB091201 /* WatchRecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92B16CE404BDF5D90777E5E1 /* WatchRecordingView.swift */; };
+		DDEEB958F96B92D47E59C659 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8321814083A6E3D8CBF91CE3 /* Assets.xcassets */; };
+		3971D0AF129F3F94526DC9B3 /* WivozaWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 2C91DE33D19E950550063B13 /* WivozaWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -176,7 +186,49 @@
 		5A081C11A01F67A71E1D5CD9 /* FirstThirtyDaysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstThirtyDaysView.swift; sourceTree = "<group>"; };
 		025582038E0B9691AAD788E6 /* PracticeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeView.swift; sourceTree = "<group>"; };
 		B4C8F35A2D9E41F7C830A166 /* TeachingContextFields.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeachingContextFields.swift; sourceTree = "<group>"; };
+		8356709078652135982AB966 /* WatchRecordingTransfer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRecordingTransfer.swift; sourceTree = "<group>"; };
+		90C5504DBFC097019C17F24C /* WatchRecordingReceiver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRecordingReceiver.swift; sourceTree = "<group>"; };
+		B80102BABA38A2DAB4A9DD05 /* WivozaWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WivozaWatchApp.swift; sourceTree = "<group>"; };
+		16EE9CB41B56B0087D9FEF87 /* WatchRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRecorder.swift; sourceTree = "<group>"; };
+		753AFC3FA17CD7A154C99746 /* WatchRecordingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRecordingStore.swift; sourceTree = "<group>"; };
+		DBC472AC7AD72077F66C9F85 /* WatchSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSender.swift; sourceTree = "<group>"; };
+		92B16CE404BDF5D90777E5E1 /* WatchRecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRecordingView.swift; sourceTree = "<group>"; };
+		8321814083A6E3D8CBF91CE3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		4E7A4401776BF32A592DB139 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		2C91DE33D19E950550063B13 /* WivozaWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WivozaWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B4CBD26AF2544DD72F2395BA /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				3971D0AF129F3F94526DC9B3 /* WivozaWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXContainerItemProxy section */
+		FC5B4CBD1A4B27905D62253F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C0A9B0AC6C904BE6BEB859AB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DF849CF33C58B555D74F0137;
+			remoteInfo = WivozaWatch;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		8CDCE8A8DA8CE68877348E27 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DF849CF33C58B555D74F0137 /* WivozaWatch */;
+			targetProxy = FC5B4CBD1A4B27905D62253F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		0F07A469877A4395A2FDDDCD /* Frameworks */ = {
@@ -188,12 +240,21 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		48E8EB3A5E3992460D4BB68A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		60439DD26391443A90ECB948 = {
 			isa = PBXGroup;
 			children = (
+				176E5955FD90F4360022FEDE /* WivozaWatch */,
+				23CC31C929B75201B2311A2C /* WatchShared */,
 				47EEEADD08004B8E835FB543 /* ClassCoach */,
 				FC9A858FD0E247BFB113AB6B /* Products */,
 			);
@@ -273,6 +334,7 @@
 		C232F5E32BD59813C815B9BD /* AudioCoaching */ = {
 			isa = PBXGroup;
 			children = (
+				90C5504DBFC097019C17F24C /* WatchRecordingReceiver.swift */,
 				B8892F7A1BF280494A988922 /* AudioCoachingView.swift */,
 				327797D3C4B2F09DEF6D0800 /* AudioCoachingService.swift */,
 				3A1D7C4E0930F1B28E4A0011 /* AudioCompressor.swift */,
@@ -435,9 +497,32 @@
 		FC9A858FD0E247BFB113AB6B /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				2C91DE33D19E950550063B13 /* WivozaWatch.app */,
 				F280A0043D204F56B232AD29 /* ClassCoach.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		23CC31C929B75201B2311A2C /* WatchShared */ = {
+			isa = PBXGroup;
+			children = (
+				8356709078652135982AB966 /* WatchRecordingTransfer.swift */,
+			);
+			path = WatchShared;
+			sourceTree = "<group>";
+		};
+		176E5955FD90F4360022FEDE /* WivozaWatch */ = {
+			isa = PBXGroup;
+			children = (
+				B80102BABA38A2DAB4A9DD05 /* WivozaWatchApp.swift */,
+				16EE9CB41B56B0087D9FEF87 /* WatchRecorder.swift */,
+				753AFC3FA17CD7A154C99746 /* WatchRecordingStore.swift */,
+				DBC472AC7AD72077F66C9F85 /* WatchSender.swift */,
+				92B16CE404BDF5D90777E5E1 /* WatchRecordingView.swift */,
+				8321814083A6E3D8CBF91CE3 /* Assets.xcassets */,
+				4E7A4401776BF32A592DB139 /* Info.plist */,
+			);
+			path = WivozaWatch;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -450,10 +535,12 @@
 				A94A0FEAB9754A1992372722 /* Sources */,
 				0F07A469877A4395A2FDDDCD /* Frameworks */,
 				D9D49C731AB148F1930FE0F5 /* Resources */,
+				B4CBD26AF2544DD72F2395BA /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				8CDCE8A8DA8CE68877348E27 /* PBXTargetDependency */,
 			);
 			name = ClassCoach;
 			packageProductDependencies = (
@@ -462,6 +549,23 @@
 			);
 			productName = ClassCoach;
 			productReference = F280A0043D204F56B232AD29 /* ClassCoach.app */;
+			productType = "com.apple.product-type.application";
+		};
+		DF849CF33C58B555D74F0137 /* WivozaWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 95779B05F79ABAF564E425A0 /* Build configuration list for PBXNativeTarget "WivozaWatch" */;
+			buildPhases = (
+				AEFF8CBF6F2A5EE89883EC6C /* Sources */,
+				48E8EB3A5E3992460D4BB68A /* Frameworks */,
+				11F28B7E90D185056A13D486 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = WivozaWatch;
+			productName = WivozaWatch;
+			productReference = 2C91DE33D19E950550063B13 /* WivozaWatch.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -476,6 +580,9 @@
 				TargetAttributes = {
 					72C6C0E626884B138A0E4F15 = {
 						CreatedOnToolsVersion = 16.2;
+					};
+					DF849CF33C58B555D74F0137 = {
+						CreatedOnToolsVersion = 26.2;
 					};
 				};
 			};
@@ -496,6 +603,7 @@
 			projectRoot = "";
 			targets = (
 				72C6C0E626884B138A0E4F15 /* ClassCoach */,
+				DF849CF33C58B555D74F0137 /* WivozaWatch */,
 			);
 		};
 /* End PBXProject section */
@@ -509,6 +617,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		11F28B7E90D185056A13D486 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DDEEB958F96B92D47E59C659 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -516,6 +632,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				23293F6CA5FCD6B6BDB98E61 /* WatchRecordingTransfer.swift in Sources */,
+				693ED75CFF6DF1FE3CD6FC2D /* WatchRecordingReceiver.swift in Sources */,
 				6E0865BF41564343B1AC4891 /* ClassCoachApp.swift in Sources */,
 				28F6A3F89BF8493590BFD41B /* RootTabView.swift in Sources */,
 				5109BAD9B328467AB9BC7D6D /* AppTheme.swift in Sources */,
@@ -596,6 +714,19 @@
 				53577577DFA091A33335FDBA /* FirstThirtyDaysView.swift in Sources */,
 				CF2B154D27D2E37F373C723C /* PracticeView.swift in Sources */,
 				E7A2D94C1F5B48E3A62C0B77 /* TeachingContextFields.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AEFF8CBF6F2A5EE89883EC6C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2E33C7D70ABB4658DC49C3F1 /* WivozaWatchApp.swift in Sources */,
+				EAB2FC1C00E4EA6543ACC57A /* WatchRecorder.swift in Sources */,
+				879B835EBD94F8FBFC655C1F /* WatchRecordingStore.swift in Sources */,
+				022F00058917211539D2D314 /* WatchSender.swift in Sources */,
+				14C64C3562176A71CB091201 /* WatchRecordingView.swift in Sources */,
+				F4AF42388039E252FDD9AA6B /* WatchRecordingTransfer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -726,7 +857,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ClassCoach/ClassCoach.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 174;
 				DEVELOPMENT_TEAM = 22PX9634Q5;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
@@ -743,7 +874,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3.0;
+				MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.wivoza.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -761,7 +892,7 @@
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				PROVISIONING_PROFILE_SPECIFIER = "Wivoza App Store";
-				CURRENT_PROJECT_VERSION = 172;
+				CURRENT_PROJECT_VERSION = 174;
 				DEVELOPMENT_TEAM = 22PX9634Q5;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
@@ -778,12 +909,73 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3.0;
+				MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.wivoza.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1";
+			};
+			name = Release;
+		};
+		983BA1763C4F2C9746D124EA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 174;
+				DEVELOPMENT_TEAM = 22PX9634Q5;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WivozaWatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Wivoza;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 Edinexa Technologies LLC. All rights reserved.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.wivoza.app;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.4.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wivoza.app.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		9E265E3CBB4C11E7F42F133A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 174;
+				DEVELOPMENT_TEAM = 22PX9634Q5;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WivozaWatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Wivoza;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 Edinexa Technologies LLC. All rights reserved.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.wivoza.app;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.4.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wivoza.app.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
@@ -804,6 +996,15 @@
 			buildConfigurations = (
 				D9DE68394F02442DAAA2FFC6 /* Debug */,
 				DD8FD27662C84598B372C333 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		95779B05F79ABAF564E425A0 /* Build configuration list for PBXNativeTarget "WivozaWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				983BA1763C4F2C9746D124EA /* Debug */,
+				9E265E3CBB4C11E7F42F133A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

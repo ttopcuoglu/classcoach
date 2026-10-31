@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Same answer as the iPhone app: only the OS's own encryption. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Wivoza records your class period on your watch and sends it to the Wivoza app on your iPhone for a transcript-based coaching report. Audio itself is never saved — only the text transcript.</string>
+	<!-- Keeps the recording going when the teacher lowers their wrist. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
+</dict>
+</plist>
