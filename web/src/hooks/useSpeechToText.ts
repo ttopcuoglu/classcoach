@@ -25,12 +25,8 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
   const [listening, setListening] = useState(false)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
 
-  function toggleListening() {
+  function start() {
     if (!SpeechRecognitionCtor) return
-    if (listening) {
-      recognitionRef.current?.stop()
-      return
-    }
     const recognition = new SpeechRecognitionCtor()
     recognition.continuous = true
     recognition.interimResults = true
@@ -43,12 +39,26 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
         onFinalTranscript(finalTranscript.trim())
       }
     }
-    recognition.onend = () => setListening(false)
-    recognition.onerror = () => setListening(false)
+    // A stopped session can end after a new one has started; only the
+    // current one decides whether the mic reads as listening.
+    const ended = () => {
+      if (recognitionRef.current === recognition) setListening(false)
+    }
+    recognition.onend = ended
+    recognition.onerror = ended
     recognitionRef.current = recognition
     recognition.start()
     setListening(true)
   }
 
-  return { supported: !!SpeechRecognitionCtor, listening, toggleListening }
+  function stop() {
+    recognitionRef.current?.stop()
+  }
+
+  function toggleListening() {
+    if (listening) stop()
+    else start()
+  }
+
+  return { supported: !!SpeechRecognitionCtor, listening, toggleListening, start, stop }
 }

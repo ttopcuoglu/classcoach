@@ -1703,6 +1703,14 @@ function previewRealAttempt(body: Json): Json {
 function answer(path: string, method: string, body: Json): Json | Json[] | null {
   // Practice's "Something real", end to end: the situation is stored, then
   // coached and classified on the first response.
+  // "Make one up for me": a fixed scenario, so the response box can be seen.
+  if (path === '/api/scenarios/generate' && method === 'POST') {
+    return {
+      id: 'preview-generated', text: 'Your assistant principal stops by during your planning period and asks you to stop sending students to the office for phone violations unless it is the third offense.',
+      focusArea: 'professionalism', category: 'admin', gradeBand: String(body.gradeBand ?? '6-8'), difficulty: 'beginner',
+      source: 'generated', createdAt: new Date().toISOString(),
+    }
+  }
   if (path === '/api/scenarios/real' && method === 'POST') {
     return {
       id: 'preview-real', text: String(body.text ?? ''), focusArea: null, category: 'own_situation',

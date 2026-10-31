@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import AnswerSection from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
 import PastList from '../components/PastList'
 import ReflectionTimeline from '../components/ReflectionTimeline'
 import ShareButton from '../components/ShareButton'
-import { ArrowUpIcon, MicIcon, StarIcon } from '../components/icons'
+import { ArrowUpIcon, StarIcon } from '../components/icons'
 import { ProgressRing, WorkingRing } from '../components/ProgressRing'
 import { useSimulatedProgress } from '../hooks/useSimulatedProgress'
 import { useSpeechToText } from '../hooks/useSpeechToText'
+import { SpeakInBox, speakingBoxClass } from '../components/SpeakInBox'
 import { OWN_SITUATION, categoryLabel } from '../lib/categories'
 import { TEACHING_AND_LEARNING, findFocusArea, focusAreaForCategory, subCategoriesFor } from '../lib/focusAreas'
 import { hintsFor } from '../lib/practiceHints'
@@ -88,9 +89,34 @@ export default function TryItOut({
   const [submitting, setSubmitting] = useState(false)
   const workingProgress = useSimulatedProgress(generating || submitting, 8000)
   const [error, setError] = useState<string | null>(null)
-  const { supported: speechSupported, listening, toggleListening } = useSpeechToText((text) =>
-    setResponseText((prev) => (prev ? `${prev} ${text}` : text)),
-  )
+  // One microphone, pointed at whichever box asked for it. Speaking adds to
+  // what is already typed; starting in one box stops the other.
+  const [speechTarget, setSpeechTarget] = useState<'situation' | 'response'>('response')
+  const speechTargetRef = useRef<'situation' | 'response'>('response')
+  const { supported: speechSupported, listening, start: startSpeech, stop: stopSpeech } = useSpeechToText((text) => {
+    const add = (prev: string) => (prev ? `${prev} ${text}` : text)
+    if (speechTargetRef.current === 'situation') setSituationText(add)
+    else setResponseText(add)
+  })
+  function speakInto(target: 'situation' | 'response') {
+    if (listening && speechTargetRef.current === target) {
+      stopSpeech()
+      return
+    }
+    const pointAt = () => {
+      speechTargetRef.current = target
+      setSpeechTarget(target)
+      startSpeech()
+    }
+    if (listening) {
+      // Stop the other box first, so its last words still land in it, then
+      // start this one once the browser has let go of the microphone.
+      stopSpeech()
+      window.setTimeout(pointAt, 350)
+    } else {
+      pointAt()
+    }
+  }
 
   // attemptIds: what this Quick Session produced, for the recap at the end.
   const [sessionState, setSessionState] = useState<{
@@ -460,15 +486,22 @@ export default function TryItOut({
             )}
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink">What&rsquo;s happening?</span>
-              <textarea
-                value={situationText}
-                onChange={(e) => setSituationText(e.target.value)}
-                disabled={submitting}
-                rows={4}
-                maxLength={3000}
-                placeholder="e.g. A student in my third period calls out every answer before anyone else can think, and the quieter kids have stopped trying."
-                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
-              />
+              <div className="relative">
+                <textarea
+                  value={situationText}
+                  onChange={(e) => setSituationText(e.target.value)}
+                  disabled={submitting}
+                  rows={4}
+                  maxLength={3000}
+                  placeholder="e.g. A student in my third period calls out every answer before anyone else can think, and the quieter kids have stopped trying."
+                  className={`w-full rounded-xl border bg-cream px-4 pb-12 pt-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60 ${
+                    listening && speechTarget === 'situation' ? speakingBoxClass : 'border-hairline'
+                  }`}
+                />
+                {speechSupported && (
+                  <SpeakInBox listening={listening && speechTarget === 'situation'} onClick={() => speakInto('situation')} disabled={submitting} />
+                )}
+              </div>
               <span className="text-xs text-ink-soft">
                 No need to sort it into a type — your coach works that out. Leave out names.
               </span>
@@ -480,34 +513,25 @@ export default function TryItOut({
               <span className="text-sm font-medium text-ink">
                 How would you handle it? <span className="font-normal text-ink-soft">(optional)</span>
               </span>
-              <textarea
-                value={responseText}
-                onChange={(e) => setResponseText(e.target.value)}
-                disabled={submitting}
-                rows={4}
-                placeholder="What you'd say, word for word, and what you'd do."
-                className="rounded-xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
-              />
+              <div className="relative">
+                <textarea
+                  value={responseText}
+                  onChange={(e) => setResponseText(e.target.value)}
+                  disabled={submitting}
+                  rows={4}
+                  placeholder="What you'd say, word for word, and what you'd do."
+                  className={`w-full rounded-xl border bg-cream px-4 pb-12 pt-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60 ${
+                    listening && speechTarget === 'response' ? speakingBoxClass : 'border-hairline'
+                  }`}
+                />
+                {speechSupported && (
+                  <SpeakInBox listening={listening && speechTarget === 'response'} onClick={() => speakInto('response')} disabled={submitting} />
+                )}
+              </div>
               <span className="text-xs text-ink-soft">
                 Not sure what to say yet? Leave it blank and your coach will walk you through it.
               </span>
             </label>
-            {speechSupported && (
-              <button
-                type="button"
-                onClick={toggleListening}
-                disabled={submitting}
-                className={`flex w-fit items-center gap-2 rounded-full border-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
-                  listening
-                    ? 'border-terracotta bg-peach-tint text-terracotta-600'
-                    : 'border-mint-tint bg-mint-tint/60 text-forest hover:border-terracotta/40 hover:bg-mint-tint'
-                }`}
-              >
-                <MicIcon className="h-5 w-5" />
-                {listening ? 'Listening... tap to stop' : 'Speak your response'}
-              </button>
-            )}
-
             <div>
               <button
                 type="button"
@@ -656,14 +680,21 @@ export default function TryItOut({
               <div className="flex flex-col gap-3">
                 <label className="flex flex-col gap-1.5">
                   <span className="font-heading text-xl font-bold text-forest">How would you handle this?</span>
-                  <textarea
-                    value={responseText}
-                    onChange={(e) => setResponseText(e.target.value)}
-                    disabled={submitting}
-                    rows={4}
-                    placeholder="Your first move — what do you say, and what do you do?"
-                    className="rounded-2xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={responseText}
+                      onChange={(e) => setResponseText(e.target.value)}
+                      disabled={submitting}
+                      rows={4}
+                      placeholder="Your first move — what do you say, and what do you do?"
+                      className={`w-full rounded-2xl border bg-cream px-4 pb-12 pt-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60 ${
+                        listening ? speakingBoxClass : 'border-hairline'
+                      }`}
+                    />
+                    {speechSupported && (
+                      <SpeakInBox listening={listening} onClick={() => speakInto('response')} disabled={submitting} />
+                    )}
+                  </div>
                 </label>
 
                 {/* A question, never an answer. Picking from options and
@@ -688,21 +719,6 @@ export default function TryItOut({
                     </p>
                   )}
                 </div>
-                {speechSupported && (
-                  <button
-                    type="button"
-                    onClick={toggleListening}
-                    disabled={submitting}
-                    className={`flex w-fit items-center gap-2 rounded-full border-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
-                      listening
-                        ? 'border-terracotta bg-peach-tint text-terracotta-600'
-                        : 'border-mint-tint bg-mint-tint/60 text-forest hover:border-terracotta/40 hover:bg-mint-tint'
-                    }`}
-                  >
-                    <MicIcon className="h-5 w-5" />
-                    {listening ? 'Listening... tap to stop' : 'Speak your response'}
-                  </button>
-                )}
                 {/* The hero's ring isn't on screen once a scenario is showing. */}
                 <WorkingRing
                   active={generating || submitting}
