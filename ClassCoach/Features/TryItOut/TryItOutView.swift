@@ -492,7 +492,8 @@ struct TryItOutContent: View {
             error: chatError,
             placeholder: attempt.responseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? "Try saying it in your own words..."
-                : "Ask a follow-up about this feedback..."
+                : "Ask a follow-up about this feedback...",
+            speakable: true
         ) {
             Task { await sendChat(attempt) }
         }

@@ -133,6 +133,31 @@ struct SpeakInBoxButton: View {
     }
 }
 
+extension View {
+    /// Puts a Speak button in this multi-line box's bottom-right corner, with
+    /// room for it, the terracotta border while listening, and any dictation
+    /// error underneath. Apply it after the box's inner padding and before its
+    /// background, so the button lands inside the box. Pass its corner radius.
+    func speakable(_ box: String, text: Binding<String>, dictation: BoxDictation, cornerRadius: CGFloat = 14) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            self
+                .padding(.bottom, 34)
+                .overlay(RoundedRectangle(cornerRadius: cornerRadius).strokeBorder(
+                    dictation.isListening(box) ? AppTheme.terracotta : .clear, lineWidth: 2
+                ))
+                .overlay(alignment: .bottomTrailing) {
+                    SpeakInBoxButton(listening: dictation.isListening(box), writing: dictation.isWriting(box)) {
+                        dictation.toggle(box) { spoken in text.wrappedValue = text.wrappedValue.appendingSpoken(spoken) }
+                    }
+                    .padding(10)
+                }
+            if let error = dictation.error, dictation.target == box || dictation.target == nil {
+                Text(error).font(.caption).foregroundStyle(AppTheme.terracotta600)
+            }
+        }
+    }
+}
+
 extension String {
     /// Adds dictated words after what is already typed.
     func appendingSpoken(_ text: String) -> String {

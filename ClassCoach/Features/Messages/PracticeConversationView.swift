@@ -17,6 +17,7 @@ struct PracticeConversationView: View {
 
     @State private var situationText: String?
     @State private var responseText = ""
+    @StateObject private var dictation = BoxDictation()
     @State private var prep: ConversationPrep?
     @State private var generating = false
     @State private var submitting = false
@@ -51,6 +52,7 @@ struct PracticeConversationView: View {
             .padding()
         }
         .background(AppTheme.background)
+        .onDisappear { dictation.cancel() }
         .clearsFloatingTabBar()
     }
 
@@ -101,6 +103,7 @@ struct PracticeConversationView: View {
                         .scrollContentBackground(.hidden)
                         .frame(minHeight: 110)
                         .padding(8)
+                        .speakable("response", text: $responseText, dictation: dictation)
                         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
                         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
                         .disabled(submitting)
