@@ -48,6 +48,7 @@ struct TryItOutContent: View {
     @State private var attempt: ScenarioAttempt?
     @State private var responseText = ""
     @State private var situationText = ""
+    @StateObject private var dictation = BoxDictation()
     /// The stored situation, so a retry after a failed coaching call doesn't
     /// save the same words twice. Dropped as soon as the words change.
     @State private var realScenario: (id: String, text: String)?
@@ -81,6 +82,9 @@ struct TryItOutContent: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                if let dictationError = dictation.error {
+                    Text(dictationError).font(.caption).foregroundStyle(AppTheme.terracotta600)
+                }
                 if real {
                     PanelHeader(
                         eyebrow: "Practice",
@@ -108,6 +112,8 @@ struct TryItOutContent: View {
             }
             .padding()
         }
+        // Leaving mid-sentence drops the clip rather than keeping the microphone open.
+        .onDisappear { dictation.cancel() }
         .background(AppTheme.background)
         .clearsFloatingTabBar()
         .task { await loadHistory() }
@@ -201,7 +207,7 @@ struct TryItOutContent: View {
             Text("What\u{2019}s happening?")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(AppTheme.textPrimary)
-            editor($situationText, placeholder: "e.g. A student in my third period calls out every answer before anyone else can think, and the quieter kids have stopped trying.")
+            editor($situationText, box: "situation", placeholder: "e.g. A student in my third period calls out every answer before anyone else can think, and the quieter kids have stopped trying.")
             Text("No need to sort it into a type \u{2014} your coach works that out. Leave out names.")
                 .font(.caption)
                 .foregroundStyle(AppTheme.textSecondary)
@@ -210,7 +216,7 @@ struct TryItOutContent: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(AppTheme.textPrimary)
                 .padding(.top, 4)
-            editor($responseText, placeholder: "What you\u{2019}d say, word for word, and what you\u{2019}d do.")
+            editor($responseText, box: "response", placeholder: "What you\u{2019}d say, word for word, and what you\u{2019}d do.")
             Text("Not sure what to say yet? Leave it blank and your coach will walk you through it.")
                 .font(.caption)
                 .foregroundStyle(AppTheme.textSecondary)
@@ -232,11 +238,12 @@ struct TryItOutContent: View {
         }
     }
 
-    private func editor(_ text: Binding<String>, placeholder: String) -> some View {
+    private func editor(_ text: Binding<String>, box: String, placeholder: String) -> some View {
         TextEditor(text: text)
             .scrollContentBackground(.hidden)
             .frame(minHeight: 100)
             .padding(8)
+            .padding(.bottom, 34)
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
             .overlay(alignment: .topLeading) {
                 if text.wrappedValue.isEmpty {
@@ -248,8 +255,22 @@ struct TryItOutContent: View {
                         .allowsHitTesting(false)
                 }
             }
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(
+                dictation.isListening(box) ? AppTheme.terracotta : AppTheme.hairline,
+                lineWidth: dictation.isListening(box) ? 2 : 1
+            ))
+            .overlay(alignment: .bottomTrailing) { speakButton(box, into: text) }
             .disabled(submitting)
+    }
+
+    private func speakButton(_ box: String, into text: Binding<String>) -> some View {
+        SpeakInBoxButton(
+            listening: dictation.isListening(box),
+            writing: dictation.isWriting(box)
+        ) {
+            dictation.toggle(box) { spoken in text.wrappedValue = text.wrappedValue.appendingSpoken(spoken) }
+        }
+        .padding(10)
     }
 
     private func tagLine(_ attempt: ScenarioAttempt) -> String {
@@ -313,8 +334,13 @@ struct TryItOutContent: View {
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 100)
                 .padding(8)
+                .padding(.bottom, 34)
                 .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(
+                    dictation.isListening("response") ? AppTheme.terracotta : AppTheme.hairline,
+                    lineWidth: dictation.isListening("response") ? 2 : 1
+                ))
+                .overlay(alignment: .bottomTrailing) { speakButton("response", into: $responseText) }
                 .disabled(submitting)
 
             // A question, never an answer. Picking from options and composing a

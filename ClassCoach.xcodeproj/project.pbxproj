@@ -26,6 +26,7 @@
 		5D4B952FA23A815A4AF0ED13 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 5BD7125A4F03F1A093AD04D1 /* GoogleSignInSwift */; };
 		7A5A2E31CE2E4E366BE6A526 /* Scenario.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DAB353C2E35233EA2C16166 /* Scenario.swift */; };
 		BD7438888C3E04B89D29A2A2 /* TryItOutService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9674160BA6B8D289506548A9 /* TryItOutService.swift */; };
+		C15A2C353BBD949C791D838B /* SpeakInBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 069DBD6DDFA335793A4AAEB5 /* SpeakInBox.swift */; };
 		C5EC6B67818C4290C83B8B0E /* Categories.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3585852E3B968C6EEFABBF1 /* Categories.swift */; };
 		A1F0CA5E7B4D41A2B9E30C11 /* FocusAreas.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B7E4419C6F48A7B1035E22 /* FocusAreas.swift */; };
 		B7C41D9E2A5F43C8A0E17D34 /* TalkTopics.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8D52EAF3B6054D9B1F28E45 /* TalkTopics.swift */; };
@@ -111,6 +112,7 @@
 		4FDEAFA5D90E1CC762D02719 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0DAB353C2E35233EA2C16166 /* Scenario.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Scenario.swift; sourceTree = "<group>"; };
 		9674160BA6B8D289506548A9 /* TryItOutService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TryItOutService.swift; sourceTree = "<group>"; };
+		069DBD6DDFA335793A4AAEB5 /* SpeakInBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakInBox.swift; sourceTree = "<group>"; };
 		E3585852E3B968C6EEFABBF1 /* Categories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Categories.swift; sourceTree = "<group>"; };
 		D2B7E4419C6F48A7B1035E22 /* FocusAreas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusAreas.swift; sourceTree = "<group>"; };
 		C8D52EAF3B6054D9B1F28E45 /* TalkTopics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkTopics.swift; sourceTree = "<group>"; };
@@ -356,6 +358,7 @@
 			children = (
 				6F6BCE86A2EC4F36B828FBA1 /* TryItOutView.swift */,
 				9674160BA6B8D289506548A9 /* TryItOutService.swift */,
+				069DBD6DDFA335793A4AAEB5 /* SpeakInBox.swift */,
 			);
 			path = TryItOut;
 			sourceTree = "<group>";
@@ -529,6 +532,7 @@
 				447C669581DE4E4288EAD45C /* EmailAuthView.swift in Sources */,
 				7A5A2E31CE2E4E366BE6A526 /* Scenario.swift in Sources */,
 				BD7438888C3E04B89D29A2A2 /* TryItOutService.swift in Sources */,
+				C15A2C353BBD949C791D838B /* SpeakInBox.swift in Sources */,
 				C5EC6B67818C4290C83B8B0E /* Categories.swift in Sources */,
 				A1F0CA5E7B4D41A2B9E30C11 /* FocusAreas.swift in Sources */,
 				B7C41D9E2A5F43C8A0E17D34 /* TalkTopics.swift in Sources */,
