@@ -725,8 +725,8 @@ struct StoredPauseGates: Decodable {
 /// on the phone, so it reads the same on the web, here, and on every visit.
 struct StoredTeacherPause: Decodable {
     /// One thinking question's pause. `sec` is nil where it could not be
-    /// timed; `folded`: a student's answer was transcribed inside the
-    /// teacher's line, so where the teacher stopped is unknown.
+    /// timed; `folded`: a short answer was transcribed inside the teacher's
+    /// line, and sits inside the pause.
     struct Question: Decodable {
         let timestampSec: Double
         let text: String

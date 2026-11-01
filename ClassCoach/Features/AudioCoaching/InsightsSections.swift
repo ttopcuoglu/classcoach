@@ -1215,9 +1215,9 @@ struct QuestionsSection: View {
                     }
                     Spacer(minLength: 0)
                     VStack(alignment: .trailing, spacing: 2) {
-                        if let p, let sec = p.sec, !p.folded {
+                        if let p, let sec = p.sec {
                             Text(String(format: "%.1f s", sec)).font(.heading(.subheadline)).foregroundStyle(AppTheme.forest)
-                            Text(p.keptTalking ? "you kept talking" : p.answered ? "a student answered" : "no one answered")
+                            Text(p.keptTalking ? "you kept talking" : p.answered ? "a student answered" : p.folded ? "a short answer came first" : "no one answered")
                         } else {
                             Text(p?.label ?? "not measured")
                         }

@@ -190,8 +190,8 @@ enum ThinkingPause {
 
     /// `answered`: a student was heard before the teacher spoke again.
     /// `keptTalking`: the teacher went on with no real gap (`sec` is the gap
-    /// there was). `folded`: an answer was transcribed as the teacher, so
-    /// the pause could not be timed. `sec` is nil wherever it was not timed.
+    /// there was). `folded`: a short answer was transcribed as the teacher and
+    /// sits inside the pause. `sec` is nil wherever it was not timed.
     struct Pause {
         let sec: Double?
         let answered: Bool
@@ -200,10 +200,9 @@ enum ThinkingPause {
 
         /// What this pause says, wherever a question is listed.
         var label: String {
-            if folded { return "an answer was recorded as your voice \u{00B7} not timed" }
             guard let sec else { return "could not be timed" }
             if keptTalking { return sec > 0 ? String(format: "you went on after %.1f s", sec) : "you kept talking" }
-            return String(format: "%.1f s", sec) + (answered ? " \u{00B7} a student answered" : "")
+            return String(format: "%.1f s", sec) + (answered ? " \u{00B7} a student answered" : folded ? " \u{00B7} a short answer came first" : "")
         }
     }
 

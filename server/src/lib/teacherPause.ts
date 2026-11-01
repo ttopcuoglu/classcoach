@@ -1,8 +1,9 @@
 // Teacher Pause Time: how long the teacher left a question that asked
-// students to explain or reason, from the end of the teacher's turn with the
-// question in it to the moment the teacher spoke again. A student answering
-// inside that time is part of it — this is the teacher's half, how long
-// before they stepped back in.
+// students to explain or reason, from the end of the question to the
+// teacher's next real sentence — four words or more, or a new question. A
+// student answering inside that time is part of it, and so is a one-word
+// answer or echo ("Zero. Zero.") whoever said it: this is the teacher's
+// half, how long before they moved the lesson on.
 //
 // THE one place it is worked out. It used to be worked out three times — a
 // held-silence figure here, the tile in the browser, a copy in the iPhone app
@@ -12,32 +13,36 @@
 // reads the same right after class and a week later, and a code change
 // cannot quietly move a number a teacher has already seen.
 //
-// It FAILS CLOSED. The measure needs to know where the teacher stopped
-// talking, and on a room mic students' short answers are often transcribed
-// as the teacher: "…would be, Bruce? Zero. Zero, very good." Read naively,
-// that teacher talked straight past the question (0.0 s). Where answers
-// like that turn up after too many of a lesson's questions, there is no
-// number at all — "not measurable" is the honest answer, a confident wrong
-// one is not.
+// Why "real sentence": on a room mic, students' short answers are often
+// transcribed as the teacher — "…would be, Bruce? Zero. Zero. Because let's
+// say…". Timed to the teacher's next words, that read as 0.0 s; timed to
+// the next real sentence it reads as the second or so it was, without ever
+// having to decide who said "Zero". With no student voice told apart at all
+// there is still no figure: a longer answer would read as the teacher.
 
 import { countedQuestions } from './questionMix.ts'
 
 /// Bumped whenever the arithmetic changes, so a stored figure says which
 /// rules made it. A lesson keeps the figure it was analysed with; moving old
 /// lessons onto new rules is a deliberate backfill, never a side effect.
-export const TEACHER_PAUSE_VERSION = 1
+export const TEACHER_PAUSE_VERSION = 2
 
 /// Two teacher lines under this far apart are one turn still running.
 const MAX_JOIN_GAP_SEC = 2
 /// A gap over this is independent work or a hole in the recording.
 const MAX_PAUSE_SEC = 30
-/// More than this many words after the question, in the same turn, and the
-/// teacher went on rather than leaving it with students.
-const MAX_WORDS_AFTER = 3
-/// A gap this long between two of the teacher's lines, straight after the
-/// question, is a pause even though the turn carries on. Under it is a
-/// breath between sentences: still talking past the question.
+/// Under this, the teacher went straight on: a breath between sentences,
+/// still talking past the question.
 const MIN_PAUSE_IN_TURN_SEC = 1
+/// What ends the pause: the teacher building a real sentence again — this
+/// many words, or a question of QUESTION_WORDS. Anything shorter ("Zero."
+/// "Four." "Very good." "Zero, zero.") does not stop the clock, whoever said
+/// it: a student's one-word answer and the teacher echoing it are both still
+/// inside the time the teacher left before moving the lesson on. That is what
+/// makes the measure work on a room mic, where those short answers are
+/// transcribed as the teacher — it never has to know who said them.
+const SENTENCE_WORDS = 4
+const QUESTION_WORDS = 3
 /// The longest "sentence" straight after a question that reads as a student's
 /// answer filed under the teacher: "Zero." "The x." "In quadrant three."
 const MAX_ANSWER_WORDS = 3
@@ -60,7 +65,9 @@ type Seg = { speakerLabel: string; startSec: number; endSec: number; text: strin
 /// `keptTalking`: the teacher went on with no real gap; `sec` is the gap
 /// there was (0 when the question ran straight into more words in one line).
 /// `folded`: what followed the question reads as a student's answer
-/// transcribed as the teacher, so where the teacher stopped is unknown.
+/// transcribed as the teacher. It is inside the pause, which is timed to the
+/// teacher's next real sentence; counted because the other pause measures,
+/// which do need to know who spoke, fail on it (pauseGates.ts).
 export type QuestionPause = {
   timestampSec: number
   text: string
@@ -123,7 +130,23 @@ export function looksLikeAnswer(after: Token[]): boolean {
   return false
 }
 
-/// The pause after one question, or null where it cannot be timed.
+type TimedToken = Token & { seg: number; startSec: number; endSec: number }
+
+/// A line's words, each given a time by its place in the line. The transcript
+/// times lines, not words; a line is split where the speaker paused, so the
+/// words inside one run close together and their place is a fair estimate.
+function timedTokens(seg: Seg, segIndex: number): TimedToken[] {
+  const tokens = tokensOf(seg.text)
+  const step = tokens.length > 0 ? (seg.endSec - seg.startSec) / tokens.length : 0
+  return tokens.map((t, i) => ({ ...t, seg: segIndex, startSec: seg.startSec + i * step, endSec: seg.startSec + (i + 1) * step }))
+}
+
+/// A sentence that ends the pause: the teacher moving the lesson on.
+const isRealSentence = (sentence: Token[]) =>
+  sentence.length >= SENTENCE_WORDS || (sentence.length >= QUESTION_WORDS && endsQuestion(sentence[sentence.length - 1].raw))
+
+/// The pause after one question, or null where it cannot be timed: from the
+/// end of the question to the start of the teacher's next real sentence.
 function pauseAfter(ordered: Seg[], t: number, quote: string): Omit<QuestionPause, 'timestampSec' | 'text'> | null {
   const idx = ordered.findIndex((s) => s.endSec > t)
   if (idx === -1 || ordered[idx].speakerLabel !== 'Teacher') return null
@@ -136,30 +159,64 @@ function pauseAfter(ordered: Seg[], t: number, quote: string): Omit<QuestionPaus
     end++
   }
   // Where the question ends in the turn: just after the last place its final
-  // three words appear.
-  const lineTokens = ordered.slice(idx, end + 1).map((s) => tokensOf(s.text))
-  const turn = lineTokens.flat()
+  // three words appear. Not found, the whole turn is taken as the question.
+  const turn = ordered.slice(idx, end + 1).flatMap((s, k) => timedTokens(s, idx + k))
   const tail = tokensOf(quote).slice(-3).map((x) => x.w).join(' ')
   let at = -1
   for (let i = 0; i + 3 <= turn.length; i++) if (turn.slice(i, i + 3).map((x) => x.w).join(' ') === tail) at = i + 3
-  if (at !== -1 && looksLikeAnswer(turn.slice(at))) return { sec: null, answered: true, folded: true }
-  if (at !== -1 && turn.length - at > MAX_WORDS_AFTER) {
-    // The line the question ends in, and how many words it still had.
-    let k = 0
-    let upTo = lineTokens[0].length
-    while (upTo < at && k < lineTokens.length - 1) upTo += lineTokens[++k].length
-    if (upTo - at > MAX_WORDS_AFTER || k === lineTokens.length - 1) return { sec: 0, answered: false, keptTalking: true }
-    const gap = Math.round((ordered[idx + k + 1].startSec - ordered[idx + k].endSec) * 10) / 10
-    if (gap < MIN_PAUSE_IN_TURN_SEC) return { sec: Math.max(0, gap), answered: false, keptTalking: true }
-    return { sec: gap, answered: false }
+  if (at === -1) at = turn.length
+  if (at === 0) return null
+  const askedEnd = turn[at - 1].endSec
+  const folded = looksLikeAnswer(turn.slice(at))
+
+  // Walk on through the teacher's words, sentence by sentence, until one is
+  // real. A sentence carries over into the next teacher line only within one
+  // turn; a longer gap, or a student between, ends it.
+  let answered = false
+  let shortPieces = false
+  let sentence: TimedToken[] = []
+  let lastSeg = -1
+  const flush = () => {
+    if (sentence.length > 0 && !isRealSentence(sentence)) shortPieces = true
+    sentence = []
   }
-  const rest = ordered.slice(end + 1)
-  const nextTeacher = rest.find((x) => x.speakerLabel === 'Teacher')
-  if (!nextTeacher) return null
-  const gap = nextTeacher.startSec - ordered[end].endSec
-  if (gap < 0 || gap > MAX_PAUSE_SEC) return null
-  const answered = rest.some((x) => x.speakerLabel !== 'Teacher' && x.startSec < nextTeacher.startSec)
-  return { sec: Math.round(gap * 10) / 10, answered }
+  // The rest of the turn, then every line up to the ceiling; a student line
+  // is one marker with no words.
+  const pending = [...turn.slice(at)]
+  for (let k = end + 1; k < ordered.length && ordered[k].startSec - askedEnd <= MAX_PAUSE_SEC; k++) {
+    if (ordered[k].speakerLabel === 'Teacher') pending.push(...timedTokens(ordered[k], k))
+    else pending.push({ raw: '', w: '', seg: k, startSec: ordered[k].startSec, endSec: ordered[k].endSec })
+  }
+  for (const tok of pending) {
+    if (tok.startSec - askedEnd > MAX_PAUSE_SEC) return null
+    if (!tok.w) {
+      // A student line.
+      flush()
+      answered = true
+      lastSeg = -1
+      continue
+    }
+    // Once a student was heard on their own line, the teacher's next words
+    // are the teacher stepping back in, however short: "Not completely." The
+    // short-words rule is only for answers the transcript did NOT separate.
+    if (answered && sentence.length === 0) {
+      return { sec: Math.max(0, Math.round((tok.startSec - askedEnd) * 10) / 10), answered: true, ...(folded ? { folded: true } : {}) }
+    }
+    if (lastSeg !== -1 && tok.seg !== lastSeg && ordered[tok.seg].startSec - ordered[lastSeg].endSec > MAX_JOIN_GAP_SEC) flush()
+    lastSeg = tok.seg
+    sentence.push(tok)
+    // Four words in, it is a real sentence whether or not it has ended; a
+    // short question needs its question mark.
+    if (!endsSentence(tok.raw) && sentence.length < SENTENCE_WORDS) continue
+    if (isRealSentence(sentence)) {
+      const gap = Math.max(0, Math.round((sentence[0].startSec - askedEnd) * 10) / 10)
+      const anything = answered || shortPieces
+      if (!anything && gap < MIN_PAUSE_IN_TURN_SEC) return { sec: gap, answered: false, keptTalking: true, ...(folded ? { folded: true } : {}) }
+      return { sec: gap, answered, ...(folded ? { folded: true } : {}) }
+    }
+    flush()
+  }
+  return null
 }
 
 /// Whether answers turned up inside the teacher's lines after too many of a
@@ -180,14 +237,12 @@ export function teacherPauseOf(segments: Seg[], questionLog: unknown, teachingMo
   const base = { version: TEACHER_PAUSE_VERSION, foldedCount, questionCount: questions.length, thinking }
 
   const studentHeard = ordered.some((s) => s.speakerLabel !== 'Teacher')
+  // Answers in the teacher's lines no longer stop this measure: the pause
+  // runs to the teacher's next real sentence, short answers and echoes
+  // inside it. It still needs some student voice told apart, or a longer
+  // answer would read as the teacher moving on.
   const reason: TeacherPauseReason | null =
-    thinking.length === 0
-      ? 'no_thinking_questions'
-      : !studentHeard
-        ? 'no_student_voice'
-        : answersInTeacherVoice(foldedCount, questions.length)
-          ? 'answers_in_teacher_voice'
-          : null
+    thinking.length === 0 ? 'no_thinking_questions' : !studentHeard ? 'no_student_voice' : null
   if (reason) return { ...base, average: null, reason }
   const timed = thinking.filter((p) => p.sec != null).map((p) => p.sec as number)
   if (timed.length === 0) return { ...base, average: null, reason: 'none_timed' }

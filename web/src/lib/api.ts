@@ -776,8 +776,8 @@ export type AssignmentCoachSession = {
 // status is one of: setup, recording, paused, transcribing, tagging,
 // analyzed, locked
 /// One thinking question's pause. `sec` is null where it could not be
-/// timed; `folded`: a student's answer was transcribed inside the teacher's
-/// line, so where the teacher stopped is unknown.
+/// timed; `folded`: a short answer was transcribed inside the teacher's line,
+/// and is inside the pause (timed to the teacher's next real sentence).
 export type StoredQuestionPause = {
   timestampSec: number
   text: string

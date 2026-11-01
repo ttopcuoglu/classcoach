@@ -6574,10 +6574,9 @@ function tawtOf(session: AudioSessionWithSegments) {
 /// What one question's pause says, wherever it is listed.
 function pauseLabel(p: StoredQuestionPause | undefined): string {
   if (!p) return 'not measured'
-  if (p.folded) return 'an answer was recorded as your voice · not timed'
   if (p.sec == null) return 'not measured'
   if (p.keptTalking) return p.sec > 0 ? `you went on after ${p.sec.toFixed(1)} s` : 'you kept talking'
-  return `${p.sec.toFixed(1)} s${p.answered ? ' · a student answered' : ''}`
+  return `${p.sec.toFixed(1)} s${p.answered ? ' · a student answered' : p.folded ? ' · a short answer came first' : ''}`
 }
 
 /// Your questions and checks for understanding on one lesson timeline: each
@@ -6908,10 +6907,12 @@ function QuestionsChecksPart({ session }: { session: AudioSessionWithSegments })
                     “{q.quote}”
                   </div>
                   <span className="shrink-0 text-right text-xs text-ink-soft">
-                    {p?.sec != null && !p.folded ? (
+                    {p?.sec != null ? (
                       <>
                         <b className="font-heading text-base text-forest">{p.sec.toFixed(1)} s</b>
-                        <span className="block">{p.keptTalking ? 'you kept talking' : p.answered ? 'a student answered' : 'no one answered'}</span>
+                        <span className="block">
+                          {p.keptTalking ? 'you kept talking' : p.answered ? 'a student answered' : p.folded ? 'a short answer came first' : 'no one answered'}
+                        </span>
                       </>
                     ) : (
                       pauseLabel(p)
