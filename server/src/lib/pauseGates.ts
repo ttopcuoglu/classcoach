@@ -10,16 +10,20 @@
 // the copies disagreed: the report hid a pause after an answer resting on two
 // answers while the coach was told it. This is that decision, made once when
 // the lesson is analysed and stored beside the numbers; every reader follows
-// it. Same rule as Teacher Pause Time (teacherPause.ts): it fails closed.
+// it. It fails closed: no number without enough separated answers.
+//
+// Version 2 dropped hiding them when answers also turned up inside the
+// teacher's lines: the three-answer floor already covers the lessons where
+// that mattered, and it hid figures resting on twenty real answers.
 
-import { answersInTeacherVoice, type TeacherPause } from './teacherPause.ts'
-
-export const PAUSE_GATES_VERSION = 1
+export const PAUSE_GATES_VERSION = 2
 
 /// Below this many answers an average is a reading of one or two moments,
 /// which nothing in this product treats as a habit.
 export const MIN_ANSWER_SAMPLES = 3
 
+/// 'answers_in_teacher_voice' is no longer given (version 1 only); kept so a
+/// decision stored then still reads.
 export type PauseGateReason = 'no_student_voice' | 'answers_in_teacher_voice' | 'not_counted' | 'no_answers_heard' | 'too_few_answers'
 
 export type PauseGate = { shown: true } | { shown: false; reason: PauseGateReason }
@@ -35,12 +39,8 @@ type Detail = { studentVoiceSegments?: unknown; waitTimeSampleCount?: unknown; w
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 const counted = (v: unknown) => typeof v === 'number' && Number.isFinite(v)
 
-function gateOf(samples: unknown, noStudents: boolean, folded: boolean): PauseGate {
+function gateOf(samples: unknown, noStudents: boolean): PauseGate {
   if (noStudents) return { shown: false, reason: 'no_student_voice' }
-  // The answers that WERE separated are the few the transcript happened to
-  // catch, and on such a lesson some "student" lines turned out to be the
-  // teacher: an average over them describes the transcript, not the lesson.
-  if (folded) return { shown: false, reason: 'answers_in_teacher_voice' }
   // Analysed before the answers behind the average were counted: there is no
   // telling one answer from twenty.
   if (!counted(samples)) return { shown: false, reason: 'not_counted' }
@@ -49,14 +49,13 @@ function gateOf(samples: unknown, noStudents: boolean, folded: boolean): PauseGa
   return { shown: true }
 }
 
-export function pauseGatesOf(metricsDetail: unknown, teacherPause: Pick<TeacherPause, 'foldedCount' | 'questionCount'>): PauseGates {
+export function pauseGatesOf(metricsDetail: unknown): PauseGates {
   const d = (metricsDetail ?? {}) as Detail
   const noStudents = num(d.studentVoiceSegments) === 0
-  const folded = answersInTeacherVoice(teacherPause.foldedCount, teacherPause.questionCount)
   return {
     version: PAUSE_GATES_VERSION,
-    waitTime: gateOf(d.waitTimeSampleCount, noStudents, folded),
-    waitTime2: gateOf(d.waitTime2SampleCount, noStudents, folded),
+    waitTime: gateOf(d.waitTimeSampleCount, noStudents),
+    waitTime2: gateOf(d.waitTime2SampleCount, noStudents),
   }
 }
 

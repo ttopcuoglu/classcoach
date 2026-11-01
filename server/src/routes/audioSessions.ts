@@ -1006,7 +1006,7 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
         teacherPause: teacherPause as unknown as Prisma.InputJsonValue,
         // Whether wait time and the pause after an answer may be shown —
         // decided here once, followed by every reader.
-        pauseGates: pauseGatesOf(analysis.metricsDetail, teacherPause) as unknown as Prisma.InputJsonValue,
+        pauseGates: pauseGatesOf(analysis.metricsDetail) as unknown as Prisma.InputJsonValue,
       },
       highlights: analysis.highlights,
       phases: analysis.phases,

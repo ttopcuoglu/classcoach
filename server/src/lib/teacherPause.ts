@@ -46,11 +46,6 @@ const QUESTION_WORDS = 3
 /// The longest "sentence" straight after a question that reads as a student's
 /// answer filed under the teacher: "Zero." "The x." "In quadrant three."
 const MAX_ANSWER_WORDS = 3
-/// At or above this share of a lesson's questions followed by an answer in
-/// the teacher's lines, and at least MIN_FOLDED of them, the teacher's turns
-/// cannot be trusted to end where the teacher stopped: no figure.
-const MAX_FOLDED_SHARE = 0.25
-const MIN_FOLDED = 2
 
 /// Words a teacher says straight after their own question that are not an
 /// answer: tags, fillers, praise.
@@ -217,13 +212,6 @@ function pauseAfter(ordered: Seg[], t: number, quote: string): Omit<QuestionPaus
     flush()
   }
   return null
-}
-
-/// Whether answers turned up inside the teacher's lines after too many of a
-/// lesson's questions to trust where the teacher's turns end. Shared with the
-/// other pause measures (pauseGates.ts), which fail on the same evidence.
-export function answersInTeacherVoice(foldedCount: number, questionCount: number): boolean {
-  return foldedCount >= MIN_FOLDED && foldedCount >= questionCount * MAX_FOLDED_SHARE
 }
 
 export function teacherPauseOf(segments: Seg[], questionLog: unknown, teachingMoves: unknown): TeacherPause {
