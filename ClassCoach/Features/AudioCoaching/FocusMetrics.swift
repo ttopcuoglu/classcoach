@@ -122,12 +122,8 @@ enum FocusMetrics {
                 return ((sec / 60) * 10).rounded() / 10
             })]
         case .waitTime2:
-            // Below the sample floor the average is a reading of one or two
-            // exchanges, which the rest of the report refuses to call a habit.
-            return [("Seconds", sessions.map { session in
-                guard !noStudentVoice(session), (session.metricsDetail?["waitTime2SampleCount"] ?? 0) >= AudioInsights.minWaitTimeSamples else { return nil }
-                return session.metricsDetail?["waitTime2Sec"]
-            })]
+            // Only lessons whose stored decision lets the pause be shown.
+            return [("Seconds", sessions.map(PauseGates.shownWaitTime2))]
         case .followUpQuestionCount:
             // Answers followed up, of the answers heard — what the focus card
             // and Questioning use. Under three answers it is one or two
@@ -157,7 +153,7 @@ enum FocusMetrics {
             })]
         // --- retired: still rendered if an account's stored focus is one ---
         case .avgWaitTime:
-            return [("Wait time", sessions.map(\.avgWaitTimeSec))]
+            return [("Wait time", sessions.map(PauseGates.shownWaitTime))]
         case .redirectionCount:
             return [("Redirections", sessions.map { perTenMin($0.metricsDetail?["redirectionCount"], durationSec: $0.durationSec) })]
         case .toneRatio:

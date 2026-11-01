@@ -701,6 +701,25 @@ private struct TeacherPauseLog: Decodable {
     let teacherPause: StoredTeacherPause?
 }
 
+/// Read on its own for the same reason as TeacherPauseLog.
+private struct PauseGatesLog: Decodable {
+    let pauseGates: StoredPauseGates?
+}
+
+/// Whether wait time and the pause after an answer may be shown, as the
+/// server decided when the lesson was analysed (server/src/lib/pauseGates.ts).
+/// Every screen follows it; none decides for itself.
+struct StoredPauseGates: Decodable {
+    struct Gate: Decodable {
+        let shown: Bool
+        /// no_student_voice, answers_in_teacher_voice, not_counted, no_answers_heard,
+        /// too_few_answers — nil when shown.
+        let reason: String?
+    }
+    let waitTime: Gate?
+    let waitTime2: Gate?
+}
+
 /// Teacher Pause Time as the server stored it when the lesson was analysed
 /// (server/src/lib/teacherPause.ts). Shown as stored and never worked out
 /// on the phone, so it reads the same on the web, here, and on every visit.
@@ -755,6 +774,8 @@ struct AudioSession: Decodable, Identifiable {
     let roomTrace: String?
     /// metricsLogs.teacherPause; absent on lessons not yet worked out.
     let teacherPause: StoredTeacherPause?
+    /// metricsLogs.pauseGates; absent on lessons not yet worked out.
+    let pauseGates: StoredPauseGates?
     let highlights: [AudioHighlight]?
     let phases: [AudioPhase]?
     let questionLog: [AudioQuestionLogEntry]?
@@ -859,6 +880,7 @@ struct AudioSession: Decodable, Identifiable {
         followUpLog = logs?.followUpLog
         roomTrace = logs?.roomTrace
         teacherPause = (try? container.decodeIfPresent(TeacherPauseLog.self, forKey: .metricsLogs))?.teacherPause
+        pauseGates = (try? container.decodeIfPresent(PauseGatesLog.self, forKey: .metricsLogs))?.pauseGates
         highlights = try container.decodeIfPresent([AudioHighlight].self, forKey: .highlights)
         phases = try container.decodeIfPresent([AudioPhase].self, forKey: .phases)
         questionLog = try container.decodeIfPresent([AudioQuestionLogEntry].self, forKey: .questionLog)

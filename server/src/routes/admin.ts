@@ -12,6 +12,7 @@ import {
 } from '../lib/organization.ts'
 import { mergeBreakdownGroups } from '../lib/breakdownGroups.ts'
 import { splitByCoverage } from '../lib/transcriptCoverage.ts'
+import { shownWaitTime, shownWaitTime2 } from '../lib/pauseGates.ts'
 import { prisma } from '../lib/prisma.ts'
 import { ADMIN_PRIORITY_SELECT } from '../lib/schoolPriorities.ts'
 import { draftGuidance, MAX_DRAFT_INPUT_CHARS } from '../lib/schoolPriorityDraft.ts'
@@ -133,11 +134,6 @@ function dataConfidence(n: number): DataConfidence {
   return 'full'
 }
 
-/// Matches MIN_WAIT_TIME_SAMPLES in web/src/lib/reportConfidence.ts — below
-/// this many exchanges the average is a reading of one or two moments, which
-/// no surface in this product treats as a habit.
-const MIN_WAIT_TIME_SAMPLES = 3
-
 type HeadlineMetricsRow = {
   teacherTalkPct: number | null
   questionCount: number | null
@@ -163,11 +159,10 @@ function numDetail(s: HeadlineMetricsRow, key: string): number | null {
 // figure. Same evidence-only discipline: a session missing a field never
 // counts as a zero for that field.
 function computeHeadlineMetrics(sessions: HeadlineMetricsRow[]) {
-  const waitTimes = sessions.map((s) => s.avgWaitTimeSec).filter((v): v is number => v != null)
-  const waitTime2s = sessions
-    .filter((s) => (numDetail(s, 'waitTime2SampleCount') ?? 0) >= MIN_WAIT_TIME_SAMPLES)
-    .map((s) => numDetail(s, 'waitTime2Sec'))
-    .filter((v): v is number => v != null)
+  // Only lessons whose stored decision lets each pause be shown
+  // (pauseGates.ts) — the same lessons a teacher sees the number on.
+  const waitTimes = sessions.map(shownWaitTime).filter((v): v is number => v != null)
+  const waitTime2s = sessions.map((s) => shownWaitTime2(s.metricsDetail)).filter((v): v is number => v != null)
   const paces = sessions.map((s) => numDetail(s, 'teacherWordsPerMinute')).filter((v): v is number => v != null)
   const teacherTalkPcts = sessions.map((s) => s.teacherTalkPct).filter((v): v is number => v != null)
 
@@ -672,16 +667,15 @@ async function computeOverview(req: Request, res: Response) {
   // precision" discipline the report itself applies via reportConfidence.ts.
   // average/metricsOf/numDetail are the module-scope helpers defined above
   // (shared with computeHeadlineMetrics for the grade/subject breakdown).
-  const waitTimes = filteredAudioSessions.map((s) => s.avgWaitTimeSec).filter((v): v is number => v != null)
+  // Only lessons whose stored decision lets each pause be shown
+  // (pauseGates.ts) — the same lessons a teacher sees the number on.
+  const waitTimes = filteredAudioSessions.map(shownWaitTime).filter((v): v is number => v != null)
   // The pause AFTER a student answers, alongside the one after a question.
   // Measured on real classroom audio it lands about three and a half times as
   // often as wait time 1, which needs a detected question AND an audible
   // answer where this needs only a student turn followed by a teacher turn —
   // so a staff-wide figure rests on far more sessions.
-  const waitTime2s = filteredAudioSessions
-    .filter((s) => (numDetail(s, 'waitTime2SampleCount') ?? 0) >= MIN_WAIT_TIME_SAMPLES)
-    .map((s) => numDetail(s, 'waitTime2Sec'))
-    .filter((v): v is number => v != null)
+  const waitTime2s = filteredAudioSessions.map((s) => shownWaitTime2(s.metricsDetail)).filter((v): v is number => v != null)
   // How fast staff speak. Exact arithmetic rather than a detection, so it is
   // available wherever there is a minute of teacher speech.
   const paces = filteredAudioSessions

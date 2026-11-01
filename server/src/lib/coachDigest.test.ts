@@ -14,6 +14,9 @@ import {
 // a null rendered as a zero, or the "only audio was measured" caveat dropped so
 // Coach can tell a teacher they never checked for understanding.
 
+/// Both pauses cleared to be shown, as analysis stores it (pauseGates.ts).
+const SHOWN = { version: 1, waitTime: { shown: true }, waitTime2: { shown: true } }
+
 function session(over: Partial<DigestSession> = {}): DigestSession {
   return {
     period: '3rd period',
@@ -31,6 +34,7 @@ function session(over: Partial<DigestSession> = {}): DigestSession {
     strengths: 'You followed up on a student idea instead of moving on.',
     growthAreas: 'A long explanation stretch mid-lesson.',
     nextStep: 'Try one checkpoint inside the explanation.',
+    metricsDetail: { pauseGates: SHOWN },
     ...over,
   }
 }
@@ -192,6 +196,7 @@ function paced(wpm: number, waitTime2: number, monologueSec: number, day: number
       teacherWordsPerMinute: wpm,
       waitTime2Sec: waitTime2,
       longestTeacherMonologueSec: monologueSec,
+      pauseGates: SHOWN,
     },
   })
 }
@@ -225,7 +230,7 @@ test('the longest stretch is reported in minutes, not seconds', () => {
 
 test('a session with no metricsDetail is skipped rather than read as zero', () => {
   const block = buildDigestBlock(
-    [paced(220, 0.4, 360, 24), session({ sessionDate: new Date('2026-09-17T14:00:00Z') })],
+    [paced(220, 0.4, 360, 24), session({ sessionDate: new Date('2026-09-17T14:00:00Z'), metricsDetail: undefined })],
     { includeMetrics: true, focusMetric: 'teacherPace' },
   )
   // One usable value is not a trend, and a missing one is not a zero.
@@ -239,4 +244,10 @@ test('a retired focus still works for an account that chose it', () => {
     { includeMetrics: true, focusMetric: 'avgWaitTime' },
   )
   assert.match(block, /average wait time/)
+})
+
+test('a pause the lesson may not show is never told to the coach', () => {
+  const hidden = { version: 1, waitTime: { shown: false, reason: 'too_few_answers' }, waitTime2: { shown: false, reason: 'too_few_answers' } }
+  const block = buildDigestBlock([session({ metricsDetail: { pauseGates: hidden } })], RELEVANT)
+  assert.doesNotMatch(block, /wait time/i)
 })

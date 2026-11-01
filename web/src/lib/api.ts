@@ -787,6 +787,9 @@ export type StoredQuestionPause = {
   folded?: true
 }
 
+export type PauseGateReason = 'no_student_voice' | 'answers_in_teacher_voice' | 'not_counted' | 'no_answers_heard' | 'too_few_answers'
+export type PauseGate = { shown: true } | { shown: false; reason: PauseGateReason }
+
 export type StoredTeacherPause = {
   version: number
   average: number | null
@@ -1172,6 +1175,9 @@ export type AudioSession = {
     /// analysed (server lib/teacherPause.ts). Shown as stored, never worked
     /// out again here, so it reads the same on every visit and every device.
     teacherPause?: StoredTeacherPause
+    /// Whether wait time and the pause after an answer may be shown, decided
+    /// by the server at analysis (server lib/pauseGates.ts).
+    pauseGates?: { version: number; waitTime: PauseGate; waitTime2: PauseGate }
   } | null
   /// The one focus for next lesson the teacher picked from Try next time.
   /// `lines`: the focus said simply, one per item made the focus, keyed by

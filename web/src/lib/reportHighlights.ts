@@ -14,11 +14,11 @@ import type {
   FocusMetric,
 } from './api'
 import {
-  hasEnoughWaitTimeSamples,
   MIN_CFU_FOR_STRENGTH,
   MIN_DURATION_FOR_TALK_BALANCE_CANDIDATE_SEC,
   type ConfidentMetric,
 } from './reportConfidence'
+import { shownWaitTime } from './pauseGates'
 
 const CANDIDATE_ORDER = [
   'highlight-followup',
@@ -127,13 +127,11 @@ export function buildStrengthCandidates(
 
   if (
     hasEnoughDurationForTalkBalance &&
-    hasEnoughWaitTimeSamples(session.metricsDetail) &&
-    session.avgWaitTimeSec != null &&
-    session.avgWaitTimeSec >= 3
+    (shownWaitTime(session) ?? 0) >= 3
   ) {
     candidates.push({
       id: 'wait-time',
-      observation: `Your average wait time was ${session.avgWaitTimeSec}s`,
+      observation: `Your average wait time was ${shownWaitTime(session)}s`,
       whyItMatters: 'Giving students real time to think before answering leads to deeper, more complete responses.',
       timestampSec: null,
       excerpt: null,

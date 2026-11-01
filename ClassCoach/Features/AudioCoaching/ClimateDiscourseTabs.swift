@@ -392,20 +392,12 @@ struct DiscourseDetailsTab: View {
     }
 
     private var waitTime2Metric: ReportConfidence.ConfidentMetric {
-        guard let sec = session.metricsDetail?["waitTime2Sec"] else {
-            return ReportConfidence.ConfidentMetric(
-                state: .notAnalyzed, display: "—",
-                reason: "This session was analyzed before the pause after an answer was measured.")
-        }
-        let samples = Int(session.metricsDetail?["waitTime2SampleCount"] ?? 0)
-        let display = String(format: "%.1fs", sec)
-        if Double(samples) < AudioInsights.minWaitTimeSamples {
-            return ReportConfidence.ConfidentMetric(
-                state: .limitedEvidence, display: display,
-                reason: "Averaged over only \(samples) exchange\(samples == 1 ? "" : "s"), which is too few to read as a habit.")
+        guard let sec = PauseGates.shownWaitTime2(session.session) else {
+            return ReportConfidence.ConfidentMetric(state: .notMeasurable, display: "\u{2014}",
+                                                    reason: PauseGates.hiddenReason(session.session, .waitTime2))
         }
         return ReportConfidence.ConfidentMetric(
-            state: .measured, display: display,
+            state: .measured, display: String(format: "%.1fs", sec),
             reason: "How long you left after a student finished before speaking. The pause above is the one after your question; this is the one after their answer, and it is where a follow-up has to fit.")
     }
 
@@ -427,17 +419,9 @@ struct DiscourseDetailsTab: View {
     }
 
     private var waitTimeMetric: ReportConfidence.ConfidentMetric {
-        guard let wait = session.avgWaitTimeSec else {
-            // "Not enough data" is true but unhelpful: on a room mic the pause
-            // is usually missing because the answer was never captured, not
-            // because the teacher never waited.
-            if (session.questionCount ?? 0) > 0 {
-                return ReportConfidence.ConfidentMetric(
-                    state: .notMeasurable, display: "—",
-                    reason: "None of your questions was followed by an audible student answer, so there was no pause to time."
-                )
-            }
-            return ReportConfidence.ConfidentMetric(state: .notMeasurable, display: "—", reason: "Not enough data in this session to compute this.")
+        guard let wait = PauseGates.shownWaitTime(session.session) else {
+            return ReportConfidence.ConfidentMetric(state: .notMeasurable, display: "\u{2014}",
+                                                    reason: PauseGates.hiddenReason(session.session, .waitTime))
         }
         return ReportConfidence.ConfidentMetric(state: .measured, display: "\(ReportConfidence.formatNumber(wait))s")
     }

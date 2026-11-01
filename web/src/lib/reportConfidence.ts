@@ -4,7 +4,8 @@
 // as pure functions so both the in-app report and the print/export view
 // can share the exact same judgment calls.
 
-import type { AudioPhase } from './api'
+import type { AudioPhase, AudioSession } from './api'
+import { pauseHiddenReason, shownWaitTime, shownWaitTime2 } from './pauseGates'
 
 // A session shorter than this gets a can't-miss "treat as indicative"
 // banner — short samples are real data, but not a full observation.
@@ -36,28 +37,15 @@ export const MIN_STUDENT_SEGMENTS_FOR_FEEDBACK = 5
 // room mic that gap is usually missing because the answer was never captured,
 // not because the teacher never paused — "not enough data" reads like a glitch
 // and blames the wrong thing.
-export function waitTimeMetric(avgWaitTimeSec: number | null | undefined, questionCount: number | null | undefined): ConfidentMetric {
-  if (avgWaitTimeSec == null && (questionCount ?? 0) > 0) {
-    return {
-      state: 'not_measurable',
-      display: '—',
-      reason: 'None of your questions was followed by an audible student answer, so there was no pause to time.',
-    }
-  }
-  return getPresenceMetric(avgWaitTimeSec)
+export function waitTimeMetric(session: Pick<AudioSession, 'avgWaitTimeSec' | 'metricsDetail' | 'metricsLogs'>): ConfidentMetric {
+  const wait = shownWaitTime(session)
+  if (wait == null) return { state: 'not_measurable', display: '—', reason: pauseHiddenReason(session, 'waitTime') }
+  return { state: 'measured', display: String(wait) }
 }
 
 export function feedbackMeasurable(studentVoiceSegments: number | null | undefined): boolean {
   return (studentVoiceSegments ?? 0) >= MIN_STUDENT_SEGMENTS_FOR_FEEDBACK
 }
-
-// Wait time only counts a question followed by an audible student response
-// (see audioAnalysis.ts), so a session with many questions can still have
-// just one or two usable intervals. Below this many, the average is still
-// shown, but never framed as a Strength, Priority, or judgment. Sessions
-// analyzed before waitTimeSampleCount existed used the older, looser wait
-// rule, so a missing count deliberately fails the floor too.
-export const MIN_WAIT_TIME_SAMPLES = 3
 
 /// Everyday conversation usually runs about 120-160 words a minute, pauses
 /// included — and pace is measured with the teacher's short pauses included
@@ -86,25 +74,10 @@ export function speechRateMetric(wpm: number | null | undefined): ConfidentMetri
 /// question* followed by an audible answer; this only needs a student turn
 /// followed by a teacher turn. On real lessons it has samples where wait
 /// time 1 has none.
-export function waitTime2Metric(
-  waitTime2Sec: number | null | undefined,
-  sampleCount: number | null | undefined,
-): ConfidentMetric {
-  if (waitTime2Sec == null) {
-    return {
-      state: 'not_measurable',
-      display: '—',
-      reason: 'No audible student answer was followed by you speaking, so there was no pause to time.',
-    }
-  }
-  if ((sampleCount ?? 0) < MIN_WAIT_TIME_SAMPLES) {
-    return {
-      state: 'limited_evidence',
-      display: `${waitTime2Sec}s`,
-      reason: `Averaged over only ${sampleCount ?? 0} exchange${(sampleCount ?? 0) === 1 ? '' : 's'}, which is too few to read as a habit.`,
-    }
-  }
-  return { state: 'measured', display: `${waitTime2Sec}s` }
+export function waitTime2Metric(session: Pick<AudioSession, 'metricsDetail' | 'metricsLogs'>): ConfidentMetric {
+  const sec = shownWaitTime2(session)
+  if (sec == null) return { state: 'not_measurable', display: '—', reason: pauseHiddenReason(session, 'waitTime2') }
+  return { state: 'measured', display: `${sec}s` }
 }
 
 /// Long enough to be worth saying. Below this the recording started with the
@@ -138,11 +111,6 @@ export function leadingSilenceNote(firstWordSec: number | null | undefined): str
 /// One or two checks now produce neither praise nor criticism, which is the
 /// honest reading: the growth-side candidate still only fires at zero.
 export const MIN_CFU_FOR_STRENGTH = 3
-
-export function hasEnoughWaitTimeSamples(metricsDetail: Record<string, number | null> | null | undefined): boolean {
-  const count = metricsDetail?.waitTimeSampleCount
-  return count != null && count >= MIN_WAIT_TIME_SAMPLES
-}
 
 // Checks-for-understanding phrases are optional, relatively sparse teacher
 // behavior — a short clip that happens not to contain one doesn't mean the

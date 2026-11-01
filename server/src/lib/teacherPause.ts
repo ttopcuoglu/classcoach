@@ -162,6 +162,13 @@ function pauseAfter(ordered: Seg[], t: number, quote: string): Omit<QuestionPaus
   return { sec: Math.round(gap * 10) / 10, answered }
 }
 
+/// Whether answers turned up inside the teacher's lines after too many of a
+/// lesson's questions to trust where the teacher's turns end. Shared with the
+/// other pause measures (pauseGates.ts), which fail on the same evidence.
+export function answersInTeacherVoice(foldedCount: number, questionCount: number): boolean {
+  return foldedCount >= MIN_FOLDED && foldedCount >= questionCount * MAX_FOLDED_SHARE
+}
+
 export function teacherPauseOf(segments: Seg[], questionLog: unknown, teachingMoves: unknown): TeacherPause {
   const ordered = segments.filter((s) => s.text.trim()).sort((a, b) => a.startSec - b.startSec)
   const { questions } = countedQuestions(questionLog, teachingMoves)
@@ -178,7 +185,7 @@ export function teacherPauseOf(segments: Seg[], questionLog: unknown, teachingMo
       ? 'no_thinking_questions'
       : !studentHeard
         ? 'no_student_voice'
-        : foldedCount >= MIN_FOLDED && foldedCount >= questions.length * MAX_FOLDED_SHARE
+        : answersInTeacherVoice(foldedCount, questions.length)
           ? 'answers_in_teacher_voice'
           : null
   if (reason) return { ...base, average: null, reason }

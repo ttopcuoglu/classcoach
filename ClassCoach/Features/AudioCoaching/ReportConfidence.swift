@@ -294,12 +294,6 @@ enum AudioInsights {
         }
     }
 
-    /// Mirrors `MIN_WAIT_TIME_SAMPLES` in web/src/lib/reportConfidence.ts —
-    /// fewer usable question → student-response intervals than this, or a
-    /// session analyzed before the count existed, never makes wait time a
-    /// Strength or Priority.
-    static let minWaitTimeSamples = 3.0
-
     /// Everyday conversation usually runs in this range, pauses included —
     /// and pace is measured with the teacher's short pauses included to
     /// match. A range rather than one number, which reads as a target. There
@@ -317,11 +311,6 @@ enum AudioInsights {
     static func leadingSilenceNote(firstWordSec: Double?) -> String? {
         guard let firstWordSec, firstWordSec >= materialLeadingSilenceSec else { return nil }
         return "Nothing was transcribed until \(ReportConfidence.formatDuration(firstWordSec)), so that much of the silence above is the recorder running before the lesson got going rather than quiet in the room."
-    }
-
-    static func hasEnoughWaitTimeSamples(_ session: AudioSessionWithSegments) -> Bool {
-        guard let count = session.metricsDetail?["waitTimeSampleCount"] else { return false }
-        return count >= minWaitTimeSamples
     }
 
     static func buildStrengthCandidates(
@@ -342,7 +331,7 @@ enum AudioInsights {
                 timestampSec: nil, excerpt: nil, durationSec: nil, weight: 1, focusMetric: .higherOrderPct
             ))
         }
-        if hasEnoughWaitTimeSamples(session), let wait = session.avgWaitTimeSec, wait >= 3 {
+        if let wait = PauseGates.shownWaitTime(session.session), wait >= 3 {
             candidates.append(NoticeCandidate(
                 id: "wait-time", observation: "Your average wait time was \(Confidence.formatNumber(wait))s",
                 whyItMatters: "Giving students real time to think before answering leads to deeper, more complete responses.",
@@ -441,5 +430,44 @@ enum AudioInsights {
             }
         }
         return nil
+    }
+}
+
+/// Whether wait time and the pause after an answer may be shown — read from
+/// the decision the server stored at analysis (StoredPauseGates), mirroring
+/// web/src/lib/pauseGates.ts. A lesson with no decision stored shows neither.
+enum PauseGates {
+    enum Measure { case waitTime, waitTime2 }
+
+    private static func gate(_ session: AudioSession, _ measure: Measure) -> StoredPauseGates.Gate? {
+        measure == .waitTime ? session.pauseGates?.waitTime : session.pauseGates?.waitTime2
+    }
+
+    static func shownWaitTime(_ session: AudioSession) -> Double? {
+        gate(session, .waitTime)?.shown == true ? session.avgWaitTimeSec : nil
+    }
+
+    static func shownWaitTime2(_ session: AudioSession) -> Double? {
+        gate(session, .waitTime2)?.shown == true ? session.metricsDetail?["waitTime2Sec"] : nil
+    }
+
+    /// Why a pause isn't shown, in the words the web uses.
+    static func hiddenReason(_ session: AudioSession, _ measure: Measure) -> String {
+        guard let g = gate(session, measure) else { return "Not worked out for this lesson yet." }
+        let count = Int(session.metricsDetail?[measure == .waitTime ? "waitTimeSampleCount" : "waitTime2SampleCount"] ?? 0)
+        switch g.reason {
+        case "no_student_voice":
+            return "No student voice was told apart from yours in this recording, so there was no answer to time against."
+        case "answers_in_teacher_voice":
+            return "Students\u{2019} answers were recorded as your voice, so the few answers that were told apart can\u{2019}t stand for the lesson."
+        case "not_counted":
+            return "This lesson was analysed before the answers behind it were counted, so it can\u{2019}t be checked."
+        case "too_few_answers":
+            return "Only \(count) answer\(count == 1 ? "" : "s") could be timed, too few to read as a habit."
+        default:
+            return measure == .waitTime
+                ? "None of your questions was followed by an audible student answer, so there was no pause to time."
+                : "No audible student answer was followed by you speaking, so there was no pause to time."
+        }
     }
 }

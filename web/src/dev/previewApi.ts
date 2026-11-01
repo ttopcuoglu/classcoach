@@ -544,8 +544,9 @@ function previewReport(): Json {
       ...(new URLSearchParams(window.location.search).has('room')
         ? { roomTrace: 'q'.repeat(40) + ('t'.repeat(60) + 'g'.repeat(40) + 's'.repeat(10) + 'x'.repeat(30) + 'o'.repeat(20) + 'q'.repeat(10)).repeat(8) + 't'.repeat(78) }
         : {}),
-      // As the server stores it (server lib/teacherPause.ts); the page only
-      // shows it.
+      // As the server stores them (server lib/pauseGates.ts, teacherPause.ts);
+      // the page only shows them.
+      pauseGates: { version: 1, waitTime: { shown: true }, waitTime2: { shown: true } },
       teacherPause: {
         version: 1,
         average: 3.7,

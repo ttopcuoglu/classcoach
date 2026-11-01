@@ -141,9 +141,9 @@ export default function AudioCoachingExport() {
   // Counted as the Questioning card counts it, so paper and screen agree.
   const mix = beyondRecall(session)
   const higherOrder = mix && mix.total > 0 ? formatRatio(mix.beyond, mix.total) : null
-  const waitTime = waitTimeMetric(session.avgWaitTimeSec, session.questionCount)
+  const waitTime = waitTimeMetric(session)
   const pace = speechRateMetric(rawNum('teacherWordsPerMinute'))
-  const waitTime2 = waitTime2Metric(rawNum('waitTime2Sec'), rawNum('waitTime2SampleCount'))
+  const waitTime2 = waitTime2Metric(session)
   const followUps = getFollowUpMetric({
     count: rawNum('followUpQuestionCount'),
     studentVoiceSegments: rawNum('studentVoiceSegments'),

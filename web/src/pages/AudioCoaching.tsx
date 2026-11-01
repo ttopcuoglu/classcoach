@@ -71,13 +71,11 @@ import {
   getFollowUpMetric,
   feedbackMeasurable,
   getPresenceMetric,
-  hasEnoughWaitTimeSamples,
   isConfidentState,
   isMissingState,
   judgeTalkBalance,
   MIN_DURATION_FOR_CFU_DETECTION_SEC,
   MIN_N_FOR_PERCENT,
-  MIN_WAIT_TIME_SAMPLES,
   TINY_RECORDING_THRESHOLD_SEC,
   SHORT_SESSION_THRESHOLD_SEC,
   STUDENT_TALK_CAVEAT,
@@ -92,6 +90,7 @@ import {
 import { buildNextTimeItems, workedNote, type NoticeCandidate } from '../lib/reportHighlights'
 import { checkCount } from '../lib/questionMix'
 import { focusLineKey, lineIgnoresPause, stepIgnoresPause } from '../lib/focusLine'
+import { shownWaitTime, shownWaitTime2 } from '../lib/pauseGates'
 
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60)
@@ -1623,11 +1622,12 @@ function buildQuestioningInsight(
   } else if (followUpMetric.state === 'confirmed_none') {
     sentence += ' No follow-up questions were detected after a student answer today — a quick "say more about that" can go a long way.'
   }
-  if (waitTimeMetric.state === 'measured' && session.avgWaitTimeSec != null && hasEnoughWaitTimeSamples(session.metricsDetail)) {
+  const wait = waitTimeMetric.state === 'measured' ? shownWaitTime(session) : null
+  if (wait != null) {
     sentence +=
-      session.avgWaitTimeSec >= 3
-        ? ` Your average wait time was ${session.avgWaitTimeSec.toFixed(1)}s — that's real thinking room.`
-        : ` Your average wait time was ${session.avgWaitTimeSec.toFixed(1)}s — waiting a beat longer can bring more students into a response.`
+      wait >= 3
+        ? ` Your average wait time was ${wait.toFixed(1)}s — that's real thinking room.`
+        : ` Your average wait time was ${wait.toFixed(1)}s — waiting a beat longer can bring more students into a response.`
   }
   return sentence
 }
@@ -2130,7 +2130,7 @@ function ReportPanel({
     studentVoiceSegments: num('studentVoiceSegments'),
     recordedSec,
   })
-  const waitTimeMetric = waitTimeMetricOf(session.avgWaitTimeSec, session.questionCount)
+  const waitTimeMetric = waitTimeMetricOf(session)
 
   // Checking Understanding
   const cfuMetric = getCountMetric({
@@ -3510,11 +3510,9 @@ function MyGrowthTab({
     return sec == null ? null : Math.round((sec / 60) * 10) / 10
   })
   const monologueMax = Math.max(4, ...longestMonologue.filter((v): v is number => v != null)) * 1.2
-  // Below the sample floor the average is a reading of one or two exchanges,
-  // which the rest of the report refuses to treat as a habit — so does this.
-  const waitTime2 = analyzed.map((s) =>
-    !noStudentVoice(s) && (metricsNum(s, 'waitTime2SampleCount') ?? 0) >= MIN_WAIT_TIME_SAMPLES ? metricsNum(s, 'waitTime2Sec') : null,
-  )
+  // Only lessons whose stored decision lets the pause be shown — the same
+  // ones whose own page shows it.
+  const waitTime2 = analyzed.map(shownWaitTime2)
   const waitTime2Max = Math.max(4, ...waitTime2.filter((v): v is number => v != null)) * 1.2
   // Count AND total on one chart rather than a share on its own: a share is
   // 100% when one question was asked and one went beyond recall, which reads

@@ -12,6 +12,7 @@ import { enrichClassroomMoves } from '../lib/classroomMoves.ts'
 import { readEscalation } from '../lib/escalation.ts'
 import { readTeachingMoves } from '../lib/teachingMoves.ts'
 import { parseLevelTrace, splitNonSpeech, teacherIntervals } from '../lib/settleTime.ts'
+import { pauseGatesOf, shownWaitTime, shownWaitTime2 } from '../lib/pauseGates.ts'
 import { storedTeacherPause, teacherPauseOf } from '../lib/teacherPause.ts'
 import { buildRoomTrace, openingWasRecorderOnly, roomFacts, roomShares, type RoomFacts } from '../lib/roomTrace.ts'
 import { buildSoundTimeline } from '../lib/soundTimeline.ts'
@@ -983,6 +984,7 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
       )
     : null
 
+  const teacherPause = teacherPauseOf(segments, analysis.questionLog, teachingMoves)
   const updated = await prisma.audioSession.update({
     where: { id: sessionId },
     data: {
@@ -1001,7 +1003,10 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
         ...(roomTrace ? { roomTrace, ...roomShares(roomTrace) } : {}),
         // Worked out once, here, and only shown by the web and the iPhone,
         // so the figure a teacher sees cannot move after the fact.
-        teacherPause: teacherPauseOf(segments, analysis.questionLog, teachingMoves) as unknown as Prisma.InputJsonValue,
+        teacherPause: teacherPause as unknown as Prisma.InputJsonValue,
+        // Whether wait time and the pause after an answer may be shown —
+        // decided here once, followed by every reader.
+        pauseGates: pauseGatesOf(analysis.metricsDetail, teacherPause) as unknown as Prisma.InputJsonValue,
       },
       highlights: analysis.highlights,
       phases: analysis.phases,
@@ -1868,7 +1873,7 @@ export function buildClassSummarySystemPrompt(
           ? `${metrics.higherOrderCount} of ${metrics.questionCount}`
           : 'not measured'
       } (a count — never restate it as a percentage, and never call these "higher-order")
-- average wait time after a question: ${metrics.avgWaitTimeSec ?? 'not measured'}s${metrics.studentVoiceDetected ? '' : ' (NOT reliable here: with no student voice separated, a student answer reads as the teacher still talking)'}
+- average wait time after a question: ${metrics.avgWaitTimeSec != null ? `${metrics.avgWaitTimeSec}s` : 'not measured (too few student answers were told apart from the teacher to time it)'}
 - check-for-understanding moves heard: ${metrics.cfuCount ?? 'not measured'}`
     : ''
 
@@ -2142,11 +2147,13 @@ export async function requestClassSummaryText(session: ClassSummarySource, segme
       questionCount: mix && mixTotal > 0 ? mixTotal : session.questionCount,
       higherOrderPct: session.higherOrderPct,
       higherOrderCount: mix && mixTotal > 0 ? mix.explain + mix.reasoning : metricNumber(session.metricsDetail, 'higherOrderQuestionCount'),
-      avgWaitTimeSec: session.avgWaitTimeSec,
+      // Only where the stored decision says these may be shown (pauseGates.ts):
+      // the coach is never told a number the report hides.
+      avgWaitTimeSec: shownWaitTime(session),
       cfuCount: session.cfuCount,
       studentVoiceDetected: segments.some((s) => s.speakerLabel === 'Student'),
       teacherWordsPerMinute: metricNumber(session.metricsDetail, 'teacherWordsPerMinute'),
-      waitTime2Sec: metricNumber(session.metricsDetail, 'waitTime2Sec'),
+      waitTime2Sec: shownWaitTime2(session.metricsDetail),
       waitTime2SampleCount: metricNumber(session.metricsDetail, 'waitTime2SampleCount'),
       firstWordSec: metricNumber(session.metricsDetail, 'firstWordSec'),
       room: storedRoomFacts(session.metricsDetail),

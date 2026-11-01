@@ -1,3 +1,4 @@
+import { shownWaitTime, shownWaitTime2 } from './pauseGates.ts'
 import { prisma } from './prisma.ts'
 
 // COACH_DIGEST_ENABLED takes either `true`, which switches the digest on for
@@ -147,10 +148,12 @@ function roomLabel(s: DigestSession): string {
 const TREND_COLUMNS: Record<string, { read: (s: DigestSession) => number | null; label: string; unit: string }> = {
   talkRatio: { read: (s) => s.teacherTalkPct, label: 'their share of the talking', unit: '%' },
   higherOrderPct: { read: (s) => s.higherOrderPct, label: 'higher-order questions', unit: '%' },
-  avgWaitTime: { read: (s) => s.avgWaitTimeSec, label: 'average wait time', unit: 's' },
+  // The two pauses only where the stored decision lets them be shown
+  // (pauseGates.ts), so the coach never trends a number the report hides.
+  avgWaitTime: { read: (s) => shownWaitTime(s), label: 'average wait time', unit: 's' },
   cfuCount: { read: (s) => s.cfuCount, label: 'spoken checks for understanding', unit: '' },
   teacherPace: { read: (s) => detailNumber(s, 'teacherWordsPerMinute'), label: 'their speaking pace', unit: ' words a minute' },
-  waitTime2: { read: (s) => detailNumber(s, 'waitTime2Sec'), label: 'the pause after a student answers', unit: 's' },
+  waitTime2: { read: (s) => shownWaitTime2(s.metricsDetail), label: 'the pause after a student answers', unit: 's' },
   longestMonologue: {
     read: (s) => {
       const sec = detailNumber(s, 'longestTeacherMonologueSec')
@@ -202,7 +205,8 @@ export function buildDigestBlock(
       const ho = latest.higherOrderPct != null ? `, ${Math.round(latest.higherOrderPct)}% higher-order` : ''
       lines.push(`- ${latest.questionCount} questions${ho}`)
     }
-    if (latest.avgWaitTimeSec != null) lines.push(`- Average wait time ${latest.avgWaitTimeSec.toFixed(1)}s`)
+    const wait = shownWaitTime(latest)
+    if (wait != null) lines.push(`- Average wait time ${wait.toFixed(1)}s`)
     if (latest.cfuCount != null) lines.push(`- ${latest.cfuCount} spoken checks for understanding`)
   }
   if (latest.classSummary) lines.push(`- What the lesson covered: ${latest.classSummary}`)

@@ -1,3 +1,5 @@
+import { shownWaitTime } from './pauseGates.ts'
+
 // A server-side port of AudioCoaching.tsx's buildPriorityCandidates +
 // pickTop, scoped to admin reporting: which single coaching-priority theme
 // a session's numbers point to, so it can be tallied across many sessions.
@@ -12,9 +14,6 @@
 // a reasonable follow-up but out of scope for this first pass.
 
 const MIN_N_FOR_PERCENT = 10
-// Mirrors MIN_WAIT_TIME_SAMPLES in web/src/lib/reportConfidence.ts — a
-// missing waitTimeSampleCount (session analyzed before it existed) fails.
-const MIN_WAIT_TIME_SAMPLES = 3
 export const MIN_DURATION_FOR_CFU_DETECTION_SEC = 3 * 60
 // Mirrors MIN_DURATION_FOR_TALK_BALANCE_CANDIDATE_SEC — a zero CFU count only
 // becomes a priority on a recording at least this long.
@@ -73,8 +72,8 @@ export function topPriorityForSession(session: PrioritySessionInput): PriorityLa
     }
   }
 
-  const waitSamples = num('waitTimeSampleCount')
-  if (waitSamples != null && waitSamples >= MIN_WAIT_TIME_SAMPLES && session.avgWaitTimeSec != null && session.avgWaitTimeSec < 3) {
+  const wait = shownWaitTime(session)
+  if (wait != null && wait < 3) {
     candidates.push({ id: 'wait-time', weight: 1 })
   }
 
