@@ -448,7 +448,7 @@ struct TalkSection: View {
             howToRead: read, hardLook: hardLook, onDiscuss: onDiscuss
         ) {
             if noStudents && !session.segments.isEmpty { noStudentsNotice }
-            if let room { roomNumbers(room, noStudents: noStudents) } else { talkNumbers }
+            talkCards
             // No moves marked: "How you brought students in" was removed as
             // crowded (web 5239b52); Questioning shows follow-ups and checks.
             FlowStrip(session: session, marks: [], room: room, onPick: { moments = $0 })
@@ -483,31 +483,45 @@ struct TalkSection: View {
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(AppTheme.gold.opacity(0.6)))
     }
 
-    /// Minutes first, each share as the strip colours it. Only Teacher Voice
-    /// and Student Voice open anything: the rest had no words.
-    private func roomNumbers(_ room: RoomBreakdown, noStudents: Bool) -> some View {
-        let kinds: [(RoomBreakdown.Kind, String)] = [
-            (.teacher, "your words, and pauses between them"),
-            (.student, "students\u{2019} words; any the microphone couldn\u{2019}t make out aren\u{2019}t counted"),
-        ] + (room.videoSec > 0 ? [(.video, "the voice you marked as video or audio")] : []) + [
-            (.other, "no transcribed words \u{2014} most often students talking together"),
-            (.quiet, "the microphone heard nothing"),
-        ]
+    /// The six numbers Talk & Participation leads with — the Summary's, in the
+    /// same words (chosen 2026-11-02, all holding when students were not told
+    /// apart) — mirrors TalkNumbers in AudioCoaching.tsx. Teacher Voice,
+    /// Students Called On and Think Time open the transcript behind them.
+    private var talkCards: some View {
+        let older = "not measured on this older recording"
+        let notYet = "worked out for lessons analysed from now on"
+        let calledOn = session.metricsDetail?["studentsCalledOn"]
+        let calledOnTimes = session.calledOnTimes ?? []
+        let think = session.thinkTime
+        let timed = think?.questions.filter { $0.sec != nil }.count ?? 0
+        let thinkSub: String = think?.average != nil ? "quiet after a question, before anyone spoke \u{00B7} average of \(timed)"
+            : think == nil ? notYet
+            : think?.reason == "no_questions" ? "no questions in this recording" : "no question could be timed"
         return LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-            ForEach(kinds, id: \.0) { kind, sub in
-                if kind == .student && noStudents {
-                    tile(kind.label, "Not separated",
-                         "no line was told apart from yours, so students\u{2019} answers count as your talk", kind.color)
-                } else {
-                    let opens: TalkMoments? = kind == .teacher ? .teacher : kind == .student ? .student : nil
-                    tile(kind.label, (kind == .student ? "at least " : "") + room.minutes(kind),
-                         "\(Int((room.pct[kind] ?? 0).rounded()))% \u{00B7} \(sub)", kind.color,
-                         link: opens == nil ? nil : kind == .student ? "See the conversation" : "See your lines")
-                        .onTapGesture { if let opens { moments = opens } }
-                }
+            if let room {
+                tile("Teacher Voice", room.minutes(.teacher), "\(Int((room.pct[.teacher] ?? 0).rounded()))% \u{00B7} your words, and pauses between them",
+                     RoomBreakdown.Kind.teacher.color, link: "See your lines")
+                    .onTapGesture { moments = .teacher }
+                tile("Room Talk Time", room.minutes(.other), "\(Int((room.pct[.other] ?? 0).rounded()))% \u{00B7} no transcribed words \u{2014} most often students talking together",
+                     RoomBreakdown.Kind.other.color)
+                tile("Quiet Time", room.minutes(.quiet), "\(Int((room.pct[.quiet] ?? 0).rounded()))% \u{00B7} the microphone heard nothing",
+                     RoomBreakdown.Kind.quiet.color)
+            } else {
+                tile("Teacher Voice", session.teacherTalkPct.map { "\(Int($0.rounded()))%" } ?? "\u{2014}",
+                     session.teacherTalkPct != nil ? "of the recording" : "unavailable", FlowStrip.you, link: "See your lines")
+                    .onTapGesture { moments = .teacher }
+                tile("Room Talk Time", "\u{2014}", older, nil)
+                tile("Quiet Time", "\u{2014}", older, nil)
             }
+            tile("Students Called On", calledOn.map { "\(Int($0))" } ?? "\u{2014}",
+                 calledOn != nil ? "different students you addressed by name" : notYet, nil,
+                 link: calledOnTimes.isEmpty ? nil : "See the conversation")
+                .onTapGesture { if !calledOnTimes.isEmpty { moments = .calledOn } }
             tile("Your pace", wpm.map { "\(Int($0.rounded()))" } ?? "\u{2014}",
                  wpm != nil ? "words a minute \u{00B7} conversation usually runs \(AudioInsights.conversationalWpmRange)" : "unavailable", nil)
+            tile("Think Time", think?.average.map { String(format: "%.1f s", $0) } ?? "\u{2014}", thinkSub, nil,
+                 link: timed == 0 ? nil : "See the questions")
+                .onTapGesture { if timed > 0 { moments = .think } }
         }
     }
 
@@ -516,19 +530,6 @@ struct TalkSection: View {
             + moves.followUps.compactMap { $0.timestampSec.map { ($0, .probe) } }
             + moves.widening.compactMap { $0.timestampSec.map { ($0, .voices) } }
             + (session.cfuLog ?? []).map { ($0.timestampSec, .check) }
-    }
-
-    private var talkNumbers: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                tile("You", session.teacherTalkPct.map { "\(Int($0.rounded()))%" } ?? "\u{2014}",
-                     session.teacherTalkPct != nil ? "of the recording" : "unavailable", FlowStrip.you)
-                tile("Students", session.studentTalkPct.map { "\(Int($0.rounded()))%" } ?? "\u{2014}",
-                     session.studentTalkPct != nil ? "that came through as words" : "unavailable", FlowStrip.students)
-            }
-            tile("Your pace", wpm.map { "\(Int($0.rounded()))" } ?? "\u{2014}",
-                 wpm != nil ? "words a minute \u{00B7} conversation usually runs \(AudioInsights.conversationalWpmRange)" : "unavailable", nil)
-        }
     }
 
     private func tile(_ label: String, _ value: String, _ sub: String, _ color: Color?, link: String? = nil) -> some View {
@@ -1819,15 +1820,19 @@ struct RoomBreakdown {
 }
 
 /// What a tile or a block of the strip opens: your lines, the conversation
-/// students were part of, or what was said in one slice of the lesson.
+/// students were part of, each time you called on a student by name or each
+/// question's quiet (with the line before and after), or what was said in one
+/// slice of the lesson.
 enum TalkMoments: Identifiable {
-    case teacher, student
+    case teacher, student, calledOn, think
     case range(Double, Double)
 
     var id: String {
         switch self {
         case .teacher: "teacher"
         case .student: "student"
+        case .calledOn: "calledOn"
+        case .think: "think"
         case .range(let a, let b): "\(a)-\(b)"
         }
     }
@@ -1865,9 +1870,9 @@ struct Exchange: Identifiable {
     }
 }
 
-/// The moments behind Teacher Voice, Student Voice or Teacher pause, so each
-/// number can be checked against what was said — mirrors RoomMoments.tsx and
-/// PauseMoments in AudioCoaching.tsx.
+/// The moments behind Teacher Voice, Student Voice, Students Called On or
+/// Think Time, so each number can be checked against what was said — mirrors
+/// RoomMoments.tsx.
 struct TalkMomentsSheet: View {
     let session: AudioSessionWithSegments
     let moments: TalkMoments
@@ -1899,6 +1904,12 @@ struct TalkMomentsSheet: View {
         case .student:
             let n = Exchange.all(session.segments).count
             return "Student Voice \u{00B7} \(n) exchange\(n == 1 ? "" : "s")"
+        case .calledOn:
+            let n = session.calledOnTimes?.count ?? 0
+            return "Students Called On \u{00B7} \(n) time\(n == 1 ? "" : "s")"
+        case .think:
+            let n = session.thinkTime?.questions.filter { $0.sec != nil }.count ?? 0
+            return "Think Time \u{00B7} \(n) question\(n == 1 ? "" : "s")"
         case .range(let a, let b):
             return "\(mmss(a))\u{2013}\(mmss(b))"
         }
@@ -1919,11 +1930,42 @@ struct TalkMomentsSheet: View {
                 }
                 Divider()
             }
+        case .calledOn:
+            ForEach(Array((session.calledOnTimes ?? []).enumerated()), id: \.offset) { _, at in
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(around(at)) { line($0, who: true) }
+                }
+                Divider()
+            }
+        case .think:
+            let timed = (session.thinkTime?.questions ?? []).filter { $0.sec != nil }
+            if timed.isEmpty { empty("No question could be timed.") }
+            ForEach(Array(timed.enumerated()), id: \.offset) { _, q in
+                let own = lines.first { $0.endSec > q.timestampSec }
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(around(q.timestampSec)) { s in
+                        line(s, who: true)
+                        if s.id == own?.id, let sec = q.sec {
+                            Text("Quiet after the question: \(String(format: "%.1f", sec)) s")
+                                .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary).padding(.leading, 44)
+                        }
+                    }
+                }
+                Divider()
+            }
         case .range(let a, let b):
             let inside = lines.filter { $0.endSec > a && $0.startSec < b }
             if inside.isEmpty { empty("No words were transcribed here.") }
             ForEach(inside) { line($0, who: true) }
         }
+    }
+
+    /// The line said at `at`, with the one before it and the one after it.
+    private func around(_ at: Double) -> [TranscriptSegment] {
+        let all = lines
+        guard !all.isEmpty else { return [] }
+        let i = all.firstIndex { $0.endSec > at } ?? all.count - 1
+        return Array(all[max(0, i - 1)...min(all.count - 1, i + 1)])
     }
 
     private func line(_ s: TranscriptSegment, who: Bool) -> some View {

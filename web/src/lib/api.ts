@@ -1189,6 +1189,9 @@ export type AudioSession = {
     pauseGates?: { version: number; waitTime: PauseGate; waitTime2: PauseGate }
     /// The Summary's Think Time, stored by the server at analysis.
     thinkTime?: StoredThinkTime
+    /// Each teacher line that called on a student by name (server
+    /// studentsCalledOn), for Talk & Participation's Students Called On.
+    calledOnLog?: { timestampSec: number }[]
   } | null
   /// The one focus for next lesson the teacher picked from Try next time.
   /// `lines`: the focus said simply, one per item made the focus, keyed by

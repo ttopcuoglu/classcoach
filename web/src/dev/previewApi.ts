@@ -547,6 +547,7 @@ function previewReport(): Json {
       // As the server stores them (server lib/pauseGates.ts, teacherPause.ts);
       // the page only shows them.
       pauseGates: { version: 1, waitTime: { shown: true }, waitTime2: { shown: true } },
+      calledOnLog: [{ timestampSec: 319.8 }],
       thinkTime: {
         version: 1,
         average: 1.4,

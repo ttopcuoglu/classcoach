@@ -711,6 +711,12 @@ private struct ThinkTimeLog: Decodable {
     let thinkTime: StoredThinkTime?
 }
 
+/// Read on its own for the same reason as TeacherPauseLog.
+private struct CalledOnLog: Decodable {
+    struct Moment: Decodable { let timestampSec: Double }
+    let calledOnLog: [Moment]?
+}
+
 /// Think Time as the server stored it (server/src/lib/thinkTime.ts): after
 /// each question, how long until anyone spoke, teacher or student. It needs
 /// no voices told apart, so it is the Summary's tile.
@@ -797,6 +803,9 @@ struct AudioSession: Decodable, Identifiable {
     let pauseGates: StoredPauseGates?
     /// metricsLogs.thinkTime; absent on lessons not yet worked out.
     let thinkTime: StoredThinkTime?
+    /// metricsLogs.calledOnLog: the start of each teacher line that called
+    /// on a student by name; absent on lessons not yet worked out.
+    let calledOnTimes: [Double]?
     let highlights: [AudioHighlight]?
     let phases: [AudioPhase]?
     let questionLog: [AudioQuestionLogEntry]?
@@ -903,6 +912,7 @@ struct AudioSession: Decodable, Identifiable {
         teacherPause = (try? container.decodeIfPresent(TeacherPauseLog.self, forKey: .metricsLogs))?.teacherPause
         pauseGates = (try? container.decodeIfPresent(PauseGatesLog.self, forKey: .metricsLogs))?.pauseGates
         thinkTime = (try? container.decodeIfPresent(ThinkTimeLog.self, forKey: .metricsLogs))?.thinkTime
+        calledOnTimes = (try? container.decodeIfPresent(CalledOnLog.self, forKey: .metricsLogs))?.calledOnLog?.map(\.timestampSec)
         highlights = try container.decodeIfPresent([AudioHighlight].self, forKey: .highlights)
         phases = try container.decodeIfPresent([AudioPhase].self, forKey: .phases)
         questionLog = try container.decodeIfPresent([AudioQuestionLogEntry].self, forKey: .questionLog)
@@ -995,6 +1005,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var roomTrace: String? { session.roomTrace }
     var teacherPause: StoredTeacherPause? { session.teacherPause }
     var thinkTime: StoredThinkTime? { session.thinkTime }
+    var calledOnTimes: [Double]? { session.calledOnTimes }
     var highlights: [AudioHighlight]? { session.highlights }
     var phases: [AudioPhase]? { session.phases }
     var questionLog: [AudioQuestionLogEntry]? { session.questionLog }

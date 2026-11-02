@@ -7,7 +7,7 @@ import { readParticipation } from '../lib/participation.ts'
 import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
-import { analyzeTranscript, buildContentExhibits, detectLessonContent, studentsCalledOnOf, type Segment } from '../lib/audioAnalysis.ts'
+import { analyzeTranscript, buildContentExhibits, detectLessonContent, studentsCalledOn, type Segment } from '../lib/audioAnalysis.ts'
 import { enrichClassroomMoves } from '../lib/classroomMoves.ts'
 import { readEscalation } from '../lib/escalation.ts'
 import { readTeachingMoves } from '../lib/teachingMoves.ts'
@@ -986,6 +986,7 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
     : null
 
   const teacherPause = teacherPauseOf(segments, analysis.questionLog, teachingMoves)
+  const calledOn = studentsCalledOn(segments)
   const updated = await prisma.audioSession.update({
     where: { id: sessionId },
     data: {
@@ -1011,7 +1012,8 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
         // The Summary's Think Time and Students Called On: neither asks who
         // spoke, so both hold when students were not told apart.
         thinkTime: thinkTimeOf(segments, analysis.questionLog, teachingMoves) as unknown as Prisma.InputJsonValue,
-        studentsCalledOn: studentsCalledOnOf(segments),
+        studentsCalledOn: calledOn.count,
+        calledOnLog: calledOn.moments,
       },
       highlights: analysis.highlights,
       phases: analysis.phases,

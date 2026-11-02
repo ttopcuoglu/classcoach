@@ -1,8 +1,8 @@
 import { cloneElement, createContext, isValidElement, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
-import TalkFlowStrip, { FLOW_COLOR, ROOM_COLOR, ROOM_LABEL, type ShareSlice } from '../components/TalkFlowStrip'
-import { roomBreakdown, type RoomBreakdown, type RoomKind } from '../lib/roomBreakdown'
+import TalkFlowStrip, { FLOW_COLOR, ROOM_COLOR, type ShareSlice } from '../components/TalkFlowStrip'
+import { roomBreakdown, type RoomBreakdown } from '../lib/roomBreakdown'
 import RoomMoments, { type RoomPick } from '../components/RoomMoments'
 import { DashedLinePoint, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
@@ -59,6 +59,7 @@ import {
   type ReflectChatErrorKind,
   type SpeakerSample,
   type StoredTeacherPause,
+  type StoredThinkTime,
   type TalkVoice,
   type TranscriptSegment,
 } from '../lib/api'
@@ -5751,12 +5752,13 @@ function TalkParticipationTab({
         )}
         <TalkNumbers
           teacherPct={session.teacherTalkPct}
-          studentPct={session.studentTalkPct}
           wpm={wpm}
           room={room}
-          picked={pick && 'kind' in pick ? pick.kind : null}
-          onPick={(kind) => setPick(pick && 'kind' in pick && pick.kind === kind ? null : { kind })}
-          noStudents={noStudents}
+          calledOn={session.metricsDetail?.studentsCalledOn ?? undefined}
+          calledOnTimes={session.metricsLogs?.calledOnLog?.length ?? 0}
+          think={session.metricsLogs?.thinkTime}
+          picked={talkOpenOf(pick)}
+          onPick={(open) => setPick(talkOpenOf(pick) === open ? null : open === 'teacher' ? { kind: 'teacher' } : { moments: open })}
         />
         <TalkFlowStrip
           segments={session.segments}
@@ -5769,7 +5771,15 @@ function TalkParticipationTab({
           room={room}
           onPick={room ? setPick : undefined}
         />
-        {room && pick && <RoomMoments segments={session.segments} pick={pick} onClose={() => setPick(null)} />}
+        {pick && (
+          <RoomMoments
+            segments={session.segments}
+            pick={pick}
+            calledOn={session.metricsLogs?.calledOnLog}
+            think={session.metricsLogs?.thinkTime}
+            onClose={() => setPick(null)}
+          />
+        )}
       </div>
 
       {stretch && <LongestStretchCard stretch={stretch} read={moves?.stretch ?? null} segments={session.segments} />}
@@ -5895,103 +5905,116 @@ function KeepAndTry({ keep, tryNext, tryGoal }: { keep: KeepLine | null; tryNext
 }
 
 /// The three numbers Talk & Participation leads with.
+/// Which card an open transcript panel belongs to, if any.
+function talkOpenOf(pick: RoomPick | null): TalkOpen | null {
+  if (!pick) return null
+  if ('moments' in pick) return pick.moments
+  if ('kind' in pick && pick.kind === 'teacher') return 'teacher'
+  return null
+}
+
+/// The six numbers Talk & Participation leads with — the Summary's, in the
+/// same words: Teacher Voice, Room Talk Time, Quiet Time, Students Called On,
+/// Pace, Think Time (chosen 2026-11-02, all of them holding when students were
+/// not told apart). Teacher Voice, Students Called On and Think Time open the
+/// transcript behind them.
+type TalkOpen = 'teacher' | 'calledOn' | 'think'
 function TalkNumbers({
   teacherPct,
-  studentPct,
   wpm,
   room,
+  calledOn,
+  calledOnTimes,
+  think,
   picked,
   onPick,
-  noStudents = false,
 }: {
   teacherPct: number | null
-  studentPct: number | null
   wpm: number | null
   room: RoomBreakdown | null
-  picked: RoomKind | null
-  onPick: (kind: 'teacher' | 'student') => void
-  /// No student was told apart from the teacher: Student Voice says so
-  /// rather than "at least 0 s".
-  noStudents?: boolean
+  /// Different students called on by name; undefined before it was stored.
+  calledOn: number | undefined
+  /// How many lines called on one, to open.
+  calledOnTimes: number
+  think: StoredThinkTime | undefined
+  picked: TalkOpen | null
+  onPick: (open: TalkOpen) => void
 }) {
-  const tile = (label: string, value: string, sub: string, color: string | undefined) => (
-    <div className="rounded-xl border border-hairline bg-cream-card px-4 py-3">
-      <p className="text-xs font-semibold text-ink-soft">{label}</p>
-      <p className="font-heading text-2xl font-extrabold leading-tight text-ink" style={color ? { color } : undefined}>
-        {value}
-      </p>
-      <p className="text-xs text-ink-soft">{sub}</p>
-    </div>
-  )
-  const pace = tile('Your pace', wpm != null ? String(Math.round(wpm)) : '—', wpm != null ? `words a minute · conversation usually runs ${CONVERSATIONAL_WPM_RANGE}` : 'unavailable', undefined)
-  if (room) {
-    // Minutes first: they can be checked against the lesson as remembered,
-    // and a share cannot. Each opens the moments behind it.
-    const total = room.seconds.length
-    const minutes = (pct: number) => {
-      const sec = Math.round((pct / 100) * total)
-      const m = Math.floor(sec / 60)
-      return m ? `${m} min${sec % 60 ? ` ${sec % 60} s` : ''}` : `${sec} s`
-    }
-    const kinds: { kind: RoomKind; sub: string }[] = [
-      { kind: 'teacher', sub: 'your words, and pauses between them' },
-      { kind: 'student', sub: 'students’ words; any the microphone couldn’t make out aren’t counted' },
-      ...(room.videoSec > 0 ? [{ kind: 'video' as const, sub: 'the voice you marked as video or audio' }] : []),
-      { kind: 'other', sub: 'no transcribed words — most often students talking together' },
-      { kind: 'quiet', sub: 'the microphone heard nothing' },
-    ]
-    return (
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {kinds.map(({ kind, sub }) => {
-          // Only voices with words open: the rest had none to show.
-          const unseparated = kind === 'student' && noStudents
-          const opens = kind === 'teacher' || (kind === 'student' && !unseparated) ? kind : null
-          const inner = unseparated ? (
-            <>
-              <p className="text-xs font-semibold text-ink-soft">{ROOM_LABEL[kind]}</p>
-              <p className="font-heading text-2xl font-extrabold leading-tight" style={{ color: ROOM_COLOR[kind] }}>
-                Not separated
-              </p>
-              <p className="text-xs text-ink-soft">no line was told apart from yours, so students’ answers count as your talk</p>
-            </>
-          ) : (
-            <>
-              <p className="text-xs font-semibold text-ink-soft">{ROOM_LABEL[kind]}</p>
-              <p className="font-heading text-2xl font-extrabold leading-tight" style={{ color: ROOM_COLOR[kind] }}>
-                {kind === 'student' ? 'at least ' : ''}
-                {minutes(room.pct[kind])}
-              </p>
-              <p className="text-xs text-ink-soft">
-                {Math.round(room.pct[kind])}% · {sub}
-              </p>
-              {opens && <p className="mt-1 text-xs font-semibold text-terracotta-600">{kind === 'student' ? 'See the conversation' : 'See your lines'}</p>}
-            </>
-          )
-          return opens ? (
-            <button
-              key={kind}
-              type="button"
-              onClick={() => onPick(opens)}
-              aria-expanded={picked === kind}
-              className={`rounded-xl border bg-cream-card px-4 py-3 text-left transition-colors hover:border-forest ${picked === kind ? 'border-forest' : 'border-hairline'}`}
-            >
-              {inner}
-            </button>
-          ) : (
-            <div key={kind} className="rounded-xl border border-hairline bg-cream-card px-4 py-3">
-              {inner}
-            </div>
-          )
-        })}
-        {pace}
-      </div>
-    )
+  const total = room?.seconds.length ?? 0
+  const minutes = (pct: number) => {
+    const sec = Math.round((pct / 100) * total)
+    const m = Math.floor(sec / 60)
+    return m ? `${m} min${sec % 60 ? ` ${sec % 60} s` : ''}` : `${sec} s`
   }
+  const older = 'not measured on this older recording'
+  const timed = think ? think.questions.filter((q) => q.sec != null).length : 0
+  const cards: { key: string; label: string; value: string; sub: string; color?: string; opens?: TalkOpen; link?: string }[] = [
+    room
+      ? { key: 'teacher', label: 'Teacher Voice', value: minutes(room.pct.teacher), sub: `${Math.round(room.pct.teacher)}% · your words, and pauses between them`, color: ROOM_COLOR.teacher, opens: 'teacher', link: 'See your lines' }
+      : { key: 'teacher', label: 'Teacher Voice', value: teacherPct != null ? `${Math.round(teacherPct)}%` : '—', sub: teacherPct != null ? 'of the recording' : 'unavailable', color: FLOW_COLOR.you, opens: 'teacher', link: 'See your lines' },
+    room
+      ? { key: 'other', label: 'Room Talk Time', value: minutes(room.pct.other), sub: `${Math.round(room.pct.other)}% · no transcribed words — most often students talking together`, color: ROOM_COLOR.other }
+      : { key: 'other', label: 'Room Talk Time', value: '—', sub: older },
+    room
+      ? { key: 'quiet', label: 'Quiet Time', value: minutes(room.pct.quiet), sub: `${Math.round(room.pct.quiet)}% · the microphone heard nothing`, color: ROOM_COLOR.quiet }
+      : { key: 'quiet', label: 'Quiet Time', value: '—', sub: older },
+    {
+      key: 'calledOn',
+      label: 'Students Called On',
+      value: calledOn != null ? String(calledOn) : '—',
+      sub: calledOn != null ? 'different students you addressed by name' : 'worked out for lessons analysed from now on',
+      ...(calledOnTimes > 0 ? { opens: 'calledOn' as const, link: 'See the conversation' } : {}),
+    },
+    {
+      key: 'pace',
+      label: 'Your pace',
+      value: wpm != null ? String(Math.round(wpm)) : '—',
+      sub: wpm != null ? `words a minute · conversation usually runs ${CONVERSATIONAL_WPM_RANGE}` : 'unavailable',
+    },
+    {
+      key: 'think',
+      label: 'Think Time',
+      value: think?.average != null ? `${think.average.toFixed(1)} s` : '—',
+      sub:
+        think?.average != null
+          ? `quiet after a question, before anyone spoke · average of ${timed}`
+          : !think
+            ? 'worked out for lessons analysed from now on'
+            : think.reason === 'no_questions'
+              ? 'no questions in this recording'
+              : 'no question could be timed',
+      ...(timed > 0 ? { opens: 'think' as const, link: 'See the questions' } : {}),
+    },
+  ]
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      {tile('You', teacherPct != null ? `${Math.round(teacherPct)}%` : '—', teacherPct != null ? 'of the recording' : 'unavailable', FLOW_COLOR.you)}
-      {tile('Students', studentPct != null ? `${Math.round(studentPct)}%` : '—', studentPct != null ? 'that came through as words' : 'unavailable', FLOW_COLOR.other)}
-      {pace}
+      {cards.map((c) => {
+        const inner = (
+          <>
+            <p className="text-xs font-semibold text-ink-soft">{c.label}</p>
+            <p className="font-heading text-2xl font-extrabold leading-tight text-ink" style={c.color ? { color: c.color } : undefined}>
+              {c.value}
+            </p>
+            <p className="text-xs text-ink-soft">{c.sub}</p>
+            {c.opens && <p className="mt-1 text-xs font-semibold text-terracotta-600">{c.link}</p>}
+          </>
+        )
+        return c.opens ? (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => onPick(c.opens!)}
+            aria-expanded={picked === c.opens}
+            className={`rounded-xl border bg-cream-card px-4 py-3 text-left transition-colors hover:border-forest ${picked === c.opens ? 'border-forest' : 'border-hairline'}`}
+          >
+            {inner}
+          </button>
+        ) : (
+          <div key={c.key} className="rounded-xl border border-hairline bg-cream-card px-4 py-3">
+            {inner}
+          </div>
+        )
+      })}
     </div>
   )
 }

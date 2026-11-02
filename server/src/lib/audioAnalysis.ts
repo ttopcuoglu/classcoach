@@ -530,6 +530,10 @@ const ADDRESS_FOLLOWERS = new Set([
   'yes', 'okay', 'ok', 'hands', 'look', 'listen', 'wait',
 ])
 
+// More openers after "Name," that mark address only in a question: "Aya,
+// which one did you pick?" — but "Egypt, which was…" is a topic.
+const QUESTION_ADDRESS_FOLLOWERS = new Set(['which', 'whats', 'is', 'does', 'have', 'has', 'were', 'should', 'did'])
+
 const ADDRESS_LEADS = new Set(['thanks', 'you', 'yes', 'ahead', 'nice', 'job', 'okay', 'ok', 'please', 'hi', 'hey', 'morning', 'right', 'sure', 'great', 'good'])
 
 // Counting every capitalized word as a student's name badly over-counts:
@@ -556,7 +560,7 @@ const CONTRACTION_SUFFIX = /['’](?:m|re|ll|ve|d|t)$/i
 function extractCapitalizedWords(text: string): { addressed: string[]; content: string[] } {
   const addressed: string[] = []
   const content: string[] = []
-  for (const { sentence } of splitSentences(text)) {
+  for (const { sentence, endedWithQuestion } of splitSentences(text)) {
     const words = sentence.split(/\s+/).filter(Boolean)
     for (let i = 0; i < words.length; i++) {
       const raw = words[i]
@@ -568,7 +572,8 @@ function extractCapitalizedWords(text: string): { addressed: string[]; content: 
       const previousWord = previous.replace(/[^A-Za-z]/g, '').toLowerCase()
       const last = i === words.length - 1
       const nextWord = (words[i + 1] ?? '').replace(/[^A-Za-z]/g, '').toLowerCase()
-      const opensWithComma = i === 0 && raw.endsWith(',') && ADDRESS_FOLLOWERS.has(nextWord)
+      const opensWithComma =
+        i === 0 && raw.endsWith(',') && (ADDRESS_FOLLOWERS.has(nextWord) || (endedWithQuestion && QUESTION_ADDRESS_FOLLOWERS.has(nextWord)))
       const closesAfterComma = last && previous.endsWith(',')
       const afterAddressLead = i > 0 && ADDRESS_LEADS.has(previousWord) && (last || raw.endsWith(','))
       if (opensWithComma || closesAfterComma || afterAddressLead) addressed.push(cleaned)
@@ -589,20 +594,26 @@ export function addressedNamesIn(segments: Segment[]): string[] {
   return [...names]
 }
 
-/// How many different students the teacher called on by name: "Aya, which
-/// one did you pick?" "Zane, what was the difference?". Read from the words
-/// alone, so unlike nameMentionCount it holds on a recording where no student
-/// voice was told apart — the Summary's Students Called On.
-export function studentsCalledOnOf(segments: Segment[]): number {
-  const addressed: string[] = []
-  const content: string[] = []
-  for (const s of segments) {
-    if (s.speakerLabel !== 'Teacher') continue
-    const words = extractCapitalizedWords(s.text)
-    addressed.push(...words.addressed)
-    content.push(...words.content)
-  }
-  return new Set(resolveNameMentions(addressed, content, true).map((n) => n.toLowerCase())).size
+/// The students the teacher called on by name — "Aya, which one did you
+/// pick?" "Zane, what was the difference?" — read from the words alone, so
+/// unlike nameMentionCount it holds on a recording where no student voice was
+/// told apart. `count`: different students, the Summary's Students Called On.
+/// `moments`: the start of each teacher line that calls on one, so Talk &
+/// Participation can show each with the lines around it.
+export function studentsCalledOn(segments: Segment[]): { count: number; moments: { timestampSec: number }[] } {
+  const teacher = segments.filter((s) => s.speakerLabel === 'Teacher').sort((a, b) => a.startSec - b.startSec)
+  const perLine = teacher.map((s) => extractCapitalizedWords(s.text))
+  const names = new Set(
+    resolveNameMentions(
+      perLine.flatMap((w) => w.addressed),
+      perLine.flatMap((w) => w.content),
+      true,
+    ).map((n) => n.toLowerCase()),
+  )
+  const moments = teacher
+    .filter((_, i) => perLine[i].addressed.some((n) => names.has(n.toLowerCase())))
+    .map((s) => ({ timestampSec: round(s.startSec, 1) }))
+  return { count: names.size, moments }
 }
 
 // Session-level filter over every teacher segment's capitalized words.

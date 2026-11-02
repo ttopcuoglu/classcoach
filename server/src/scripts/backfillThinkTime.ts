@@ -1,15 +1,15 @@
 import 'dotenv/config'
 import { prisma } from '../lib/prisma.ts'
-import { studentsCalledOnOf } from '../lib/audioAnalysis.ts'
+import { studentsCalledOn } from '../lib/audioAnalysis.ts'
 import { thinkTimeOf } from '../lib/thinkTime.ts'
 
-// Stores the Summary's Think Time and Students Called On on lessons analysed
-// before they existed (lib/thinkTime.ts, studentsCalledOnOf). Until it runs,
-// those lessons show "—" on both tiles.
+// Stores the Summary's Think Time and Students Called On (with the moments
+// behind it, calledOnLog) on lessons analysed before they existed
+// (lib/thinkTime.ts, studentsCalledOn). Until it runs, those lessons show "—".
 //
 // Arithmetic on the stored segments, question log and teaching moves only —
 // nothing is re-read, and nothing else in metricsDetail is touched. A lesson
-// that already has a Think Time is left alone unless --redo.
+// that already has both is left alone unless --redo.
 //
 //   tsx src/scripts/backfillThinkTime.ts --all            (dry run)
 //   tsx src/scripts/backfillThinkTime.ts --all --write
@@ -32,14 +32,14 @@ let changed = 0
 console.log(['lesson', 'date', 'min', 'think time', 'timed', 'teacher pause', 'called on'].join('\t'))
 for (const r of rows) {
   const detail = (r.metricsDetail ?? {}) as Record<string, unknown>
-  if (detail.thinkTime && !redo) continue
+  if (detail.thinkTime && detail.calledOnLog && !redo) continue
   const segments = await prisma.transcriptSegment.findMany({
     where: { sessionId: r.id, speakerLabel: { not: 'Video' } },
     orderBy: { startSec: 'asc' },
     select: { speakerLabel: true, startSec: true, endSec: true, text: true },
   })
   const thinkTime = thinkTimeOf(segments, r.questionLog, r.teachingMoves)
-  const studentsCalledOn = studentsCalledOnOf(segments)
+  const calledOn = studentsCalledOn(segments)
   const key = thinkTime.reason ?? 'shown'
   tally[key] = (tally[key] ?? 0) + 1
   const pause = (detail.teacherPause as { average?: number | null } | undefined)?.average
@@ -51,13 +51,13 @@ for (const r of rows) {
       thinkTime.average ?? thinkTime.reason,
       `${thinkTime.questions.filter((q) => q.sec != null).length}/${thinkTime.questions.length}`,
       pause ?? '—',
-      studentsCalledOn,
+      `${calledOn.count} (${calledOn.moments.length} times)`,
     ].join('\t'),
   )
   if (write) {
     await prisma.audioSession.update({
       where: { id: r.id },
-      data: { metricsDetail: { ...detail, thinkTime, studentsCalledOn } as object },
+      data: { metricsDetail: { ...detail, thinkTime, studentsCalledOn: calledOn.count, calledOnLog: calledOn.moments } as object },
     })
   }
   changed++
