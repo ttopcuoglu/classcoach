@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { countedQuestions, questionMixOf, staffQuestionMix } from './questionMix.ts'
+import { countedQuestions, isClosedQuestion, questionMixOf, staffQuestionMix } from './questionMix.ts'
 
 test('a finer kind within four seconds wins; otherwise the old split decides', () => {
   const log = [
@@ -60,4 +60,30 @@ test('one-word questions are not counted; entries with no text still are', () =>
     { timestampSec: 40, type: 'higher_order' },
   ]
   assert.deepEqual(countedQuestions(log, null).questions.map((q) => q.timestampSec), [30, 40])
+})
+
+test('a yes/no question is recall, whatever the read called it', () => {
+  for (const t of [
+    'Is there a dot on here that says 11 avocados?',
+    'Would your statement work for the others too?',
+    'So, does it go up?',
+    'Sarah, is that positive or negative?',
+    'Can’t we just add them?',
+  ])
+    assert.equal(isClosedQuestion(t), true, t)
+  for (const t of [
+    'What direction does it have?',
+    'Why does it go up?',
+    'Can you tell me what a residual is?',
+    'Does anyone know how we made the residual plot?',
+    'Could you explain your answer?',
+    'Which one did you pick?',
+  ])
+    assert.equal(isClosedQuestion(t), false, t)
+  const log = [
+    { timestampSec: 10, type: 'higher_order', text: 'Would your statement work for the others too?' },
+    { timestampSec: 30, type: 'higher_order', text: 'Why would it work for the others?' },
+  ]
+  const moves = { questionKinds: [{ timestampSec: 10, kind: 'evaluate', quote: 'x' }, { timestampSec: 30, kind: 'evaluate', quote: 'x' }] }
+  assert.deepEqual(countedQuestions(log, moves).questions.map((q) => q.mix), ['recall', 'reasoning'])
 })

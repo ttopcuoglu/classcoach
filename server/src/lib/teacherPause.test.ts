@@ -33,12 +33,12 @@ test('short words in the teacher’s line do not stop the clock; the next real s
 
 test('after a student heard on their own line, the teacher’s first words end it, however short', () => {
   const segments = [
-    seg('Teacher', 10, 14, 'Did we understand the meaning of it?'),
+    seg('Teacher', 10, 14, 'How do we understand the meaning of it?'),
     seg('Student', 15, 18, 'So it could change shape to fit it?'),
     seg('Teacher', 19, 20, 'Not completely.'),
     seg('Teacher', 26, 29, 'Think about what fit means here.'),
   ]
-  assert.deepEqual(pausesOf(segments, [q(10, 'Did we understand the meaning of it?')]), [{ sec: 5, answered: true }])
+  assert.deepEqual(pausesOf(segments, [q(10, 'How do we understand the meaning of it?')]), [{ sec: 5, answered: true }])
 })
 
 test('too long a gap is not a pause, and a question the teacher never moves on from is not measured', () => {
@@ -50,30 +50,30 @@ test('too long a gap is not a pause, and a question the teacher never moves on f
 })
 
 test('a question you talked straight past had no pause', () => {
-  const segments = [seg('Teacher', 10, 20, 'Would that work the same way for addition? So the same thing happens when we add them up.')]
-  assert.deepEqual(pausesOf(segments, [q(10, 'Would that work the same way for addition?')]), [{ sec: 0, answered: false, keptTalking: true }])
+  const segments = [seg('Teacher', 10, 20, 'How would that work the same way for addition? So the same thing happens when we add them up.')]
+  assert.deepEqual(pausesOf(segments, [q(10, 'How would that work the same way for addition?')]), [{ sec: 0, answered: false, keptTalking: true }])
 })
 
 test('a real gap before going on is a pause, even inside one turn', () => {
   const segments = [
-    seg('Teacher', 10, 14, 'Would that work the same way for addition?'),
+    seg('Teacher', 10, 14, 'How would that work the same way for addition?'),
     seg('Teacher', 15.8, 20, 'So the same thing happens when we add them up.'),
   ]
-  assert.deepEqual(pausesOf(segments, [q(10, 'Would that work the same way for addition?')]), [{ sec: 1.8, answered: false }])
+  assert.deepEqual(pausesOf(segments, [q(10, 'How would that work the same way for addition?')]), [{ sec: 1.8, answered: false }])
 })
 
 test('a short gap before going on is talking past it, and keeps the gap there was', () => {
   const segments = [
-    seg('Teacher', 10, 14, 'Would that work the same way for addition?'),
+    seg('Teacher', 10, 14, 'How would that work the same way for addition?'),
     seg('Teacher', 14.8, 20, 'So the same thing happens when we add them up.'),
   ]
-  assert.deepEqual(pausesOf(segments, [q(10, 'Would that work the same way for addition?')]), [{ sec: 0.8, answered: false, keptTalking: true }])
+  assert.deepEqual(pausesOf(segments, [q(10, 'How would that work the same way for addition?')]), [{ sec: 0.8, answered: false, keptTalking: true }])
 })
 
 test('a tag after the question is inside the pause', () => {
-  const segments = [seg('Teacher', 10, 14, 'Would that work the same way for addition? K?'), seg('Teacher', 16.5, 18, 'Think about it with a partner.')]
+  const segments = [seg('Teacher', 10, 14, 'How would that work the same way for addition? K?'), seg('Teacher', 16.5, 18, 'Think about it with a partner.')]
   // The clock starts where the question ends, before "K?": 8 of the line's 9 words.
-  assert.deepEqual(pausesOf(segments, [q(10, 'Would that work the same way for addition?')]), [{ sec: 2.9, answered: false }])
+  assert.deepEqual(pausesOf(segments, [q(10, 'How would that work the same way for addition?')]), [{ sec: 2.9, answered: false }])
 })
 
 test('a short question of the teacher’s own ends it', () => {

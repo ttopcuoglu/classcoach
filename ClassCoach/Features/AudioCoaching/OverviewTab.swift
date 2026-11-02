@@ -152,8 +152,33 @@ enum QuestionMix: String, CaseIterable {
             case .some: mix = .recall
             case .none: mix = q.type == "higher_order" ? .reason : .recall
             }
-            return (q, mix)
+            return (q, isClosedQuestion(q.text) ? .recall : mix)
         }
+    }
+
+    private static let yesNoOpeners: Set<String> = [
+        "is", "are", "was", "were", "am", "do", "does", "did", "can", "could", "would", "will", "should", "shall", "has", "have", "had",
+        "may", "might", "must", "isn't", "aren't", "wasn't", "weren't", "don't", "doesn't", "didn't", "can't", "couldn't", "wouldn't",
+        "won't", "shouldn't", "hasn't", "haven't",
+    ]
+    private static let leadIns: Set<String> = ["so", "okay", "ok", "and", "now", "well", "alright", "um", "uh", "but", "then", "guys", "right", "yes", "yeah", "oh"]
+    private static let openWords: Set<String> = ["why", "how", "explain", "describe", "justify", "prove", "convince", "reason", "because"]
+    private static let whWords: Set<String> = ["what", "what's", "which", "where", "when", "who", "whom", "whose"]
+
+    /// A yes/no question by its wording — "Would your statement work for the
+    /// others too?" — counted as Recall whatever the read made of it: the
+    /// class answers in a word (decided 2026-11-02). Mirrors isClosedQuestion
+    /// in server lib/questionMix.ts, which has the tests.
+    static func isClosedQuestion(_ text: String) -> Bool {
+        let raw = text.split(whereSeparator: \.isWhitespace).map(String.init)
+        let bare = raw.map { w in
+            String(w.lowercased().replacingOccurrences(of: "\u{2019}", with: "'").filter { ($0 >= "a" && $0 <= "z") || $0 == "'" })
+        }
+        if bare.contains(where: { openWords.contains($0) }) { return false }
+        var i = 0
+        while i < raw.count - 1 && (leadIns.contains(bare[i]) || raw[i].hasSuffix(",")) { i += 1 }
+        guard i < raw.count, yesNoOpeners.contains(bare[i]) else { return false }
+        return !bare[(i + 1)...].contains { whWords.contains($0) }
     }
 }
 

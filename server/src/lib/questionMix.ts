@@ -62,6 +62,38 @@ export function isCountedQuestion(text: string): boolean {
   return text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length !== 1
 }
 
+/// Words a yes/no question opens with.
+const YES_NO_OPENERS = new Set([
+  'is', 'are', 'was', 'were', 'am', 'do', 'does', 'did', 'can', 'could', 'would', 'will', 'should', 'shall', 'has', 'have', 'had',
+  'may', 'might', 'must', "isn't", "aren't", "wasn't", "weren't", "don't", "doesn't", "didn't", "can't", "couldn't", "wouldn't",
+  "won't", "shouldn't", "hasn't", "haven't",
+])
+/// Said before the question, not part of it: "So, is it…", "Okay is there…".
+const LEAD_INS = new Set(['so', 'okay', 'ok', 'and', 'now', 'well', 'alright', 'um', 'uh', 'but', 'then', 'guys', 'right', 'yes', 'yeah', 'oh'])
+/// Asks students to give the why or the how: never closed.
+const OPEN_WORDS = /\b(why|how|explain|describe|justify|prove|convince|reason|because)\b/i
+/// A wh-word after the opener makes it an indirect open question: "Can you
+/// tell me what a residual is?" asks for the what, not a yes.
+const WH_WORDS = /\b(what|what's|which|where|when|who|whom|whose)\b/i
+
+/// A closed question by its wording: one answered yes or no — "Is there a dot
+/// here that says 11 avocados?", "Would your statement work for the others
+/// too?". Counted as Recall whatever the read made of it: the class answers
+/// in a word, not with an explanation (decided 2026-11-02). Closed questions
+/// that are not yes/no ("What's the direction?") the read itself is told to
+/// call remember. Mirrors isClosedQuestion in AudioCoaching.tsx and the
+/// iPhone's QuestionMix.
+export function isClosedQuestion(text: string): boolean {
+  if (OPEN_WORDS.test(text)) return false
+  const words = text.split(/\s+/).filter(Boolean)
+  const bare = (w: string) => w.toLowerCase().replace(/’/g, "'").replace(/[^a-z']/g, '')
+  let i = 0
+  // Lead-ins and a name the question is put to ("Sarah," "[name],").
+  while (i < words.length - 1 && (LEAD_INS.has(bare(words[i])) || words[i].endsWith(','))) i++
+  if (i >= words.length || !YES_NO_OPENERS.has(bare(words[i]))) return false
+  return !WH_WORDS.test(words.slice(i + 1).join(' '))
+}
+
 export type CountedQuestion = { timestampSec: number; text: string; type?: unknown; mix: MixKind; check: boolean }
 
 /// THE question list every number on a lesson is counted from — the server
@@ -96,7 +128,8 @@ export function countedQuestions(questionLog: unknown, teachingMoves: unknown): 
       continue
     }
     const k = kinds.find((x) => Math.abs(x.timestampSec - at) <= MATCH_WINDOW_SEC)
-    const mix: MixKind = k ? (KIND_TO_MIX[k.kind] ?? 'recall') : q.type === 'higher_order' ? 'explain' : 'recall'
+    const read: MixKind = k ? (KIND_TO_MIX[k.kind] ?? 'recall') : q.type === 'higher_order' ? 'explain' : 'recall'
+    const mix: MixKind = isClosedQuestion(text) ? 'recall' : read
     questions.push({ timestampSec: at, text, type: q.type, mix, check: k?.check != null && k.check !== false })
   }
   return { questions, selfAnswered }

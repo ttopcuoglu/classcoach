@@ -6195,6 +6195,29 @@ const KIND_TO_MIX: Record<string, MixKey> = {
   recall: 'recall', explain: 'reason', justify: 'reason', compare: 'reason',
 }
 
+const YES_NO_OPENERS = new Set([
+  'is', 'are', 'was', 'were', 'am', 'do', 'does', 'did', 'can', 'could', 'would', 'will', 'should', 'shall', 'has', 'have', 'had',
+  'may', 'might', 'must', "isn't", "aren't", "wasn't", "weren't", "don't", "doesn't", "didn't", "can't", "couldn't", "wouldn't",
+  "won't", "shouldn't", "hasn't", "haven't",
+])
+const LEAD_INS = new Set(['so', 'okay', 'ok', 'and', 'now', 'well', 'alright', 'um', 'uh', 'but', 'then', 'guys', 'right', 'yes', 'yeah', 'oh'])
+const OPEN_WORDS = /\b(why|how|explain|describe|justify|prove|convince|reason|because)\b/i
+const WH_WORDS = /\b(what|what's|which|where|when|who|whom|whose)\b/i
+
+/// A yes/no question by its wording — "Would your statement work for the
+/// others too?" — counted as Recall whatever the read made of it: the class
+/// answers in a word (decided 2026-11-02). Mirrors isClosedQuestion in server
+/// lib/questionMix.ts, which has the tests.
+function isClosedQuestion(text: string): boolean {
+  if (OPEN_WORDS.test(text)) return false
+  const words = text.split(/\s+/).filter(Boolean)
+  const bare = (w: string) => w.toLowerCase().replace(/’/g, "'").replace(/[^a-z']/g, '')
+  let i = 0
+  while (i < words.length - 1 && (LEAD_INS.has(bare(words[i])) || words[i].endsWith(','))) i++
+  if (i >= words.length || !YES_NO_OPENERS.has(bare(words[i]))) return false
+  return !WH_WORDS.test(words.slice(i + 1).join(' '))
+}
+
 /// Each counted question as recall or explain & reason: the finer read where
 /// it found the question, else the older recall / higher-order split. Shared by Questioning & Checking, Summary and
 /// My Growth so the three never show different numbers.
@@ -6203,7 +6226,8 @@ function classifyQuestions(session: Pick<AudioSession, 'questionLog' | 'teaching
   const kindAt = (sec: number) => kinds.find((k) => Math.abs(k.timestampSec - sec) <= 4)
   return (session.questionLog ?? []).map((q) => {
     const kind = kindAt(q.timestampSec)?.kind
-    const mix: MixKey = kind ? (KIND_TO_MIX[kind] ?? 'recall') : q.type === 'higher_order' ? 'reason' : 'recall'
+    const read: MixKey = kind ? (KIND_TO_MIX[kind] ?? 'recall') : q.type === 'higher_order' ? 'reason' : 'recall'
+    const mix: MixKey = isClosedQuestion(q.text) ? 'recall' : read
     return {
       quote: withoutAddressedNames(q.text),
       timestampSec: q.timestampSec,
