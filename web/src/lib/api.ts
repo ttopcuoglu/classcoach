@@ -799,6 +799,15 @@ export type StoredTeacherPause = {
   thinking: StoredQuestionPause[]
 }
 
+/// Think Time: after each question, how long until anyone spoke (server
+/// lib/thinkTime.ts). Needs no voices told apart.
+export type StoredThinkTime = {
+  version: number
+  average: number | null
+  reason: 'no_questions' | 'none_timed' | null
+  questions: { timestampSec: number; sec: number | null }[]
+}
+
 export type AudioSessionStatus =
   | 'setup'
   | 'recording'
@@ -1178,6 +1187,8 @@ export type AudioSession = {
     /// Whether wait time and the pause after an answer may be shown, decided
     /// by the server at analysis (server lib/pauseGates.ts).
     pauseGates?: { version: number; waitTime: PauseGate; waitTime2: PauseGate }
+    /// The Summary's Think Time, stored by the server at analysis.
+    thinkTime?: StoredThinkTime
   } | null
   /// The one focus for next lesson the teacher picked from Try next time.
   /// `lines`: the focus said simply, one per item made the focus, keyed by

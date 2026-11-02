@@ -43,7 +43,7 @@ export const ROOM_LABEL: Record<RoomKind, string> = {
   teacher: 'Teacher Voice',
   student: 'Student Voice',
   video: 'Video/Audio',
-  other: 'Group Voice',
+  other: 'Room Talk Time',
   quiet: 'Quiet Time',
 }
 
@@ -240,7 +240,7 @@ export default function TalkFlowStrip({
       {room ? (
         <p className="text-xs text-ink-soft">
           “Teacher Voice” and “Student Voice” are seconds with words the transcript gave to you or to a student, and the
-          short pauses between them. “Group Voice” is sound with no transcribed words — most often students talking
+          short pauses between them. “Room Talk Time” is sound with no transcribed words — most often students talking
           together; music or other room sound is counted here too.
           {room.videoSec > 0 ? ' “Video/Audio” is the voice you marked as one.' : ''}
         </p>

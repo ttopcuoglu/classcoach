@@ -547,6 +547,15 @@ function previewReport(): Json {
       // As the server stores them (server lib/pauseGates.ts, teacherPause.ts);
       // the page only shows them.
       pauseGates: { version: 1, waitTime: { shown: true }, waitTime2: { shown: true } },
+      thinkTime: {
+        version: 1,
+        average: 1.4,
+        reason: null,
+        questions: [
+          { timestampSec: 1127.2749, sec: 2.1 },
+          { timestampSec: 1154.435, sec: 0.7 },
+        ],
+      },
       teacherPause: {
         version: 1,
         average: 3.7,
@@ -608,6 +617,7 @@ function previewReport(): Json {
       answerLog: [100, 240, 520, 705, 870, 1030, 1150, 1190, 1260].map((t, i) => ({ timestampSec: t, followed: i === 3 || i === 5 || i === 7 })) as never,
       followUpLog: [{ timestampSec: 712, text: 'Why do you think that happened?' }, { timestampSec: 1040, text: 'So what does abandoned mean' }, { timestampSec: 1196, text: 'Can you say more about the trade routes?' }] as never,
       uniqueNameCount: 4,
+      studentsCalledOn: 4,
     },
     questionLog: [
       {

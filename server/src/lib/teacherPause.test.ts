@@ -42,9 +42,9 @@ test('after a student heard on their own line, the teacher’s first words end i
 })
 
 test('too long a gap is not a pause, and a question the teacher never moves on from is not measured', () => {
-  const segments = [seg('Teacher', 10, 14, 'Why?'), seg('Teacher', 60, 62, 'Now take out your packets.'), seg('Teacher', 70, 72, 'How?'), seg('Student', 75, 76)]
+  const segments = [seg('Teacher', 10, 14, 'But why?'), seg('Teacher', 60, 62, 'Now take out your packets.'), seg('Teacher', 70, 72, 'How so?'), seg('Student', 75, 76)]
   assert.deepEqual(
-    teacherPauseOf(segments, [q(10, 'Why?'), q(70, 'How?')], null).thinking.map((p) => p.sec),
+    teacherPauseOf(segments, [q(10, 'But why?'), q(70, 'How so?')], null).thinking.map((p) => p.sec),
     [null, null],
   )
 })
@@ -122,7 +122,7 @@ test('answers in the teacher lines no longer hide the figure, and are still coun
 })
 
 test('with no student voice at all there is no figure', () => {
-  const out = teacherPauseOf([seg('Teacher', 10, 14, 'Why?'), seg('Teacher', 17, 18, 'Talk to your partner first.')], [q(10, 'Why?')], null)
+  const out = teacherPauseOf([seg('Teacher', 10, 14, 'But why?'), seg('Teacher', 17, 18, 'Talk to your partner first.')], [q(10, 'But why?')], null)
   assert.equal(out.average, null)
   assert.equal(out.reason, 'no_student_voice')
 })

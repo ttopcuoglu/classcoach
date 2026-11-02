@@ -140,9 +140,11 @@ function timedTokens(seg: Seg, segIndex: number): TimedToken[] {
 const isRealSentence = (sentence: Token[]) =>
   sentence.length >= SENTENCE_WORDS || (sentence.length >= QUESTION_WORDS && endsQuestion(sentence[sentence.length - 1].raw))
 
-/// The pause after one question, or null where it cannot be timed: from the
-/// end of the question to the start of the teacher's next real sentence.
-function pauseAfter(ordered: Seg[], t: number, quote: string): Omit<QuestionPause, 'timestampSec' | 'text'> | null {
+/// Where a question from the log sits in the transcript: the teacher's turn
+/// it was asked in (lines `idx`..`end`, `turn` their words) and where in that
+/// turn it ends (`at` words in, at `askedEnd`). Null where the line at its
+/// time is not the teacher's. Shared with Think Time (thinkTime.ts).
+export function askedQuestion(ordered: Seg[], t: number, quote: string) {
   const idx = ordered.findIndex((s) => s.endSec > t)
   if (idx === -1 || ordered[idx].speakerLabel !== 'Teacher') return null
   let end = idx
@@ -154,14 +156,25 @@ function pauseAfter(ordered: Seg[], t: number, quote: string): Omit<QuestionPaus
     end++
   }
   // Where the question ends in the turn: just after the last place its final
-  // three words appear. Not found, the whole turn is taken as the question.
+  // three words appear (all of them, for a shorter question: "Who knows?").
+  // Not found, the whole turn is taken as the question.
   const turn = ordered.slice(idx, end + 1).flatMap((s, k) => timedTokens(s, idx + k))
-  const tail = tokensOf(quote).slice(-3).map((x) => x.w).join(' ')
+  const quoteTokens = tokensOf(quote)
+  const n = Math.min(3, quoteTokens.length)
+  const tail = quoteTokens.slice(-n).map((x) => x.w).join(' ')
   let at = -1
-  for (let i = 0; i + 3 <= turn.length; i++) if (turn.slice(i, i + 3).map((x) => x.w).join(' ') === tail) at = i + 3
+  if (n > 0) for (let i = 0; i + n <= turn.length; i++) if (turn.slice(i, i + n).map((x) => x.w).join(' ') === tail) at = i + n
   if (at === -1) at = turn.length
   if (at === 0) return null
-  const askedEnd = turn[at - 1].endSec
+  return { idx, end, turn, at, askedEnd: turn[at - 1].endSec }
+}
+
+/// The pause after one question, or null where it cannot be timed: from the
+/// end of the question to the start of the teacher's next real sentence.
+function pauseAfter(ordered: Seg[], t: number, quote: string): Omit<QuestionPause, 'timestampSec' | 'text'> | null {
+  const asked = askedQuestion(ordered, t, quote)
+  if (!asked) return null
+  const { end, turn, at, askedEnd } = asked
   const folded = looksLikeAnswer(turn.slice(at))
 
   // Walk on through the teacher's words, sentence by sentence, until one is

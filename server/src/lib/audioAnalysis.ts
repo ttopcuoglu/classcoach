@@ -589,6 +589,22 @@ export function addressedNamesIn(segments: Segment[]): string[] {
   return [...names]
 }
 
+/// How many different students the teacher called on by name: "Aya, which
+/// one did you pick?" "Zane, what was the difference?". Read from the words
+/// alone, so unlike nameMentionCount it holds on a recording where no student
+/// voice was told apart — the Summary's Students Called On.
+export function studentsCalledOnOf(segments: Segment[]): number {
+  const addressed: string[] = []
+  const content: string[] = []
+  for (const s of segments) {
+    if (s.speakerLabel !== 'Teacher') continue
+    const words = extractCapitalizedWords(s.text)
+    addressed.push(...words.addressed)
+    content.push(...words.content)
+  }
+  return new Set(resolveNameMentions(addressed, content, true).map((n) => n.toLowerCase())).size
+}
+
 // Session-level filter over every teacher segment's capitalized words.
 function resolveNameMentions(addressed: string[], content: string[], hasStudentTalk: boolean): string[] {
   // No student voice anywhere means nobody was there to be called on.

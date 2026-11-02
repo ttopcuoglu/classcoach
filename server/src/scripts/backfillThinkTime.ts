@@ -1,0 +1,66 @@
+import 'dotenv/config'
+import { prisma } from '../lib/prisma.ts'
+import { studentsCalledOnOf } from '../lib/audioAnalysis.ts'
+import { thinkTimeOf } from '../lib/thinkTime.ts'
+
+// Stores the Summary's Think Time and Students Called On on lessons analysed
+// before they existed (lib/thinkTime.ts, studentsCalledOnOf). Until it runs,
+// those lessons show "—" on both tiles.
+//
+// Arithmetic on the stored segments, question log and teaching moves only —
+// nothing is re-read, and nothing else in metricsDetail is touched. A lesson
+// that already has a Think Time is left alone unless --redo.
+//
+//   tsx src/scripts/backfillThinkTime.ts --all            (dry run)
+//   tsx src/scripts/backfillThinkTime.ts --all --write
+//   tsx src/scripts/backfillThinkTime.ts --all --redo --write
+const write = process.argv.includes('--write')
+const redo = process.argv.includes('--redo')
+if (!process.argv.includes('--all')) {
+  console.error('Pass --all to mean it (a dry run unless --write).')
+  process.exit(1)
+}
+
+const rows = await prisma.audioSession.findMany({
+  where: { status: { in: ['analyzed', 'locked'] } },
+  orderBy: { createdAt: 'desc' },
+  select: { id: true, createdAt: true, durationSec: true, metricsDetail: true, questionLog: true, teachingMoves: true },
+})
+
+const tally: Record<string, number> = {}
+let changed = 0
+console.log(['lesson', 'date', 'min', 'think time', 'timed', 'teacher pause', 'called on'].join('\t'))
+for (const r of rows) {
+  const detail = (r.metricsDetail ?? {}) as Record<string, unknown>
+  if (detail.thinkTime && !redo) continue
+  const segments = await prisma.transcriptSegment.findMany({
+    where: { sessionId: r.id, speakerLabel: { not: 'Video' } },
+    orderBy: { startSec: 'asc' },
+    select: { speakerLabel: true, startSec: true, endSec: true, text: true },
+  })
+  const thinkTime = thinkTimeOf(segments, r.questionLog, r.teachingMoves)
+  const studentsCalledOn = studentsCalledOnOf(segments)
+  const key = thinkTime.reason ?? 'shown'
+  tally[key] = (tally[key] ?? 0) + 1
+  const pause = (detail.teacherPause as { average?: number | null } | undefined)?.average
+  console.log(
+    [
+      r.id.slice(0, 8),
+      r.createdAt.toISOString().slice(0, 10),
+      Math.round((r.durationSec ?? 0) / 60),
+      thinkTime.average ?? thinkTime.reason,
+      `${thinkTime.questions.filter((q) => q.sec != null).length}/${thinkTime.questions.length}`,
+      pause ?? '—',
+      studentsCalledOn,
+    ].join('\t'),
+  )
+  if (write) {
+    await prisma.audioSession.update({
+      where: { id: r.id },
+      data: { metricsDetail: { ...detail, thinkTime, studentsCalledOn } as object },
+    })
+  }
+  changed++
+}
+console.log(`\n${changed} lesson(s) ${write ? 'written' : 'would be written (dry run)'}:`, tally)
+await prisma.$disconnect()

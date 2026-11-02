@@ -224,7 +224,7 @@ enum ThinkingPause {
     static func detail(_ session: AudioSessionWithSegments) -> Detail {
         let selfAnswered = session.teachingMoves?.selfAnswered ?? []
         let questions = QuestionMix.classify(session).filter { q in
-            !selfAnswered.contains { sa in
+            isCountedQuestion(q.entry.text) && !selfAnswered.contains { sa in
                 sameMoment(q.entry.timestampSec, Redaction.withoutAddressedNames(q.entry.text), sa.timestampSec, Redaction.withoutAddressedNames(sa.quote))
             }
         }
@@ -242,6 +242,13 @@ enum ThinkingPause {
         return Detail(selfAnswered: selfAnswered, questions: questions, thinking: matched.map(\.0), pauses: matched.map(\.1),
                       noStudents: noStudents, average: stored.average,
                       why: stored.average == nil ? whyNotShown(stored.reason) : nil)
+    }
+
+    /// A one-word question is not counted as a question: "Right?" "K?" "2?"
+    /// "Why?" — mostly tags, echoes and answers read back on a room mic
+    /// (decided 2026-11-02). Mirrors isCountedQuestion in server lib/questionMix.ts.
+    static func isCountedQuestion(_ text: String) -> Bool {
+        text.split(whereSeparator: \.isWhitespace).filter { $0.contains { $0.isLetter || $0.isNumber } }.count != 1
     }
 
     /// Whether the transcript told any student apart from the teacher —
@@ -553,55 +560,49 @@ struct OverviewTab: View {
         let teacher = session.teacherTalkPct
         let students = session.studentTalkPct
         let silence = teacher != nil && students != nil ? max(0, ((100 - teacher! - students!) * 10).rounded() / 10) : nil
+        let notYet = "Worked out for lessons analysed from now on."
         var out: [Tile]
-        // A lesson with the per-second breakdown shows the same five Talk &
-        // Participation shows.
+        // The eight numbers chosen 2026-11-02 to hold even when students were
+        // not told apart from the teacher — the same as the web Summary.
         if let room = RoomBreakdown(session.roomTrace) {
-            let noStudents = !ThinkingPause.studentVoiceSeparated(session)
             let voice = { (kind: RoomBreakdown.Kind, label: String) in
                 Tile(label: label, value: Self.whole(room.pct[kind]), unit: "%", tint: kind.color, swatch: kind.color)
             }
-            out = [
-                voice(.teacher, "Teacher Voice"),
-                noStudents
-                    ? Tile(label: "Student Voice", value: nil, unit: "%", tint: RoomBreakdown.Kind.student.color,
-                           hint: "Not separated from your voice in this recording.", swatch: RoomBreakdown.Kind.student.color)
-                    : Tile(label: "Student Voice", value: Self.whole(room.pct[.student]), unit: "%", tint: RoomBreakdown.Kind.student.color,
-                           note: "at least", swatch: RoomBreakdown.Kind.student.color),
-            ]
-            if room.videoSec > 0 { out.append(voice(.video, "Video/Audio")) }
-            out.append(voice(.other, "Group Voice"))
-            out.append(voice(.quiet, "Quiet Time"))
+            out = [voice(.teacher, "Teacher Voice"), voice(.other, "Room Talk Time"), voice(.quiet, "Quiet Time")]
         } else {
-            out = [
-                Tile(label: "You spoke", value: Self.pct(teacher), unit: "%", tint: Color(hex: 0xF5DBC8)),
-                Tile(label: "Students spoke", value: Self.pct(students), unit: "%", tint: Color(hex: 0xF5E7C4)),
-            ]
+            out = [Tile(label: "Teacher Voice", value: Self.pct(teacher), unit: "%", tint: Color(hex: 0xF5DBC8))]
+            // Older recordings with no sound reading cannot split the rest.
+            if let silence, let quiet = detail["quietSec"], let unresolved = detail["unresolvedSec"], quiet + unresolved > 0 {
+                let sound = (silence * unresolved / (quiet + unresolved) * 10).rounded() / 10
+                out.append(Tile(label: "Room Talk Time", value: Self.pct(sound), unit: "%", tint: Color(hex: 0xE5E0EF)))
+                out.append(Tile(label: "Quiet Time", value: Self.pct(max(0, silence - sound)), unit: "%", tint: Color(hex: 0xDDE8F4)))
+            } else {
+                out.append(Tile(label: "Room Talk Time", value: nil, unit: "%", tint: Color(hex: 0xE5E0EF), hint: "Not measured on this older recording."))
+                out.append(Tile(label: "Quiet Time", value: nil, unit: "%", tint: Color(hex: 0xDDE8F4), hint: "Not measured on this older recording."))
+            }
         }
-        // The rest split the way Talk & Participation splits it; recordings
-        // with no sound reading keep one combined tile.
-        if RoomBreakdown(session.roomTrace) != nil {
-            // Already split above.
-        } else if let silence, let quiet = detail["quietSec"], let unresolved = detail["unresolvedSec"], quiet + unresolved > 0 {
-            let sound = (silence * unresolved / (quiet + unresolved) * 10).rounded() / 10
-            out.append(Tile(label: "Sound, no words", value: Self.pct(sound), unit: "%", tint: Color(hex: 0xE5E0EF)))
-            out.append(Tile(label: "Quiet", value: Self.pct(max(0, silence - sound)), unit: "%", tint: Color(hex: 0xDDE8F4)))
-        } else {
-            out.append(Tile(label: "Silence / other", value: Self.pct(silence), unit: "%", tint: Color(hex: 0xE5E0EF)))
-        }
-        // Gold beside the voices, whose pink is Video/Audio's.
+        // Different students addressed by name, from the words alone.
+        let calledOn = detail["studentsCalledOn"]
+        out.append(Tile(label: "Students Called On", value: calledOn.map { "\(Int($0))" }, unit: "", tint: Color(hex: 0xF4DFE4),
+                        hint: calledOn == nil ? notYet : nil))
         out.append(Tile(label: "Pace", value: detail["teacherWordsPerMinute"].map { "\(Int($0.rounded()))" }, unit: "wpm",
-                        tint: RoomBreakdown(session.roomTrace) != nil ? Color(hex: 0xF5E7C4) : Color(hex: 0xF4DFE4)))
+                        tint: Color(hex: 0xF5E7C4)))
         // The questions Questioning counts, with the ones you answered
         // yourself said beside them rather than folded in.
         let counted = ThinkingPause.detail(session)
         out.append(Tile(label: "Questions", value: session.questionLog != nil ? "\(counted.questions.count)" : session.questionCount.map { "\($0)" },
                         unit: "", tint: Color(hex: 0xDCE7DF),
                         note: counted.selfAnswered.isEmpty ? nil : "+ \(counted.selfAnswered.count) you answered"))
-        let tawt = ThinkingPause.tawt(session)
-        out.append(Tile(label: "Teacher pause", value: tawt.map { String(format: "%.1f", $0.average) }, unit: "s", tint: Color(hex: 0xE6EBD2),
-                        hint: tawt != nil ? nil : counted.why,
-                        note: tawt.map { "from \($0.count) question\($0.count == 1 ? "" : "s")" }))
+        // Think Time: after each question, how long until anyone spoke, as the
+        // server stored it (server lib/thinkTime.ts). Teacher Pause Time stays
+        // on Questioning & Checking.
+        let think = session.thinkTime
+        let timed = think?.questions.filter { $0.sec != nil }.count ?? 0
+        out.append(Tile(label: "Think Time", value: think?.average.map { String(format: "%.1f", $0) }, unit: "s", tint: Color(hex: 0xE6EBD2),
+                        hint: think == nil ? notYet
+                            : think?.average != nil ? nil
+                            : think?.reason == "no_questions" ? "No questions in this recording." : "No question could be timed.",
+                        note: think?.average != nil ? "from \(timed) question\(timed == 1 ? "" : "s")" : nil))
         // The checks Questioning & Checking lists, left-out non-checks and all;
         // older lessons with no log fall back to the stored count.
         let checks = ThinkingPause.checkCount(session)
@@ -611,7 +612,6 @@ struct OverviewTab: View {
         return out
     }
 
-    private var hasSoundSplit: Bool { tiles.contains { $0.label == "Quiet" } }
     @State private var readingOpen = false
 
     @ViewBuilder private var numbersCard: some View {
@@ -639,16 +639,13 @@ struct OverviewTab: View {
             }
             DisclosureGroup(isExpanded: $readingOpen) {
                 VStack(alignment: .leading, spacing: 6) {
-                    readingLine("You spoke, Students spoke", "the share of the recording each voice took. The microphone hears you better than students.")
-                    if hasSoundSplit {
-                        readingLine("Sound, no words", "sound the microphone caught but couldn\u{2019}t turn into words, usually voices too far away or talking over each other.")
-                        readingLine("Quiet", "no sound at all: quiet work, pauses, a settled room.")
-                    } else {
-                        readingLine("Silence / other", "everything that was neither clearly you nor clearly a student: quiet, and voices too faint to place.")
-                    }
+                    readingLine("Teacher Voice", "the share of the recording with words the transcript gave to you.")
+                    readingLine("Room Talk Time", "sound the microphone caught but couldn\u{2019}t turn into words, usually students talking together or too far away; other room sound is counted here too.")
+                    readingLine("Quiet Time", "no sound at all: quiet work, pauses, a settled room.")
+                    readingLine("Students Called On", "how many different students you addressed by name, as the transcript caught them.")
                     readingLine("Pace", "your words a minute, short pauses included. Everyday conversation usually runs about \(AudioInsights.conversationalWpmRange).")
                     readingLine("Questions", "the questions you asked, as the transcript caught them.")
-                    readingLine("Teacher Pause Time", "after a question that asked students to explain or reason, how long until you spoke again, averaged, with any student answer included. It is your side of the pause \u{2014} not a measure of how long students thought, which a microphone at the front of the room cannot see. Three seconds or more gives most students time to think.")
+                    readingLine("Think Time", "after each question, how long the room was quiet before anyone spoke \u{2014} you or a student \u{2014} averaged. Three seconds or more gives most students time to think.")
                     readingLine("Checks", "the times you checked for understanding, as the transcript caught them. It counts the checks, not whether students understood.")
                 }
                 .padding(.top, 6)

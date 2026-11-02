@@ -54,6 +54,14 @@ function sameMoment(a: { timestampSec: number; text: string }, b: { timestampSec
   return Math.abs(a.timestampSec - b.timestampSec) <= 8 && na.length > 0 && nb.length > 0 && (na.startsWith(nb.slice(0, 20)) || nb.startsWith(na.slice(0, 20)))
 }
 
+/// A one-word question is not counted as a question: "Right?" "K?" "2?"
+/// "Why?". On a room mic these are mostly tags, echoes and students' answers
+/// read back, not questions left with the class (decided 2026-11-02). Mirrors
+/// isCountedQuestion in AudioCoaching.tsx and the iPhone's ThinkingPause.
+export function isCountedQuestion(text: string): boolean {
+  return text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length !== 1
+}
+
 export type CountedQuestion = { timestampSec: number; text: string; type?: unknown; mix: MixKind; check: boolean }
 
 /// THE question list every number on a lesson is counted from — the server
@@ -80,6 +88,7 @@ export function countedQuestions(questionLog: unknown, teachingMoves: unknown): 
     if (typeof q?.timestampSec !== 'number') continue
     const at = q.timestampSec
     const text = typeof q.text === 'string' ? q.text : ''
+    if (!isCountedQuestion(text)) continue
     // A question the teacher answered before a student could is not counted,
     // as the lesson page leaves it out.
     if (selfList.some((sa) => sameMoment({ timestampSec: at, text }, sa))) {

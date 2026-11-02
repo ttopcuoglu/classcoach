@@ -706,6 +706,25 @@ private struct PauseGatesLog: Decodable {
     let pauseGates: StoredPauseGates?
 }
 
+/// Read on its own for the same reason as TeacherPauseLog.
+private struct ThinkTimeLog: Decodable {
+    let thinkTime: StoredThinkTime?
+}
+
+/// Think Time as the server stored it (server/src/lib/thinkTime.ts): after
+/// each question, how long until anyone spoke, teacher or student. It needs
+/// no voices told apart, so it is the Summary's tile.
+struct StoredThinkTime: Decodable {
+    struct Question: Decodable {
+        let timestampSec: Double
+        let sec: Double?
+    }
+    let average: Double?
+    /// no_questions or none_timed — nil when there is an average.
+    let reason: String?
+    let questions: [Question]
+}
+
 /// Whether wait time and the pause after an answer may be shown, as the
 /// server decided when the lesson was analysed (server/src/lib/pauseGates.ts).
 /// Every screen follows it; none decides for itself.
@@ -776,6 +795,8 @@ struct AudioSession: Decodable, Identifiable {
     let teacherPause: StoredTeacherPause?
     /// metricsLogs.pauseGates; absent on lessons not yet worked out.
     let pauseGates: StoredPauseGates?
+    /// metricsLogs.thinkTime; absent on lessons not yet worked out.
+    let thinkTime: StoredThinkTime?
     let highlights: [AudioHighlight]?
     let phases: [AudioPhase]?
     let questionLog: [AudioQuestionLogEntry]?
@@ -881,6 +902,7 @@ struct AudioSession: Decodable, Identifiable {
         roomTrace = logs?.roomTrace
         teacherPause = (try? container.decodeIfPresent(TeacherPauseLog.self, forKey: .metricsLogs))?.teacherPause
         pauseGates = (try? container.decodeIfPresent(PauseGatesLog.self, forKey: .metricsLogs))?.pauseGates
+        thinkTime = (try? container.decodeIfPresent(ThinkTimeLog.self, forKey: .metricsLogs))?.thinkTime
         highlights = try container.decodeIfPresent([AudioHighlight].self, forKey: .highlights)
         phases = try container.decodeIfPresent([AudioPhase].self, forKey: .phases)
         questionLog = try container.decodeIfPresent([AudioQuestionLogEntry].self, forKey: .questionLog)
@@ -972,6 +994,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var followUpLog: [AudioFollowUpLine]? { session.followUpLog }
     var roomTrace: String? { session.roomTrace }
     var teacherPause: StoredTeacherPause? { session.teacherPause }
+    var thinkTime: StoredThinkTime? { session.thinkTime }
     var highlights: [AudioHighlight]? { session.highlights }
     var phases: [AudioPhase]? { session.phases }
     var questionLog: [AudioQuestionLogEntry]? { session.questionLog }

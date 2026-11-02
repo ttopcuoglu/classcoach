@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { questionMixOf, staffQuestionMix } from './questionMix.ts'
+import { countedQuestions, questionMixOf, staffQuestionMix } from './questionMix.ts'
 
 test('a finer kind within four seconds wins; otherwise the old split decides', () => {
   const log = [
@@ -50,4 +50,14 @@ test('staff totals add questions and count only lessons that had any', () => {
     { questionLog: [{ timestampSec: 1, type: 'recall' }], teachingMoves: { questionKinds: [{ timestampSec: 1, kind: 'compare' }] } },
   ])
   assert.deepEqual(mix, { counts: { recall: 1, explain: 1, reasoning: 1 }, questions: 3, lessons: 2, beyondRecallPct: 67 })
+})
+
+test('one-word questions are not counted; entries with no text still are', () => {
+  const log = [
+    { timestampSec: 10, type: 'recall', text: 'Right?' },
+    { timestampSec: 20, type: 'recall', text: '2?' },
+    { timestampSec: 30, type: 'recall', text: 'Twenty twenty what?' },
+    { timestampSec: 40, type: 'higher_order' },
+  ]
+  assert.deepEqual(countedQuestions(log, null).questions.map((q) => q.timestampSec), [30, 40])
 })

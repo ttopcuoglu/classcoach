@@ -7,13 +7,14 @@ import { readParticipation } from '../lib/participation.ts'
 import { Router } from 'express'
 import multer from 'multer'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
-import { analyzeTranscript, buildContentExhibits, detectLessonContent, type Segment } from '../lib/audioAnalysis.ts'
+import { analyzeTranscript, buildContentExhibits, detectLessonContent, studentsCalledOnOf, type Segment } from '../lib/audioAnalysis.ts'
 import { enrichClassroomMoves } from '../lib/classroomMoves.ts'
 import { readEscalation } from '../lib/escalation.ts'
 import { readTeachingMoves } from '../lib/teachingMoves.ts'
 import { parseLevelTrace, splitNonSpeech, teacherIntervals } from '../lib/settleTime.ts'
 import { pauseGatesOf, shownWaitTime, shownWaitTime2 } from '../lib/pauseGates.ts'
 import { storedTeacherPause, teacherPauseOf } from '../lib/teacherPause.ts'
+import { thinkTimeOf } from '../lib/thinkTime.ts'
 import { buildRoomTrace, openingWasRecorderOnly, roomFacts, roomShares, type RoomFacts } from '../lib/roomTrace.ts'
 import { buildSoundTimeline } from '../lib/soundTimeline.ts'
 import { enrichLessonContent } from '../lib/lessonObjective.ts'
@@ -1007,6 +1008,10 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
         // Whether wait time and the pause after an answer may be shown —
         // decided here once, followed by every reader.
         pauseGates: pauseGatesOf(analysis.metricsDetail) as unknown as Prisma.InputJsonValue,
+        // The Summary's Think Time and Students Called On: neither asks who
+        // spoke, so both hold when students were not told apart.
+        thinkTime: thinkTimeOf(segments, analysis.questionLog, teachingMoves) as unknown as Prisma.InputJsonValue,
+        studentsCalledOn: studentsCalledOnOf(segments),
       },
       highlights: analysis.highlights,
       phases: analysis.phases,

@@ -434,7 +434,7 @@ struct TalkSection: View {
         var read = [
             "Talk time describes the recording, not the room: it doesn\u{2019}t show how many students took part or whether they were engaged, and a microphone near you hears you far better than it hears them.",
             room != nil
-                ? "\u{201C}Teacher Voice\u{201D} and \u{201C}Student Voice\u{201D} count only seconds with words the transcript gave to you or to a student, and the short pauses between them. Student Voice is a minimum: students the microphone couldn\u{2019}t make out aren\u{2019}t in it. \u{201C}Group Voice\u{201D} is sound with no transcribed words, most often students talking together; music or other room sound is counted there too. \u{201C}Video/Audio\u{201D} is a voice you marked as one."
+                ? "\u{201C}Teacher Voice\u{201D} and \u{201C}Student Voice\u{201D} count only seconds with words the transcript gave to you or to a student, and the short pauses between them. Student Voice is a minimum: students the microphone couldn\u{2019}t make out aren\u{2019}t in it. \u{201C}Room Talk Time\u{201D} is sound with no transcribed words, most often students talking together; music or other room sound is counted there too. \u{201C}Video/Audio\u{201D} is a voice you marked as one."
                 : "\u{201C}Sound, no words\u{201D} and \u{201C}Quiet\u{201D} are everything that was neither clearly you nor clearly a student"
                     + (hasEnvelope ? ". In a classroom, sound with no words is usually voices the microphone could not make out; a video or noise from outside reads the same way."
                         : ": quiet work, several voices at once, and audio too faint to place."),
@@ -467,7 +467,7 @@ struct TalkSection: View {
     private var noStudentsNotice: some View {
         VStack(alignment: .leading, spacing: 8) {
             (Text("No student voice was told apart from yours in this recording,").fontWeight(.semibold)
-                + Text(" so students\u{2019} answers are counted as your talk. Teacher pause and your longest stretch need students separated, so they aren\u{2019}t shown."))
+                + Text(" so students\u{2019} answers are counted as your talk. Your longest stretch needs students separated, so it isn\u{2019}t shown."))
                 .font(.footnote).foregroundStyle(AppTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
             if let onRetag {
@@ -483,10 +483,9 @@ struct TalkSection: View {
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(AppTheme.gold.opacity(0.6)))
     }
 
-    /// Minutes first, each share as the strip colours it. Only Teacher Voice,
-    /// Student Voice and Teacher pause open anything: the rest had no words.
+    /// Minutes first, each share as the strip colours it. Only Teacher Voice
+    /// and Student Voice open anything: the rest had no words.
     private func roomNumbers(_ room: RoomBreakdown, noStudents: Bool) -> some View {
-        let pause = ThinkingPause.detail(session)
         let kinds: [(RoomBreakdown.Kind, String)] = [
             (.teacher, "your words, and pauses between them"),
             (.student, "students\u{2019} words; any the microphone couldn\u{2019}t make out aren\u{2019}t counted"),
@@ -494,9 +493,6 @@ struct TalkSection: View {
             (.other, "no transcribed words \u{2014} most often students talking together"),
             (.quiet, "the microphone heard nothing"),
         ]
-        let pauseSub = pause.average != nil
-            ? "average after \(pause.measured) thinking question\(pause.measured == 1 ? "" : "s")"
-            : ThinkingPause.lowercasedReason(pause.why)
         return LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
             ForEach(kinds, id: \.0) { kind, sub in
                 if kind == .student && noStudents {
@@ -512,9 +508,6 @@ struct TalkSection: View {
             }
             tile("Your pace", wpm.map { "\(Int($0.rounded()))" } ?? "\u{2014}",
                  wpm != nil ? "words a minute \u{00B7} conversation usually runs \(AudioInsights.conversationalWpmRange)" : "unavailable", nil)
-            tile("Teacher pause", pause.average.map { String(format: "%.1f s", $0) } ?? "\u{2014}", pauseSub, nil,
-                 link: pause.thinking.isEmpty ? nil : "See the questions")
-                .onTapGesture { if !pause.thinking.isEmpty { moments = .pause } }
         }
     }
 
@@ -702,7 +695,7 @@ struct FlowStrip: View {
                 Text(mmss(Double(total)))
             }
             .font(.caption2).foregroundStyle(AppTheme.textSecondary)
-            Text("\u{201C}Teacher Voice\u{201D} and \u{201C}Student Voice\u{201D} are seconds with words the transcript gave to you or to a student, and the short pauses between them. \u{201C}Group Voice\u{201D} is sound with no transcribed words \u{2014} most often students talking together; music or other room sound is counted here too."
+            Text("\u{201C}Teacher Voice\u{201D} and \u{201C}Student Voice\u{201D} are seconds with words the transcript gave to you or to a student, and the short pauses between them. \u{201C}Room Talk Time\u{201D} is sound with no transcribed words \u{2014} most often students talking together; music or other room sound is counted here too."
                  + (room.videoSec > 0 ? " \u{201C}Video/Audio\u{201D} is the voice you marked as one." : "")
                  + " Tap a Teacher Voice or Student Voice block to see what was said.")
                 .font(.caption2).foregroundStyle(AppTheme.textSecondary)
@@ -974,17 +967,6 @@ struct QuestionsSection: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 qcList(current, questions, selfAnswered, checks)
-                if let average = tawt.average { tawtCard(tawt, average: average) }
-                else if !tawt.thinking.isEmpty, let why = tawt.why {
-                    (Text("Teacher Pause Time").fontWeight(.semibold).foregroundStyle(AppTheme.textPrimary)
-                        + Text(" isn\u{2019}t shown. \(why)"))
-                        .font(.footnote).foregroundStyle(AppTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline))
-                }
             }
         }
     }
@@ -1183,57 +1165,6 @@ struct QuestionsSection: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.cream, in: RoundedRectangle(cornerRadius: 18))
-    }
-
-    /// Teacher Pause Time: how long you left a question that asked
-    /// students to explain or reason with the class, until you spoke again —
-    /// the same number as the Summary tile, with each question behind it.
-    private func tawtCard(_ tawt: ThinkingPause.Detail, average: Double) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Teacher Pause Time").font(.heading(.headline)).foregroundStyle(AppTheme.forest)
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(String(format: "%.1f", average)).font(.heading(.largeTitle)).foregroundStyle(AppTheme.forest)
-                Text("s").font(.body.weight(.bold)).foregroundStyle(AppTheme.forest)
-                Text("average of \(tawt.measured)").font(.subheadline).foregroundStyle(AppTheme.textSecondary).padding(.leading, 4)
-            }
-            Text("After each question that asked students to think \u{2014} to explain or to reason \u{2014} the time from the end of your question until you spoke again, with any student answer included. It shows how long you left the thinking with the class before stepping back in. When no one answered, three seconds or more of silence gives most students time to think.")
-                .font(.caption).foregroundStyle(AppTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            ForEach(Array(tawt.thinking.enumerated()), id: \.offset) { i, q in
-                let p = tawt.pauses[i]
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 5) {
-                            Circle().fill(q.mix.color).frame(width: 9, height: 9)
-                            Text(Self.mixLabel[q.mix] ?? "")
-                            Text("\u{00B7} \(mmss(q.entry.timestampSec))").font(.caption.monospacedDigit().weight(.regular))
-                        }
-                        .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
-                        Text("\u{201C}\(Redaction.withoutAddressedNames(q.entry.text))\u{201D}")
-                            .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 0)
-                    VStack(alignment: .trailing, spacing: 2) {
-                        if let p, let sec = p.sec {
-                            Text(String(format: "%.1f s", sec)).font(.heading(.subheadline)).foregroundStyle(AppTheme.forest)
-                            Text(p.keptTalking ? "you kept talking" : p.answered ? "a student answered" : p.folded ? "a short answer came first" : "no one answered")
-                        } else {
-                            Text(p?.label ?? "not measured")
-                        }
-                    }
-                    .font(.caption).foregroundStyle(AppTheme.textSecondary)
-                    .multilineTextAlignment(.trailing)
-                }
-                .padding(.horizontal, 12).padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.cream, in: RoundedRectangle(cornerRadius: 12))
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
     }
 
     // MARK: Also heard
@@ -1835,7 +1766,7 @@ struct RoomBreakdown {
             case .teacher: "Teacher Voice"
             case .student: "Student Voice"
             case .video: "Video/Audio"
-            case .other: "Group Voice"
+            case .other: "Room Talk Time"
             case .quiet: "Quiet Time"
             }
         }
@@ -1888,17 +1819,15 @@ struct RoomBreakdown {
 }
 
 /// What a tile or a block of the strip opens: your lines, the conversation
-/// students were part of, the questions behind Teacher pause, or what was
-/// said in one slice of the lesson.
+/// students were part of, or what was said in one slice of the lesson.
 enum TalkMoments: Identifiable {
-    case teacher, student, pause
+    case teacher, student
     case range(Double, Double)
 
     var id: String {
         switch self {
         case .teacher: "teacher"
         case .student: "student"
-        case .pause: "pause"
         case .range(let a, let b): "\(a)-\(b)"
         }
     }
@@ -1970,9 +1899,6 @@ struct TalkMomentsSheet: View {
         case .student:
             let n = Exchange.all(session.segments).count
             return "Student Voice \u{00B7} \(n) exchange\(n == 1 ? "" : "s")"
-        case .pause:
-            let n = ThinkingPause.detail(session).thinking.count
-            return "Teacher pause \u{00B7} \(n) question\(n == 1 ? "" : "s")"
         case .range(let a, let b):
             return "\(mmss(a))\u{2013}\(mmss(b))"
         }
@@ -1990,20 +1916,6 @@ struct TalkMomentsSheet: View {
                     if let before = x.before { line(before, who: true) }
                     ForEach(x.students) { line($0, who: true) }
                     if let after = x.after { line(after, who: true) }
-                }
-                Divider()
-            }
-        case .pause:
-            let detail = ThinkingPause.detail(session)
-            ForEach(Array(detail.thinking.enumerated()), id: \.offset) { i, q in
-                let own = lines.first { $0.endSec > q.entry.timestampSec }
-                let next = own.flatMap { own in lines.first { $0.startSec >= own.endSec - 0.01 && $0.id != own.id } }
-                let p = detail.pauses[i]
-                let waited = p?.label ?? "could not be timed"
-                VStack(alignment: .leading, spacing: 6) {
-                    said(q.entry.timestampSec, teacher: true, Redaction.withoutAddressedNames(q.entry.text), who: true)
-                    Text("Pause: \(waited)").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary).padding(.leading, 44)
-                    if let next { line(next, who: true) }
                 }
                 Divider()
             }
