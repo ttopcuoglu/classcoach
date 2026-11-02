@@ -39,7 +39,7 @@ for (const r of rows) {
     select: { speakerLabel: true, startSec: true, endSec: true, text: true },
   })
   const thinkTime = thinkTimeOf(segments, r.questionLog, r.teachingMoves)
-  const calledOn = studentsCalledOn(segments)
+  const calledOn = studentsCalledOn(segments, { questionLog: r.questionLog, teachingMoves: r.teachingMoves, followUpLog: detail.followUpLog })
   const key = thinkTime.reason ?? 'shown'
   tally[key] = (tally[key] ?? 0) + 1
   const pause = (detail.teacherPause as { average?: number | null } | undefined)?.average

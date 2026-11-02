@@ -314,10 +314,11 @@ struct OptionalBlock<Content: View>: View {
 
 /// The shapes "How you brought students in" and the flow strip share.
 enum MoveShape: String, CaseIterable {
-    case invite, probe, voices, check
+    case invite, probe, voices, check, calledOn
 
     var color: Color {
         switch self {
+        case .calledOn: return Color(hex: 0xB5476B)
         case .invite: return Color(hex: 0xB8674A)
         case .probe: return Color(hex: 0x3F7D58)
         case .voices: return Color(hex: 0xB88A1F)
@@ -331,6 +332,7 @@ enum MoveShape: String, CaseIterable {
         case .probe: return Color(hex: 0xE3EFE6)
         case .voices: return Color(hex: 0xF7EED6)
         case .check: return AppTheme.mintTint
+        case .calledOn: return Color(hex: 0xF6E1E8)
         }
     }
 
@@ -340,6 +342,7 @@ enum MoveShape: String, CaseIterable {
         case .probe: return "Follow-ups that pushed students further"
         case .voices: return "Reaching beyond volunteers"
         case .check: return "Check for understanding"
+        case .calledOn: return "Student called on by name"
         }
     }
 
@@ -350,6 +353,8 @@ enum MoveShape: String, CaseIterable {
         case .voices: Rectangle().fill(color).frame(width: size * 0.72, height: size * 0.72).rotationEffect(.degrees(45))
             .frame(width: size, height: size)
         case .check: Circle().strokeBorder(color, lineWidth: 2).frame(width: size, height: size)
+        // A triangle pointing down at the moment on the strip.
+        case .calledOn: Triangle().fill(color).frame(width: size, height: size).rotationEffect(.degrees(180))
         }
     }
 }
@@ -449,9 +454,10 @@ struct TalkSection: View {
         ) {
             if noStudents && !session.segments.isEmpty { noStudentsNotice }
             talkCards
-            // No moves marked: "How you brought students in" was removed as
-            // crowded (web 5239b52); Questioning shows follow-ups and checks.
-            FlowStrip(session: session, marks: [], room: room, onPick: { moments = $0 })
+            // Only the students called on by name about the lesson are marked:
+            // "How you brought students in" was removed as crowded (web
+            // 5239b52); Questioning shows follow-ups and checks.
+            FlowStrip(session: session, marks: (session.calledOnTimes ?? []).map { ($0, .calledOn) }, room: room, onPick: { moments = $0 })
             // With the per-second breakdown, your longest stretch is always
             // shown, as one of the measured facts beside the shares — unless
             // no student was told apart, when it runs through every answer.
@@ -681,21 +687,43 @@ struct FlowStrip: View {
                     .font(.caption).foregroundStyle(AppTheme.textPrimary)
                 }
             }
-            HStack(spacing: 1) {
-                ForEach(Array(flow.enumerated()), id: \.offset) { i, k in
-                    sliceFill(k?.color)
-                        .onTapGesture {
-                            if k == .teacher || k == .student { onPick?(.range(Double(i) * binSec, Double(i + 1) * binSec)) }
+            GeometryReader { geo in
+                ZStack(alignment: .topLeading) {
+                    ForEach(Array(marks.enumerated()), id: \.offset) { _, m in
+                        m.1.view(size: 9)
+                            .position(x: min(geo.size.width - 5, max(5, geo.size.width * CGFloat(m.0 / Double(max(1, total))))), y: 5)
+                    }
+                    HStack(spacing: 1) {
+                        ForEach(Array(flow.enumerated()), id: \.offset) { i, k in
+                            sliceFill(k?.color)
+                                .onTapGesture {
+                                    if k == .teacher || k == .student { onPick?(.range(Double(i) * binSec, Double(i + 1) * binSec)) }
+                                }
                         }
+                    }
+                    .frame(height: 28)
+                    .offset(y: marks.isEmpty ? 0 : 14)
                 }
             }
-            .frame(height: 28)
+            .frame(height: marks.isEmpty ? 28 : 42)
             HStack {
                 Text("0:00")
                 Spacer()
                 Text(mmss(Double(total)))
             }
             .font(.caption2).foregroundStyle(AppTheme.textSecondary)
+            let kinds = MoveShape.allCases.filter { k in marks.contains { $0.1 == k } }
+            if !kinds.isEmpty {
+                FlowLayout(spacing: 10) {
+                    ForEach(kinds, id: \.self) { k in
+                        HStack(spacing: 5) {
+                            k.view(size: 10)
+                            Text(k.markLabel)
+                        }
+                        .font(.caption2).foregroundStyle(AppTheme.textSecondary)
+                    }
+                }
+            }
             Text("\u{201C}Teacher Voice\u{201D} and \u{201C}Student Voice\u{201D} are seconds with words the transcript gave to you or to a student, and the short pauses between them. \u{201C}Room Talk Time\u{201D} is sound with no transcribed words \u{2014} most often students talking together; music or other room sound is counted here too."
                  + (room.videoSec > 0 ? " \u{201C}Video/Audio\u{201D} is the voice you marked as one." : "")
                  + " Tap a Teacher Voice or Student Voice block to see what was said.")

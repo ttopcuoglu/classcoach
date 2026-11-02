@@ -594,13 +594,40 @@ export function addressedNamesIn(segments: Segment[]): string[] {
   return [...names]
 }
 
-/// The students the teacher called on by name — "Aya, which one did you
-/// pick?" "Zane, what was the difference?" — read from the words alone, so
-/// unlike nameMentionCount it holds on a recording where no student voice was
-/// told apart. `count`: different students, the Summary's Students Called On.
-/// `moments`: the start of each teacher line that calls on one, so Talk &
-/// Participation can show each with the lines around it.
-export function studentsCalledOn(segments: Segment[]): { count: number; moments: { timestampSec: number }[] } {
+/// Classroom business, not the lesson: a call on a student about any of this
+/// is not counted, even when it is a question ("Aya, do you need a pencil?").
+const OPERATIONAL = new RegExp(
+  [
+    'bathroom', 'restroom', 'hall ?pass', 'bathroom pass', 'the pass', 'nurse', 'locker', 'backpack',
+    'pencils?', 'sharpen\\w*', 'pens?\\b', 'erasers?', 'markers?', 'glue', 'scissors',
+    '(take|grab|get|hand|pass|collect|turn in|hand in)( out| in| back| around| down)? (the |your |these |those |a |this )?(papers?|sheets?|packets?|handouts?|worksheets?)',
+    '(hand|pass)( them| these| those| it)? (out|back|around|down)', 'collect',
+    'chromebooks?', 'laptops?', 'chargers?', 'headphones', 'phones? away', 'put (that|it|your \\w+) away',
+    'take a seat', 'your seat', 'sit (down|up)', 'line up', 'trash', 'garbage', 'water fountain', 'drink of water',
+    'attendance', 'tardy', 'sign (in|out)', 'lunch', 'recess', 'dismiss\\w*',
+  ]
+    .map((w) => `\\b${w}\\b`)
+    .join('|'),
+  'i',
+)
+
+type Quote = { timestampSec: number }
+const quotes = (v: unknown): Quote[] =>
+  Array.isArray(v) ? v.filter((x): x is Quote => typeof (x as Quote)?.timestampSec === 'number') : []
+
+/// The students the teacher called on by name about the LESSON — "Aya, which
+/// one did you pick?" "Zane, what was the difference?" — read from the words
+/// alone, so unlike nameMentionCount it holds on a recording where no student
+/// voice was told apart. A call counts only when its line asks a content
+/// question, follows up on an answer, invites a student in or asks for a
+/// revision; a call about a hall pass, a pencil or handing out papers does not
+/// (decided 2026-11-02). `count`: different students, the Summary's Students
+/// Called On. `moments`: the start of each such line, for the transcript view
+/// and the marks on the minute-by-minute chart.
+export function studentsCalledOn(
+  segments: Segment[],
+  lesson: { questionLog?: unknown; teachingMoves?: unknown; followUpLog?: unknown } = {},
+): { count: number; moments: { timestampSec: number }[] } {
   const teacher = segments.filter((s) => s.speakerLabel === 'Teacher').sort((a, b) => a.startSec - b.startSec)
   const perLine = teacher.map((s) => extractCapitalizedWords(s.text))
   const names = new Set(
@@ -610,10 +637,26 @@ export function studentsCalledOn(segments: Segment[]): { count: number; moments:
       true,
     ).map((n) => n.toLowerCase()),
   )
-  const moments = teacher
-    .filter((_, i) => perLine[i].addressed.some((n) => names.has(n.toLowerCase())))
-    .map((s) => ({ timestampSec: round(s.startSec, 1) }))
-  return { count: names.size, moments }
+  const moves = (lesson.teachingMoves ?? {}) as Record<string, unknown>
+  const content = [
+    ...quotes(lesson.questionLog),
+    ...quotes(moves.questionKinds),
+    ...quotes(moves.invitations),
+    ...quotes(moves.revisionPrompts),
+    ...quotes(lesson.followUpLog),
+  ]
+  const business = [...quotes(moves.housekeeping), ...quotes(moves.redirections)]
+  const inLine = (s: Segment, list: Quote[]) => list.some((q) => q.timestampSec >= s.startSec - 1 && q.timestampSec <= s.endSec + 1)
+  const counted = new Set<string>()
+  const moments: { timestampSec: number }[] = []
+  teacher.forEach((s, i) => {
+    const called = perLine[i].addressed.map((n) => n.toLowerCase()).filter((n) => names.has(n))
+    if (called.length === 0) return
+    if (OPERATIONAL.test(s.text) || inLine(s, business) || !inLine(s, content)) return
+    for (const n of called) counted.add(n)
+    moments.push({ timestampSec: round(s.startSec, 1) })
+  })
+  return { count: counted.size, moments }
 }
 
 // Session-level filter over every teacher segment's capitalized words.

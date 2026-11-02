@@ -5764,9 +5764,10 @@ function TalkParticipationTab({
           segments={session.segments}
           durationSec={session.durationSec}
           seconds={session.soundTimeline?.seconds ?? null}
-          // No marks: invitations and follow-ups are no longer drawn on this
-          // card, which read as crowded; Questioning shows follow-ups and checks.
-          marks={[]}
+          // Only the students called on by name about the lesson are marked:
+          // invitations and follow-ups were taken off as crowded, and
+          // Questioning shows follow-ups and checks.
+          marks={(session.metricsLogs?.calledOnLog ?? []).map((m) => ({ t: m.timestampSec, kind: 'calledOn' as const }))}
           shares={recordingShares(session.teacherTalkPct, session.studentTalkPct, nonSpeech)}
           room={room}
           onPick={room ? setPick : undefined}

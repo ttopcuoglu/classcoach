@@ -986,7 +986,11 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
     : null
 
   const teacherPause = teacherPauseOf(segments, analysis.questionLog, teachingMoves)
-  const calledOn = studentsCalledOn(segments)
+  const calledOn = studentsCalledOn(segments, {
+    questionLog: analysis.questionLog,
+    teachingMoves,
+    followUpLog: (analysis.metricsDetail as { followUpLog?: unknown }).followUpLog,
+  })
   const updated = await prisma.audioSession.update({
     where: { id: sessionId },
     data: {

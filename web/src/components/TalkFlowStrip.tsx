@@ -100,13 +100,15 @@ function mmss(sec: number): string {
 export type ShareSlice = { kind: FlowKind; pct: number }
 
 /// What the strip can mark above itself: invitations, follow-ups, reaching
-/// beyond volunteers, and checks for understanding.
-export type StripMark = { t: number; kind: 'invite' | 'probe' | 'voices' | 'check' }
+/// beyond volunteers, checks for understanding, and students called on by
+/// name about the lesson.
+export type StripMark = { t: number; kind: 'invite' | 'probe' | 'voices' | 'check' | 'calledOn' }
 const MARK: Record<StripMark['kind'], { label: string; color: string }> = {
   invite: { label: 'Invitations to participate', color: '#B8674A' },
   probe: { label: 'Follow-ups that pushed students further', color: '#3F7D58' },
   voices: { label: 'Reaching beyond volunteers', color: '#B88A1F' },
   check: { label: 'Check for understanding', color: 'var(--color-forest)' },
+  calledOn: { label: 'Student called on by name', color: '#B5476B' },
 }
 
 function MarkShape({ kind, x, y, size }: { kind: StripMark['kind']; x: number; y: number; size: number }) {
@@ -114,6 +116,8 @@ function MarkShape({ kind, x, y, size }: { kind: StripMark['kind']; x: number; y
   const c = MARK[kind].color
   if (kind === 'invite') return <path d={`M ${x} ${y - h} L ${x + h} ${y + h} L ${x - h} ${y + h} Z`} fill={c} />
   if (kind === 'probe') return <circle cx={x} cy={y} r={h} fill={c} />
+  // A triangle pointing down at the moment on the strip.
+  if (kind === 'calledOn') return <path d={`M ${x - h} ${y - h} L ${x + h} ${y - h} L ${x} ${y + h} Z`} fill={c} />
   if (kind === 'voices') return <path d={`M ${x} ${y - h} L ${x + h} ${y} L ${x} ${y + h} L ${x - h} ${y} Z`} fill={c} />
   return <circle cx={x} cy={y} r={h - 1} fill="none" stroke={c} strokeWidth="2" />
 }
@@ -226,7 +230,7 @@ export default function TalkFlowStrip({
         {hover != null && `${mmss(hover * view.binSec)}–${mmss((hover + 1) * view.binSec)} · mostly ${label(view.bins[hover]).toLowerCase()}`}
       </p>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-soft">
-        {(['invite', 'probe', 'voices', 'check'] as const)
+        {(['invite', 'probe', 'voices', 'check', 'calledOn'] as const)
           .filter((k) => marks.some((m) => m.kind === k))
           .map((k) => (
             <span key={k} className="flex items-center gap-1.5">
