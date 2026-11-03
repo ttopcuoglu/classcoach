@@ -543,21 +543,35 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
         )}
       </header>
 
-      {/* Hero */}
-      <section className="mx-auto w-full max-w-6xl px-6 pb-12 pt-6 sm:pt-12">
+      {/* Hero: the share card's look (scripts/og-image.html) — the empty
+          classroom after the lesson, darkened to forest on the text side so
+          the words read, with the report over the brighter side. Neither home
+          page video teacher is in the photo, on purpose. */}
+      <section className="relative overflow-hidden bg-forest">
+        <img
+          src="/hero-classroom.jpg"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover object-[62%_center]"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-forest/90 lg:bg-transparent lg:bg-[linear-gradient(90deg,rgba(27,46,40,.97)_0%,rgba(27,46,40,.93)_42%,rgba(27,46,40,.5)_64%,rgba(27,46,40,.35)_100%)]"
+        />
+      <div className="relative mx-auto w-full max-w-6xl px-6 pb-12 pt-10 sm:pt-16">
         <div className="grid gap-14 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
           <div>
-            <span className="inline-flex items-center gap-2 rounded-full bg-mint-tint px-4 py-2 text-sm font-semibold text-forest">
+            <span className="inline-flex items-center gap-2 rounded-full bg-cream/10 px-4 py-2 text-sm font-semibold text-gold">
               <SparkleIcon className="h-4 w-4" />
               Coaching for your content and your teaching
             </span>
-            <h1 className="mt-6 font-heading text-5xl font-extrabold leading-[1.05] tracking-tight text-forest sm:text-6xl">
+            <h1 className="mt-6 font-heading text-5xl font-extrabold leading-[1.05] tracking-tight text-cream sm:text-6xl">
               A coach after every{' '}
-              <span className="relative inline-block text-terracotta">
+              <span className="relative inline-block text-gold">
                 lesson.
                 <svg
                   viewBox="0 0 220 14"
-                  className="absolute -bottom-1.5 left-0 w-full text-gold"
+                  className="absolute -bottom-1.5 left-0 w-full text-terracotta"
                   fill="none"
                   aria-hidden="true"
                 >
@@ -570,7 +584,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 </svg>
               </span>
             </h1>
-            <p className="mt-6 max-w-md text-lg text-ink-soft">
+            <p className="mt-6 max-w-md text-lg text-cream/80">
               Record a lesson and Wivoza reads how you taught the content (your explanations, examples
               and models) and how the lesson ran: the questions you asked and who did the talking. You
               get what worked, where it could go further, and one thing to try next class, each tied to
@@ -585,8 +599,8 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 Start free
                 <ArrowRightIcon className="h-4 w-4" />
               </a>
-              <a href="#see-it" className="flex items-center gap-2.5 text-sm font-semibold text-ink">
-                <PlayIcon className="h-8 w-8 text-ink" />
+              <a href="#see-it" className="flex items-center gap-2.5 text-sm font-semibold text-cream">
+                <PlayIcon className="h-8 w-8 text-cream" />
                 See how it works
               </a>
             </div>
@@ -594,9 +608,9 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             {/* The stars and initials that sat here read as reviews from real
                 teachers, which they were not. This makes only a claim that is
                 true. */}
-            <p className="mt-5 text-sm text-ink-soft">
+            <p className="mt-5 text-sm text-cream/70">
               No class to record yet?{' '}
-              <a href="#get-started" className="font-semibold text-terracotta-600 hover:underline">
+              <a href="#get-started" className="font-semibold text-gold hover:underline">
                 Start with Talk It Through
               </a>{' '}
               — two minutes, nothing to set up.
@@ -613,8 +627,8 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 </span>
               ))}
             </div>
-            <p className="mt-4 flex items-center gap-2.5 text-sm text-ink-soft">
-              <GraduationCapIcon className="h-5 w-5 text-forest" />
+            <p className="mt-4 flex items-center gap-2.5 text-sm text-cream/70">
+              <GraduationCapIcon className="h-5 w-5 text-gold" />
               Built with educators, for educators
             </p>
           </div>
@@ -623,10 +637,11 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <ReportMockup />
           </div>
         </div>
+      </div>
       </section>
 
       {/* Value-prop band */}
-      <section className="bg-forest py-5">
+      <section className="border-t border-cream/10 bg-forest py-5">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-x-3 gap-y-2 px-6 text-center text-xs font-semibold uppercase tracking-wider text-cream/90 sm:gap-x-4">
           {VALUE_PROPS.map((label, i) => (
             <span key={label} className="flex items-center gap-x-3 sm:gap-x-4">
