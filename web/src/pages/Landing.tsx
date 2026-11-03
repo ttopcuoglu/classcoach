@@ -28,6 +28,7 @@ import {
 import { introVideo, MEET_PLAYLIST_ID, VideoFacade } from '../components/TrainingVideos'
 import FooterContact from '../components/FooterContact'
 import RecordYourWay from '../components/RecordYourWay'
+import { ROOM_COLOR, ROOM_LABEL } from '../components/TalkFlowStrip'
 import { PLUS_DEBRIEF_PER_MONTH, PLUS_MONTHLY_PRICE, PLUS_YEARLY_PER_MONTH, PLUS_YEARLY_PRICE } from '../lib/pricing'
 
 const PROCESS = [
@@ -300,6 +301,21 @@ const SAMPLE_NOTES = [
   },
 ]
 
+// The hero's sample Talk & Participation card: shares and a minute-by-minute
+// strip for the invented lesson (teacher-led opening, questions, group work,
+// wrap-up). Kept in step with the share card, scripts/og-image.html.
+const HERO_TALK: [keyof typeof ROOM_COLOR, number][] = [
+  ['teacher', 39],
+  ['student', 26],
+  ['other', 23],
+  ['quiet', 12],
+]
+const HERO_TALK_STRIP = (
+  'tttttttststtsq' + 'ooosoooqoo' + 'tsstst' + 'qtst'
+)
+  .split('')
+  .map((c) => ({ t: 'teacher', s: 'student', o: 'other', q: 'quiet' })[c] as keyof typeof ROOM_COLOR)
+
 // A screenshot of the real report's Summary, taken from the dev preview with
 // the lesson swapped for an invented one (topic, date and every quoted line),
 // so no real class appears on the public site (see scripts/capture-hero.mjs),
@@ -347,6 +363,33 @@ function ReportMockup() {
         <p className="mt-0.5 text-sm leading-snug text-ink">
           Many students think plants photosynthesize instead of respiring. Ask what a plant does at night.
         </p>
+      </div>
+
+      {/* The teaching half of the headline, beside the content half: the Talk &
+          Participation card in the report's own colours. The numbers and the
+          minute-by-minute strip belong to the same invented lesson, not a real
+          class. Hidden on a phone, where it would cover the report. */}
+      <div className="absolute -left-12 top-[19rem] hidden w-64 rounded-xl border border-hairline bg-cream-card p-3.5 text-left shadow-lg sm:block">
+        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-forest">Talk &amp; Participation</p>
+        <div className="mt-2 flex h-2.5 gap-0.5 overflow-hidden rounded-full">
+          {HERO_TALK.map(([kind, pct]) => (
+            <span key={kind} style={{ width: `${pct}%`, background: ROOM_COLOR[kind] }} />
+          ))}
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-semibold text-ink">
+          {HERO_TALK.map(([kind, pct]) => (
+            <div key={kind} className="flex items-center gap-1.5 whitespace-nowrap">
+              <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: ROOM_COLOR[kind] }} />
+              {ROOM_LABEL[kind]}
+              <span className="ml-auto text-ink-soft">{pct}%</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2.5 flex h-4 gap-px" aria-hidden="true">
+          {HERO_TALK_STRIP.map((kind, i) => (
+            <span key={i} className="flex-1 rounded-[2px]" style={{ background: ROOM_COLOR[kind] }} />
+          ))}
+        </div>
       </div>
 
       {/* Beside the report header, clear of the chart. Hidden on a phone, where
@@ -528,10 +571,10 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           <div>
             <span className="inline-flex items-center gap-2 rounded-full bg-mint-tint px-4 py-2 text-sm font-semibold text-forest">
               <SparkleIcon className="h-4 w-4" />
-              Content coaching for every teacher
+              Coaching for your content and your teaching
             </span>
             <h1 className="mt-6 font-heading text-5xl font-extrabold leading-[1.05] tracking-tight text-forest sm:text-6xl">
-              A content coach after every{' '}
+              A coach after every{' '}
               <span className="relative inline-block text-terracotta">
                 lesson.
                 <svg
@@ -550,10 +593,10 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               </span>
             </h1>
             <p className="mt-6 max-w-md text-lg text-ink-soft">
-              Record a lesson and Wivoza reads how you taught the content: your explanations, your
-              examples, the models you used, the questions you asked. You get what worked, where it
-              could go further, and one thing to try next class — each tied to a moment in your own
-              words.
+              Record a lesson and Wivoza reads how you taught the content (your explanations, examples
+              and models) and how the lesson ran: the questions you asked and who did the talking. You
+              get what worked, where it could go further, and one thing to try next class, each tied to
+              a moment in your own words.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-6">

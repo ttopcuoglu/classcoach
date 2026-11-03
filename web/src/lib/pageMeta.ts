@@ -10,9 +10,9 @@
 // falls through to the app's catch-all index.html.
 
 const SITE = 'https://www.wivoza.com'
-const DEFAULT_TITLE = 'Wivoza — a content coach after every lesson'
+const DEFAULT_TITLE = 'Wivoza — a coach after every lesson'
 const DEFAULT_DESCRIPTION =
-  'A content coach after every lesson. Record a class and Wivoza shows how you taught the content — what worked, where it could go further, and where students usually get stuck — then helps you plan the next one. Private, never scored.'
+  'A coach after every lesson, for your content and your teaching. Record a class and Wivoza shows how you taught the content and how the lesson ran — what worked, where it could go further, and where students usually get stuck — then helps you plan the next one. Private, never scored.'
 
 type Meta = { title: string; description: string }
 
