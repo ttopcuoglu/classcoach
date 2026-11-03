@@ -4,6 +4,9 @@
   Participation card, so the card shows both the content and the teaching.
   The report image is public/samples/hero-debrief-summary.png (an invented
   lesson, see scripts/capture-hero.mjs); the talk numbers are invented too.
+  The empty classroom behind it is og-classroom.jpg, a still from the
+  Practice promo (Wivoza-Assets/marketing/practice-promo/stills/shot24),
+  chosen because neither teacher from the home page videos is in it.
   Regenerate:
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars --allow-file-access-from-files --window-size=1200,630 --virtual-time-budget=5000 --screenshot=public/og-image.png "file://$PWD/scripts/og-image.html"
   (run from web/) -->
@@ -42,8 +45,11 @@ h1 span{color:#e4b84a}
 .legend div{display:flex;align-items:center;gap:6px}.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
 .legend span{margin-left:auto;padding-left:4px;color:#6b6259}
 .strip{display:flex;gap:2px;margin-top:10px;height:20px}.strip i{flex:1;border-radius:2px}
+.photo{position:absolute;inset:0;background:url("og-classroom.jpg") 62% center/cover}
+.shade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(27,46,40,.97) 0,rgba(27,46,40,.93) 520px,rgba(27,46,40,.45) 760px,rgba(27,46,40,.30) 1200px)}
+.glow{display:none}
 </style></head><body>
-<div class="glow"></div>
+<div class="photo"></div><div class="shade"></div><div class="glow"></div>
 <img class="logo" src="../public/logo/wivoza-lockup-dark.png">
 <div class="eyebrow">Coaching for your content and your teaching</div>
 <h1>A coach after every <span>lesson.</span></h1>
