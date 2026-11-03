@@ -87,7 +87,7 @@ import {
   speechRateMetric,
   LOW_CAPTURE_PCT,
 } from '../lib/reportConfidence'
-import { buildNextTimeItems, workedNote, type NoticeCandidate } from '../lib/reportHighlights'
+import { buildContentExtras, buildNextTimeItems, workedNote, type NoticeCandidate } from '../lib/reportHighlights'
 import { checkCount } from '../lib/questionMix'
 import { focusLineKey, lineIgnoresPause, stepIgnoresPause } from '../lib/focusLine'
 import { shownWaitTime } from '../lib/pauseGates'
@@ -2710,6 +2710,10 @@ type TryNextTimeChoice = {
   setChoosing: (v: boolean) => void
   skipped: Set<string>
   setSkipped: (fn: (prev: Set<string>) => Set<string>) => void
+  /// The Content Specialist's topic lists start unticked, so these are the
+  /// ones the teacher ticked rather than the ones they left out.
+  picked: Set<string>
+  setPicked: (fn: (prev: Set<string>) => Set<string>) => void
 }
 
 function TryNextTimeList({
@@ -2736,20 +2740,25 @@ function TryNextTimeList({
   const navigate = useNavigate()
   // The one focus has its own card above; it goes to planning first.
   const items = buildNextTimeItems(session).filter((item) => item.id !== focusId)
-  const { choosing, setChoosing, skipped, setSkipped } = choice
+  const extras = buildContentExtras(session)
+  const { choosing, setChoosing, skipped, setSkipped, picked, setPicked } = choice
   const printing = usePrintAll()
   if (items.length === 0 && !focusText) return null
   const open = openProp || printing || choosing
   const chosen = items.filter((item) => !skipped.has(item.id))
+  const pickedStuck = extras.filter((x) => x.kind === 'stuck' && picked.has(x.id))
+  const pickedWays = extras.filter((x) => x.kind === 'way' && picked.has(x.id))
+  const pickedCount = pickedStuck.length + pickedWays.length
 
-  function toggle(id: string) {
-    setSkipped((prev) => {
+  function flip(set: (fn: (prev: Set<string>) => Set<string>) => void, id: string) {
+    set((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
   }
+  const toggle = (id: string) => flip(setSkipped, id)
 
   function planNextLesson() {
     setPlanningPrefill({
@@ -2759,6 +2768,10 @@ function TryNextTimeList({
         'From the debrief of my last lesson with this class, build these into the plan:',
         ...(focusText ? [`- My one focus: ${focusText}`] : []),
         ...chosen.map((item) => `- ${item.lead ? `${item.lead}: ` : ''}${item.text}`),
+        ...(pickedStuck.length
+          ? ['', 'Where students may get stuck on this topic — build in a quick check for each:', ...pickedStuck.map((x) => `- ${x.text}`)]
+          : []),
+        ...(pickedWays.length ? ['', 'Ways in to use in the plan:', ...pickedWays.map((x) => `- ${x.text}`)] : []),
       ].join('\n'),
       source: `${sessionTitle(session)}, ${new Date(session.sessionDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`,
     })
@@ -2770,12 +2783,14 @@ function TryNextTimeList({
       <button
         type="button"
         onClick={planNextLesson}
-        disabled={chosen.length === 0 && !focusText}
+        disabled={chosen.length === 0 && pickedCount === 0 && !focusText}
         className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
       >
-        {items.length === 0
+        {items.length === 0 && pickedCount === 0
           ? 'Plan the next lesson with this focus →'
-          : `Plan the next lesson with ${chosen.length === items.length ? 'all of these' : `${chosen.length} of these`} →`}
+          : `Plan the next lesson with ${
+              chosen.length === items.length && pickedCount === 0 ? 'all of these' : `${chosen.length + pickedCount} of these`
+            } →`}
       </button>
       <button type="button" onClick={() => setChoosing(false)} className="text-sm font-medium text-ink-soft hover:text-ink">
         Not now
@@ -2798,7 +2813,7 @@ function TryNextTimeList({
                 // Choosing happens on the list under the focus, so it opens
                 // and comes into view.
                 setChoosing(true)
-                if (items.length > 0) {
+                if (items.length > 0 || extras.length > 0) {
                   onOpen()
                   requestAnimationFrame(() => document.getElementById('try-next-time')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
                 }
@@ -2815,7 +2830,31 @@ function TryNextTimeList({
     )
   }
 
-  if (!open || items.length === 0) return null
+  if (!open || (items.length === 0 && !(choosing && extras.length > 0))) return null
+  const extraGroup = (kind: 'stuck' | 'way', heading: string) => {
+    const list = extras.filter((x) => x.kind === kind)
+    if (list.length === 0) return null
+    return (
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">{heading}</p>
+        <ul className="mt-1.5 flex flex-col gap-2">
+          {list.map((x) => (
+            <li key={x.id}>
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={picked.has(x.id)}
+                  onChange={() => flip(setPicked, x.id)}
+                  className="mt-1 h-4 w-4 shrink-0 accent-forest"
+                />
+                <span className="text-sm text-ink">{x.text}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
   return (
     <div id="try-next-time" className="flex scroll-mt-6 flex-col gap-4 rounded-3xl bg-peach-tint/70 p-5 sm:p-6">
       <div>
@@ -2857,6 +2896,16 @@ function TryNextTimeList({
           </li>
         ))}
       </ul>
+      {choosing && extras.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-[#E8C9B4] bg-cream-card/60 p-4">
+          <div>
+            <p className="text-sm font-semibold text-ink">From the Content Specialist</p>
+            <p className="mt-0.5 text-xs text-ink-soft">About the topic, not this lesson. Tick any if your next class stays on it.</p>
+          </div>
+          {extraGroup('stuck', 'Where students get stuck')}
+          {extraGroup('way', 'Ways in, next time')}
+        </div>
+      )}
       {choosing && <div className="border-t border-[#E8C9B4] pt-4">{planButtons}</div>}
     </div>
   )
@@ -2916,6 +2965,7 @@ function SummaryTab({
   const moreCount = tryItems.filter((item) => item.id !== focus?.id).length
   const [choosing, setChoosing] = useState(false)
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
+  const [picked, setPicked] = useState<Set<string>>(new Set())
   const triedFocusLines = useRef(new Set<string>())
   useEffect(() => {
     if (!focus || !focusKey || focusLine || triedFocusLines.current.has(focusKey)) return
@@ -3045,7 +3095,7 @@ function SummaryTab({
     onOpen: () => setMoreOpen(true),
     onMakeFocus: (id: string) => void chooseFocus(id),
     onUpdate,
-    choice: { choosing, setChoosing, skipped, setSkipped },
+    choice: { choosing, setChoosing, skipped, setSkipped, picked, setPicked },
   }
 
   return (

@@ -215,6 +215,22 @@ export function buildNextTimeItems(
   return items
 }
 
+export type ContentExtra = { id: string; kind: 'stuck' | 'way'; text: string }
+
+/// The Content Specialist's topic lists — where students get stuck and ways
+/// in — offered only when planning, and unticked: they are about the topic,
+/// not this lesson, so they help only if the next class stays on it.
+export function buildContentExtras(
+  session: Pick<AudioSessionWithSegments, 'contentNotes' | 'lessonContent'>,
+): ContentExtra[] {
+  const stuck = session.contentNotes?.misconceptions ?? []
+  const ways = session.lessonContent?.connectionIdeas ?? session.contentNotes?.connectionIdeas ?? []
+  return [
+    ...stuck.filter((t) => t.trim()).map((t, i) => ({ id: `stuck-${i}`, kind: 'stuck' as const, text: t.trim() })),
+    ...ways.filter((t) => t.trim()).map((t, i) => ({ id: `way-${i}`, kind: 'way' as const, text: t.trim() })),
+  ]
+}
+
 /// The content specialist's "What worked" note, for Keep doing.
 export function workedNote(session: Pick<AudioSessionWithSegments, 'contentNotes'>): string | null {
   return session.contentNotes?.notes.find((n) => n.label === 'What worked')?.text.trim() || null

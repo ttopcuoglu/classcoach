@@ -779,6 +779,10 @@ function previewReport(): Json {
         { term: 'feudalism', teacherCount: 3, studentCount: 0 },
         { term: 'serf', teacherCount: 2, studentCount: 1 },
       ],
+      connectionIdeas: [
+        'Open with a town that emptied when its factory closed: what made people leave, and was it one cause or several?',
+        'Compare an empire to a sports dynasty that faded: which causes came from inside the team, which from outside?',
+      ],
       subject: 'world history',
     },
     contentNotes: {

@@ -122,6 +122,26 @@ struct NextTimeItem: Identifiable, Equatable {
     }
 }
 
+/// The Content Specialist's topic lists — where students get stuck and ways
+/// in — offered only when planning, and unticked: they are about the topic,
+/// not this lesson. Mirrors `buildContentExtras` in reportHighlights.ts.
+struct ContentExtra: Identifiable, Equatable {
+    enum Kind { case stuck, way }
+    let id: String
+    let kind: Kind
+    let text: String
+
+    static func items(for session: AudioSessionWithSegments) -> [ContentExtra] {
+        func clean(_ list: [String]) -> [String] {
+            list.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        }
+        let stuck = clean(session.contentNotes?.misconceptions ?? [])
+        let ways = clean(session.lessonContent?.connectionIdeas ?? session.contentNotes?.connectionIdeas ?? [])
+        return stuck.enumerated().map { ContentExtra(id: "stuck-\($0.offset)", kind: .stuck, text: $0.element) }
+            + ways.enumerated().map { ContentExtra(id: "way-\($0.offset)", kind: .way, text: $0.element) }
+    }
+}
+
 /// Each counted question as recall or explain & reason — mirrors
 /// `classifyQuestions` in AudioCoaching.tsx, so Summary and the web count the
 /// same questions the same way: the finer read where it found the question,
@@ -328,6 +348,8 @@ struct OverviewTab: View {
     /// teacher reading their report should see what to try, not a form.
     @State private var choosingForPlan = false
     @State private var skippedForPlan: Set<String> = []
+    /// Content Specialist extras start unticked: these are the ticked ones.
+    @State private var pickedForPlan: Set<String> = []
     /// Try next time stays closed until the focus card's "Want more to try?"
     /// opens it — mirrors the web Summary since 3039d6c.
     @State private var moreOpen = false
@@ -750,9 +772,17 @@ struct OverviewTab: View {
 
     // MARK: Try next time
 
-    private func planningPrefill(_ chosenItems: [NextTimeItem]) -> PlanningPrefill {
+    private func planningPrefill(_ chosenItems: [NextTimeItem], _ pickedExtras: [ContentExtra]) -> PlanningPrefill {
         let focusLine = focus.map { ["- My one focus: \($0.text)"] } ?? []
-        let lines = focusLine + chosenItems.map { "- \($0.lead.map { "\($0): " } ?? "")\($0.text)" }
+        var lines = focusLine + chosenItems.map { "- \($0.lead.map { "\($0): " } ?? "")\($0.text)" }
+        let stuck = pickedExtras.filter { $0.kind == .stuck }
+        let ways = pickedExtras.filter { $0.kind == .way }
+        if !stuck.isEmpty {
+            lines += ["", "Where students may get stuck on this topic \u{2014} build in a quick check for each:"] + stuck.map { "- \($0.text)" }
+        }
+        if !ways.isEmpty {
+            lines += ["", "Ways in to use in the plan:"] + ways.map { "- \($0.text)" }
+        }
         return PlanningPrefill(
             subject: session.classSubject ?? session.lessonContent?.subject,
             gradeLevel: session.gradeLevel,
@@ -789,6 +819,42 @@ struct OverviewTab: View {
         }
     }
 
+    /// "From the Content Specialist": where students get stuck and ways in,
+    /// each unticked until the teacher ticks it.
+    private func contentExtrasGroup(_ extras: [ContentExtra]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("From the Content Specialist").font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
+            Text("About the topic, not this lesson. Tick any if your next class stays on it.")
+                .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach([(ContentExtra.Kind.stuck, "WHERE STUDENTS GET STUCK"), (.way, "WAYS IN, NEXT TIME")], id: \.1) { kind, heading in
+                let list = extras.filter { $0.kind == kind }
+                if !list.isEmpty {
+                    Text(heading).font(.caption2.weight(.bold)).foregroundStyle(AppTheme.terracotta600).padding(.top, 4)
+                    ForEach(list) { extra in
+                        Button {
+                            if pickedForPlan.contains(extra.id) { pickedForPlan.remove(extra.id) } else { pickedForPlan.insert(extra.id) }
+                        } label: {
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: pickedForPlan.contains(extra.id) ? "checkmark.square.fill" : "square")
+                                    .foregroundStyle(AppTheme.forest)
+                                Text(extra.text).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(AppTheme.hairline, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+        .padding(.top, 4)
+    }
+
     /// The school focus idea and the planning question, closing the page.
     /// On a phone the ticks appear right here on a yes, rather than up at the
     /// list, so choosing never means scrolling back to the top.
@@ -796,6 +862,8 @@ struct OverviewTab: View {
         let rest = items.filter { $0.id != focus?.id }
         if !rest.isEmpty || focus != nil {
             let chosenItems = rest.filter { !skippedForPlan.contains($0.id) }
+            let extras = ContentExtra.items(for: session)
+            let pickedExtras = extras.filter { pickedForPlan.contains($0.id) }
             VStack(alignment: .leading, spacing: 8) {
                 SchoolFocusIdeaRow(session: session, onUpdate: onUpdate)
                 if !choosingForPlan {
@@ -829,17 +897,20 @@ struct OverviewTab: View {
                         }
                         .buttonStyle(.plain)
                     }
+                    if !extras.isEmpty {
+                        contentExtrasGroup(extras)
+                    }
                     NavigationLink {
-                        LessonPlanningView(prefill: planningPrefill(chosenItems))
+                        LessonPlanningView(prefill: planningPrefill(chosenItems, pickedExtras))
                     } label: {
-                        Text(rest.isEmpty ? "Plan the next lesson with this focus \u{2192}"
-                             : chosenItems.count == rest.count ? "Plan the next lesson with all of these \u{2192}"
-                             : "Plan the next lesson with \(chosenItems.count) of these \u{2192}")
+                        Text(rest.isEmpty && pickedExtras.isEmpty ? "Plan the next lesson with this focus \u{2192}"
+                             : chosenItems.count == rest.count && pickedExtras.isEmpty ? "Plan the next lesson with all of these \u{2192}"
+                             : "Plan the next lesson with \(chosenItems.count + pickedExtras.count) of these \u{2192}")
                             .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.cream)
                             .padding(.horizontal, 16).padding(.vertical, 9)
                             .background(AppTheme.terracotta, in: Capsule())
                     }
-                    .disabled(chosenItems.isEmpty && focus == nil)
+                    .disabled(chosenItems.isEmpty && pickedExtras.isEmpty && focus == nil)
                     Button("Not now") { choosingForPlan = false }
                         .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                 }
