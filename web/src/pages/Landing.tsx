@@ -27,6 +27,7 @@ import {
 } from '../components/icons'
 import { introVideo, MEET_PLAYLIST_ID, VideoFacade } from '../components/TrainingVideos'
 import FooterContact from '../components/FooterContact'
+import RecordYourWay from '../components/RecordYourWay'
 import { PLUS_DEBRIEF_PER_MONTH, PLUS_MONTHLY_PRICE, PLUS_YEARLY_PER_MONTH, PLUS_YEARLY_PRICE } from '../lib/pricing'
 
 const PROCESS = [
@@ -662,6 +663,8 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           ))}
         </div>
       </section>
+
+      <RecordYourWay />
 
       {/* Features, as three teacher moments */}
       <section id="what-you-can-do" className="bg-mint-tint/50 py-16">

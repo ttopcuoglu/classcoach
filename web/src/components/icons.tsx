@@ -437,6 +437,24 @@ export function BrowserIcon({ className }: IconProps) {
   )
 }
 
+export function WatchIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className} aria-hidden="true">
+      <rect x="6.5" y="6" width="11" height="12" rx="3" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 6l.6-3h4.8l.6 3M9 18l.6 3h4.8l.6-3" />
+    </svg>
+  )
+}
+
+export function LaptopIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className} aria-hidden="true">
+      <rect x="4.5" y="5" width="15" height="10.5" rx="1.75" />
+      <path strokeLinecap="round" d="M2.5 19h19" />
+    </svg>
+  )
+}
+
 export function PhoneIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} stroke="currentColor" className={className} aria-hidden="true">
