@@ -2925,9 +2925,9 @@ function SummaryTab({
     }
   }
 
-  // How the lesson moved, then the lesson's eight numbers: Talk &
-  // Participation's four shares and pace, then Questions, Think Time and
-  // Checks (2026-11-02).
+  // How the lesson moved, then the lesson's seven numbers: Talk &
+  // Participation's four shares and pace, then Questions and Checks
+  // (2026-11-02).
   const { questions, selfAnswered: answeredSelf } = countedQuestions(session)
   const mixCount = (k: MixKey) => questions.filter((q) => q.mix === k).length
   const arc = moves?.arc ?? []
@@ -2949,11 +2949,6 @@ function SummaryTab({
   // 28 a tab away read as two different numbers.
   const roomPct = (n: number) => getPresenceMetric(Math.round(n))
   const wpm = session.metricsDetail?.teacherWordsPerMinute ?? null
-  // Think Time never asks who spoke. It is stored by the server at
-  // analysis; a lesson from before shows "—".
-  const think = session.metricsLogs?.thinkTime
-  const thinkTimed = think ? think.questions.filter((q) => q.sec != null).length : 0
-  const notYet = 'Worked out for lessons analysed from now on.'
   // The voices take the colours the Talk & Participation strip draws them in.
   const tiles: { label: string; metric: ConfidentMetric; unit?: string; note?: string; accent: Accent; swatch?: string }[] = [
     ...(room
@@ -2997,22 +2992,6 @@ function SummaryTab({
       metric: getCountMetric({ count: session.questionLog ? questions.length : session.questionCount, recordedSec: session.durationSec ?? 0 }),
       note: answeredSelf.length > 0 ? `+ ${answeredSelf.length} you answered` : undefined,
       accent: ACCENTS.mint,
-    },
-    // Think Time: after each question, how long until anyone spoke — the
-    // teacher or a student (server lib/thinkTime.ts).
-    {
-      label: 'Think Time',
-      metric:
-        think?.average != null
-          ? { state: 'measured', display: think.average.toFixed(1) }
-          : {
-              state: 'not_measurable',
-              display: '—',
-              reason: !think ? notYet : think.reason === 'no_questions' ? 'No questions in this recording.' : 'No question could be timed.',
-            },
-      unit: 's',
-      note: think?.average != null ? `from ${thinkTimed} question${thinkTimed === 1 ? '' : 's'}` : undefined,
-      accent: ACCENTS.olive,
     },
     // The checks Questioning & Checking lists, so the two never disagree:
     // moments the read found were not checks are left out. Lessons from
@@ -3218,7 +3197,6 @@ function SummaryTab({
           <div><dt className="inline font-semibold text-ink">Silence · </dt><dd className="inline">no talk: quiet work, pauses, a settled room.</dd></div>
           <div><dt className="inline font-semibold text-ink">Pace · </dt><dd className="inline">your words a minute, short pauses included. Everyday conversation usually runs about {CONVERSATIONAL_WPM_RANGE}.</dd></div>
           <div><dt className="inline font-semibold text-ink">Questions · </dt><dd className="inline">the questions you asked, as the transcript caught them.</dd></div>
-          <div><dt className="inline font-semibold text-ink">Think Time · </dt><dd className="inline">after each question, how long the room was quiet before anyone spoke — you or a student — averaged. Three seconds or more gives most students time to think.</dd></div>
           <div><dt className="inline font-semibold text-ink">Checks · </dt><dd className="inline">the times you checked for understanding, as the transcript caught them. It counts the checks, not whether students understood.</dd></div>
         </dl>
       </DetailsOpenOnPaper>
@@ -5774,22 +5752,34 @@ const INVITE_FORMAT_LABEL = {
 const EXTEND_KIND_LABEL = { probe: 'Probing', reasoning: 'Asking for reasoning', build_on_peer: 'Building on a classmate' } as const
 
 /// The lesson summary on Summary: the first paragraph — what the lesson was
-/// about — with the other two behind "Read more", beside Wivo's mark.
+/// about — then what went well behind "Read more", beside Wivo's mark. The
+/// third paragraph is the recommendation (one idea to take the content
+/// further), so it is always shown, set apart with its own label
+/// (2026-11-02). A shorter summary, from a thin recording, has no
+/// recommendation paragraph and shows as it is.
 function SummaryNoteCard({ text }: { text: string }) {
   const [openState, setOpen] = useState(false)
   // Everything is open on paper.
   const open = openState || usePrintAll()
   const paras = splitParagraphs(text.trim())
+  const idea = paras.length >= 3 ? paras[paras.length - 1] : null
+  const body = idea ? paras.slice(0, -1) : paras
   return (
     <div className="flex items-start gap-3 rounded-2xl bg-mint-tint/70 p-5">
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-forest font-heading text-sm font-bold text-gold">W</span>
       <div className="flex flex-col gap-3">
-        {(open ? paras : paras.slice(0, 1)).map((para, i) => (
+        {(open ? body : body.slice(0, 1)).map((para, i) => (
           <p key={i} className="text-base leading-relaxed text-ink">
             {para}
           </p>
         ))}
-        {paras.length > 1 && (
+        {idea && (
+          <div className="rounded-r-xl border-l-4 border-terracotta bg-cream-card/80 px-4 py-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-terracotta-600">An idea for next time</p>
+            <p className="mt-1 text-base italic leading-relaxed text-ink">{idea}</p>
+          </div>
+        )}
+        {body.length > 1 && (
           <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline print:hidden">
             {open ? 'Show less' : 'Read more'}
           </button>

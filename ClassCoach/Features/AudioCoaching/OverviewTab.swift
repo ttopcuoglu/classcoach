@@ -418,9 +418,13 @@ struct OverviewTab: View {
     @State private var noteOpen = false
 
     /// Wivo's note: the "W" mark beside the summary's first paragraph — what
-    /// the lesson was about — with the other two behind "Read more".
+    /// the lesson was about — with what went well behind "Read more". The
+    /// third paragraph is the recommendation, always shown and set apart with
+    /// its own label — mirrors SummaryNoteCard in AudioCoaching.tsx.
     private func noteCard(_ text: String) -> some View {
-        let paras = text.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let all = text.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let idea = all.count >= 3 ? all.last : nil
+        let paras = idea != nil ? Array(all.dropLast()) : all
         return HStack(alignment: .top, spacing: 12) {
             Text("W")
                 .font(.heading(.subheadline)).foregroundStyle(AppTheme.gold)
@@ -430,6 +434,18 @@ struct OverviewTab: View {
                 ForEach(noteOpen ? paras : Array(paras.prefix(1)), id: \.self) { para in
                     Text(para).font(.body).foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+                if let idea {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("AN IDEA FOR NEXT TIME").font(.caption.weight(.bold)).foregroundStyle(AppTheme.terracotta600)
+                        Text(idea).font(.body.italic()).foregroundStyle(AppTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.card.opacity(0.8))
+                    .overlay(alignment: .leading) { Rectangle().fill(AppTheme.terracotta).frame(width: 4) }
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
                 if paras.count > 1 {
                     Button(noteOpen ? "Show less" : "Read more") { withAnimation { noteOpen.toggle() } }
@@ -585,11 +601,9 @@ struct OverviewTab: View {
         let teacher = session.teacherTalkPct
         let students = session.studentTalkPct
         let silence = teacher != nil && students != nil ? max(0, ((100 - teacher! - students!) * 10).rounded() / 10) : nil
-        let notYet = "Worked out for lessons analysed from now on."
         var out: [Tile]
-        // The eight numbers (2026-11-02): Talk & Participation's four shares
-        // and pace, then Questions, Think Time and Checks — the same as the
-        // web Summary.
+        // The seven numbers (2026-11-02): Talk & Participation's four shares
+        // and pace, then Questions and Checks — the same as the web Summary.
         if let room = RoomBreakdown(session.roomTrace) {
             let voice = { (kind: RoomBreakdown.Kind, label: String) in
                 Tile(label: label, value: Self.whole(room.pct[kind]), unit: "%", tint: kind.color, swatch: kind.color)
@@ -617,16 +631,6 @@ struct OverviewTab: View {
         out.append(Tile(label: "Questions", value: session.questionLog != nil ? "\(counted.questions.count)" : session.questionCount.map { "\($0)" },
                         unit: "", tint: Color(hex: 0xDCE7DF),
                         note: counted.selfAnswered.isEmpty ? nil : "+ \(counted.selfAnswered.count) you answered"))
-        // Think Time: after each question, how long until anyone spoke, as the
-        // server stored it (server lib/thinkTime.ts). Teacher Pause Time stays
-        // on Questioning & Checking.
-        let think = session.thinkTime
-        let timed = think?.questions.filter { $0.sec != nil }.count ?? 0
-        out.append(Tile(label: "Think Time", value: think?.average.map { String(format: "%.1f", $0) }, unit: "s", tint: Color(hex: 0xE6EBD2),
-                        hint: think == nil ? notYet
-                            : think?.average != nil ? nil
-                            : think?.reason == "no_questions" ? "No questions in this recording." : "No question could be timed.",
-                        note: think?.average != nil ? "from \(timed) question\(timed == 1 ? "" : "s")" : nil))
         // The checks Questioning & Checking lists, left-out non-checks and all;
         // older lessons with no log fall back to the stored count.
         let checks = ThinkingPause.checkCount(session)
@@ -669,7 +673,6 @@ struct OverviewTab: View {
                     readingLine("Silence", "no talk: quiet work, pauses, a settled room.")
                     readingLine("Pace", "your words a minute, short pauses included. Everyday conversation usually runs about \(AudioInsights.conversationalWpmRange).")
                     readingLine("Questions", "the questions you asked, as the transcript caught them.")
-                    readingLine("Think Time", "after each question, how long the room was quiet before anyone spoke \u{2014} you or a student \u{2014} averaged. Three seconds or more gives most students time to think.")
                     readingLine("Checks", "the times you checked for understanding, as the transcript caught them. It counts the checks, not whether students understood.")
                 }
                 .padding(.top, 6)
