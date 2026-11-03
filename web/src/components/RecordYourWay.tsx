@@ -118,9 +118,10 @@ export default function RecordYourWay() {
           <img src="/badges/app-store-badge.svg" alt="Download on the App Store" className="h-10 w-auto" />
         </a>
       </div>
-      <div className="grid gap-6 sm:grid-cols-3">
+      {/* Three across from sm up; a swipe row on a phone. */}
+      <div className="-mx-6 flex snap-x snap-mandatory gap-4 overflow-x-auto px-6 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-6 sm:overflow-visible sm:px-0 sm:pb-0">
         {WAYS.map(({ Scene, icon: Icon, card, title, description, pill }) => (
-          <div key={title} className={`flex flex-col rounded-3xl p-6 ${card}`}>
+          <div key={title} className={`flex w-[80%] shrink-0 snap-center flex-col rounded-3xl p-6 sm:w-auto ${card}`}>
             <Scene />
             <div className="mt-4 flex items-center gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-forest text-gold">

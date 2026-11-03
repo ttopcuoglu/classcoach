@@ -212,7 +212,7 @@ function SampleCard({ feature, eyebrow, title, before, after, pdf, scene }: (typ
       href={pdf}
       target="_blank"
       rel="noreferrer"
-      className="group flex flex-col rounded-2xl border border-hairline bg-cream-card p-6 shadow-sm transition-shadow hover:shadow-md"
+      className="group flex w-[85%] shrink-0 snap-center flex-col rounded-2xl border border-hairline bg-cream-card p-6 shadow-sm transition-shadow hover:shadow-md md:w-auto"
     >
       {/* A drawing of the moment the sample comes from, so the band is not all
           text. See components/SampleScenes. */}
@@ -342,7 +342,7 @@ function ReportMockup() {
         </div>
         {/* The top of the Summary: the one focus, the lesson, how it moved and
             its numbers. The rest is cut off on purpose. */}
-        <div className="h-[30rem] overflow-hidden rounded-xl bg-cream sm:h-[34rem]">
+        <div className="h-[24rem] overflow-hidden rounded-xl bg-cream sm:h-[34rem]">
           <img
             src="/samples/hero-debrief-summary.png"
             alt="A sample Lesson Debrief Summary for an invented biology lesson: one thing to try next lesson, what the lesson covered, how the lesson moved, and the lesson's numbers."
@@ -595,7 +595,11 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 </svg>
               </span>
             </h1>
-            <p className="mt-6 max-w-md text-lg text-cream/80">
+            <p className="mt-6 max-w-md text-lg text-cream/80 sm:hidden">
+              Record a lesson. See how you taught the content and how the lesson ran, with one thing to
+              try next class.
+            </p>
+            <p className="mt-6 hidden max-w-md text-lg text-cream/80 sm:block">
               Record a lesson and Wivoza reads how you taught the content (your explanations, examples
               and models) and how the lesson ran: the questions you asked and who did the talking. You
               get what worked, where it could go further, and one thing to try next class, each tied to
@@ -638,7 +642,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 </span>
               ))}
             </div>
-            <p className="mt-4 flex items-center gap-2.5 text-sm text-cream/70">
+            <p className="mt-4 hidden items-center gap-2.5 text-sm text-cream/70 sm:flex">
               <GraduationCapIcon className="h-5 w-5 text-gold" />
               Built with educators, for educators
             </p>
@@ -691,20 +695,23 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             evaluation, paperwork, or pressure.
           </p>
         </div>
-        <div className="grid gap-6 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3 sm:gap-6">
           {PROCESS.map(({ icon: Icon, tint, title, description }, index) => (
             <div key={title} className="relative flex items-start gap-6 sm:block">
-              <div className={`flex-1 rounded-3xl p-7 ${TINT_STYLES[tint].card}`}>
-                <div className="flex items-start justify-between">
-                  <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${TINT_STYLES[tint].badge}`}>
-                    <Icon className="h-6 w-6" />
+              {/* On a phone a compact row: icon beside the words, no big number. */}
+              <div className={`flex flex-1 items-start gap-4 rounded-3xl p-5 sm:block sm:p-7 ${TINT_STYLES[tint].card}`}>
+                <div className="flex shrink-0 items-start justify-between">
+                  <span className={`flex h-10 w-10 items-center justify-center rounded-2xl sm:h-12 sm:w-12 ${TINT_STYLES[tint].badge}`}>
+                    <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
                   </span>
-                  <span className="font-heading text-3xl font-extrabold text-forest/15">
+                  <span className="hidden font-heading text-3xl font-extrabold text-forest/15 sm:inline">
                     {String(index + 1).padStart(2, '0')}
                   </span>
                 </div>
-                <h3 className="mt-5 font-heading text-xl font-bold text-forest">{title}</h3>
-                <p className="mt-2 text-sm text-ink-soft">{description}</p>
+                <div>
+                  <h3 className="font-heading text-lg font-bold text-forest sm:mt-5 sm:text-xl">{title}</h3>
+                  <p className="mt-1 text-sm text-ink-soft sm:mt-2">{description}</p>
+                </div>
               </div>
               {index < PROCESS.length - 1 && (
                 <ArrowRightIcon className="hidden h-5 w-5 shrink-0 self-center text-ink-soft/50 sm:absolute sm:-right-8 sm:top-1/2 sm:block sm:-translate-y-1/2" />
@@ -734,7 +741,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
 
           <div className="grid gap-6 lg:grid-cols-3">
             {MOMENTS.map(({ moment, when, features }, columnIndex) => (
-              <div key={moment} className="flex flex-col">
+              <div key={moment} className="flex min-w-0 flex-col">
                 <div className="flex items-center gap-3">
                   <span
                     className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl font-heading text-base font-bold ${
@@ -746,11 +753,12 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                   <h3 className="font-heading text-xl font-extrabold text-forest">{moment}</h3>
                 </div>
                 <p className="mt-2 text-sm text-ink-soft">{when}</p>
-                <div className="mt-4 flex flex-1 flex-col gap-3">
+                {/* A swipe row per moment on a phone; stacked from lg up. */}
+                <div className="mt-4 -mx-6 flex snap-x snap-mandatory gap-4 overflow-x-auto px-6 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:flex-1 lg:flex-col lg:gap-3 lg:overflow-visible lg:px-0 lg:pb-0">
                   {features.map(({ icon: Icon, tint, title, slug, description }) => (
                     <div
                       key={title}
-                      className="flex flex-1 items-start gap-4 rounded-3xl bg-cream-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+                      className="flex w-[80%] shrink-0 snap-center items-start gap-4 rounded-3xl bg-cream-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md lg:w-auto lg:flex-1"
                     >
                       <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${TINT_STYLES[tint].badge}`}>
                         <Icon className="h-5 w-5" />
@@ -827,7 +835,13 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <h3 className="mt-2 font-heading text-2xl font-bold leading-snug sm:text-3xl">
               Twenty-two minutes of class, read like a content specialist would<span className="text-gold">.</span>
             </h3>
-            <p className="mt-3 text-sm leading-relaxed text-cream/75">
+            {/* The full description from sm up; on a phone, two lines, so the
+                notes beside it are what fills the screen. */}
+            <p className="mt-3 text-sm leading-relaxed text-cream/75 sm:hidden">
+              Your explanations, examples and questions, each tied to its moment, then one focus for next
+              lesson. An invented class.
+            </p>
+            <p className="mt-3 hidden text-sm leading-relaxed text-cream/75 sm:block">
               How you explained the idea, the examples and models you chose, the key terms students picked
               up, and the questions that asked them to think — each with the exact moment and timestamp.
               Then one focus for next lesson that carries straight into your next plan. Talk time, pace
@@ -848,7 +862,10 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             ))}
           </div>
         </a>
-        <div className="grid gap-6 md:grid-cols-2">
+        {/* Side by side from md up; on a phone a swipe row, one card at a time
+            with the next peeking in, instead of four cards stacked five
+            screens deep. */}
+        <div className="-mx-6 flex snap-x snap-mandatory gap-4 overflow-x-auto px-6 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:grid md:grid-cols-2 md:gap-6 md:overflow-visible md:px-0 md:pb-0">
           {SAMPLES.map((sample) => (
             <SampleCard key={sample.title} {...sample} />
           ))}
