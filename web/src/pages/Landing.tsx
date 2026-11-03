@@ -873,8 +873,8 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       </section>
 
       {/* Quote / growth stat */}
-      <section id="why-wivoza" className="mx-auto w-full max-w-6xl px-6 py-20">
-        <div className="grid gap-14 lg:grid-cols-2 lg:items-center">
+      <section id="why-wivoza" className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-20">
+        <div className="grid gap-10 lg:grid-cols-2 lg:items-center lg:gap-14">
           <div>
             <QuoteIcon className="h-10 w-10 text-gold" />
             <blockquote className="mt-4 font-heading text-3xl font-extrabold leading-tight text-forest sm:text-4xl">
@@ -899,7 +899,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
 
           <div className="relative">
             <div aria-hidden="true" className="absolute inset-0 translate-x-3 translate-y-3 rounded-3xl bg-gold" />
-            <div className="relative rounded-3xl bg-forest p-8 text-cream">
+            <div className="relative rounded-3xl bg-forest p-6 text-cream sm:p-8">
               {/* One of the seven measures My Growth really charts — questions
                   beyond recall, the ones asking students to explain or reason —
                   with an illustration's numbers, said to be an example. The
@@ -916,7 +916,8 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                   <div key={i} className="flex-1 rounded-t-lg bg-gold" style={{ height: `${h}px` }} />
                 ))}
               </div>
-              <div className="mt-7 rounded-xl bg-forest-soft p-4">
+              {/* The chart's caption; on a phone the bars and their label say it. */}
+              <div className="mt-7 hidden rounded-xl bg-forest-soft p-4 sm:block">
                 <p className="text-sm font-semibold">More of your questions asked students to think.</p>
                 <p className="mt-1 text-xs text-cream/70">
                   Each bar is one recorded lesson: the questions that asked students to explain or reason.
@@ -928,9 +929,9 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="bg-mint-tint/50 py-16">
+      <section id="pricing" className="bg-mint-tint/50 py-12 sm:py-16">
         <div className="mx-auto w-full max-w-6xl px-6">
-          <div className="mx-auto mb-11 max-w-2xl text-center">
+          <div className="mx-auto mb-8 max-w-2xl text-center sm:mb-11">
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
               Simple, honest pricing
             </span>
@@ -941,11 +942,11 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           </div>
 
           <div className="mx-auto grid max-w-3xl gap-6 sm:grid-cols-2">
-            <div className="rounded-2xl border border-hairline bg-cream-card p-8 shadow-sm">
+            <div className="rounded-2xl border border-hairline bg-cream-card p-6 shadow-sm sm:p-8">
               <h3 className="font-heading text-xl font-bold text-forest">Free</h3>
               <p className="mt-1 text-sm text-ink-soft">For getting started</p>
-              <p className="mt-6 font-heading text-4xl font-extrabold text-forest">$0</p>
-              <ul className="mt-6 space-y-3 text-sm text-ink-soft">
+              <p className="mt-4 font-heading text-4xl font-extrabold text-forest sm:mt-6">$0</p>
+              <ul className="mt-4 space-y-3 text-sm text-ink-soft sm:mt-6">
                 <li className="flex items-start gap-2.5">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
                   Talk It Through, free for everyone
@@ -961,26 +962,26 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               </ul>
               <a
                 href="#get-started"
-                className="mt-8 block rounded-full border border-forest px-5 py-3 text-center text-sm font-semibold text-forest transition-opacity hover:opacity-80"
+                className="mt-6 block rounded-full border border-forest px-5 py-3 text-center text-sm font-semibold text-forest transition-opacity hover:opacity-80 sm:mt-8"
               >
                 Start free
               </a>
             </div>
 
-            <div className="relative rounded-2xl border-2 border-terracotta bg-cream-card p-8 shadow-md">
+            <div className="relative rounded-2xl border-2 border-terracotta bg-cream-card p-6 shadow-md sm:p-8">
               <span className="absolute -top-3 left-8 rounded-full bg-terracotta px-3 py-1 text-xs font-semibold text-white">
                 Most popular
               </span>
               <h3 className="font-heading text-xl font-bold text-forest">Wivoza Plus</h3>
               <p className="mt-1 text-sm text-ink-soft">For teachers who want it all</p>
-              <p className="mt-6 flex items-baseline gap-1">
+              <p className="mt-4 flex items-baseline gap-1 sm:mt-6">
                 <span className="font-heading text-4xl font-extrabold text-forest">{PLUS_MONTHLY_PRICE}</span>
                 <span className="text-sm text-ink-soft">/month</span>
               </p>
               <p className="mt-1 text-sm text-ink-soft">
                 or {PLUS_YEARLY_PRICE} a year — about {PLUS_YEARLY_PER_MONTH} a month
               </p>
-              <ul className="mt-6 space-y-3 text-sm text-ink-soft">
+              <ul className="mt-4 space-y-3 text-sm text-ink-soft sm:mt-6">
                 <li className="flex items-start gap-2.5">
                   <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
                   Everything in Free
@@ -1003,12 +1004,13 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 </li>
               </ul>
               {/* Lesson Debrief is what Plus unlocks, so its report is the proof.
-                  A staged recording — no real class or student. */}
+                  A staged recording — no real class or student. Hidden on a
+                  phone, where the samples band just above already links it. */}
               <a
                 href="/samples/lesson-debrief.pdf"
                 target="_blank"
                 rel="noreferrer"
-                className="group mt-6 flex items-center gap-3 rounded-xl border border-hairline bg-cream p-3 transition-colors hover:border-terracotta/40"
+                className="group mt-6 hidden items-center sm:flex gap-3 rounded-xl border border-hairline bg-cream p-3 transition-colors hover:border-terracotta/40"
               >
                 <img
                   src="/samples/lesson-debrief.png"
@@ -1023,7 +1025,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               </a>
               <a
                 href="#get-started"
-                className="mt-8 block rounded-full bg-terracotta px-5 py-3 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                className="mt-6 block rounded-full bg-terracotta px-5 py-3 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90 sm:mt-8"
               >
                 Start free
               </a>
@@ -1035,7 +1037,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               as "my principal will be watching my lessons". */}
           <div
             id="for-schools"
-            className="mx-auto mt-8 grid max-w-4xl scroll-mt-24 gap-6 rounded-2xl bg-forest p-8 text-center sm:grid-cols-[1fr_auto] sm:items-center sm:text-left"
+            className="mx-auto mt-8 grid max-w-4xl scroll-mt-24 gap-6 rounded-2xl bg-forest p-6 text-center sm:p-8 sm:grid-cols-[1fr_auto] sm:items-center sm:text-left"
           >
             <div>
               <h3 className="font-heading text-lg font-bold text-cream">
@@ -1045,7 +1047,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 School leaders see school-wide trends and whether their PD is working, never a
                 teacher&rsquo;s recordings or coaching.
               </p>
-              <p className="mt-1.5 text-sm text-cream/60">
+              <p className="mt-1.5 hidden text-sm text-cream/60 sm:block">
                 District licensing gives every teacher Plus-level access, with support built for
                 your rollout.
               </p>
@@ -1070,10 +1072,10 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       </section>
 
       {/* Closing CTA + sign-up */}
-      <section id="get-started" className="bg-peach-tint py-20">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-10 px-6">
+      <section id="get-started" className="bg-peach-tint py-12 sm:py-20">
+        <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-6 px-6 sm:gap-10">
           <div className="max-w-xl text-center">
-            <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-gold text-forest">
+            <span className="mx-auto hidden h-10 w-10 items-center justify-center rounded-xl bg-gold text-forest sm:flex">
               <ChartBarIcon className="h-5 w-5" />
             </span>
             <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
