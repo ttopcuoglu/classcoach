@@ -294,6 +294,33 @@ const HERO_TALK_STRIP = (
   .split('')
   .map((c) => ({ t: 'teacher', s: 'student', o: 'other', q: 'quiet' })[c] as keyof typeof ROOM_COLOR)
 
+function TalkHeroCard({ className }: { className: string }) {
+  return (
+    <div className={`rounded-xl border border-hairline bg-cream-card p-3.5 text-left shadow-lg ${className}`}>
+        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-forest">Talk &amp; Participation</p>
+        <div className="mt-2 flex h-2.5 gap-0.5 overflow-hidden rounded-full">
+          {HERO_TALK.map(([kind, pct]) => (
+            <span key={kind} style={{ width: `${pct}%`, background: ROOM_COLOR[kind] }} />
+          ))}
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-semibold text-ink">
+          {HERO_TALK.map(([kind, pct]) => (
+            <div key={kind} className="flex items-center gap-1.5 whitespace-nowrap">
+              <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: ROOM_COLOR[kind] }} />
+              {ROOM_LABEL[kind]}
+              <span className="ml-auto text-ink-soft">{pct}%</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2.5 flex h-4 gap-px" aria-hidden="true">
+          {HERO_TALK_STRIP.map((kind, i) => (
+            <span key={i} className="flex-1 rounded-[2px]" style={{ background: ROOM_COLOR[kind] }} />
+          ))}
+        </div>
+      </div>
+  )
+}
+
 // A screenshot of the real report's Summary, taken from the dev preview with
 // the lesson swapped for an invented one (topic, date and every quoted line),
 // so no real class appears on the public site (see scripts/capture-hero.mjs),
@@ -346,30 +373,10 @@ function ReportMockup() {
       {/* The teaching half of the headline, beside the content half: the Talk &
           Participation card in the report's own colours. The numbers and the
           minute-by-minute strip belong to the same invented lesson, not a real
-          class. Hidden on a phone, where it would cover the report. */}
-      <div className="absolute -left-12 top-[19rem] hidden w-64 rounded-xl border border-hairline bg-cream-card p-3.5 text-left shadow-lg sm:block">
-        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-forest">Talk &amp; Participation</p>
-        <div className="mt-2 flex h-2.5 gap-0.5 overflow-hidden rounded-full">
-          {HERO_TALK.map(([kind, pct]) => (
-            <span key={kind} style={{ width: `${pct}%`, background: ROOM_COLOR[kind] }} />
-          ))}
-        </div>
-        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-semibold text-ink">
-          {HERO_TALK.map(([kind, pct]) => (
-            <div key={kind} className="flex items-center gap-1.5 whitespace-nowrap">
-              <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: ROOM_COLOR[kind] }} />
-              {ROOM_LABEL[kind]}
-              <span className="ml-auto text-ink-soft">{pct}%</span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-2.5 flex h-4 gap-px" aria-hidden="true">
-          {HERO_TALK_STRIP.map((kind, i) => (
-            <span key={i} className="flex-1 rounded-[2px]" style={{ background: ROOM_COLOR[kind] }} />
-          ))}
-        </div>
-      </div>
-
+          class. Beside the report from sm up; on a phone, where it would cover
+          the report, it sits underneath instead, clear of the Content
+          Specialist note. */}
+      <TalkHeroCard className="absolute -left-12 top-[19rem] hidden w-64 sm:block" />
       {/* Beside the report header, clear of the chart. Hidden on a phone, where
           there is no room for it; the chips beside the headline say it. */}
       <div className="absolute -left-3 top-36 hidden items-center gap-2 rounded-xl border border-hairline bg-cream-card px-3.5 py-2.5 shadow-lg sm:-left-12 sm:flex">
@@ -637,8 +644,11 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             </p>
           </div>
 
-          <div className="flex justify-center pb-24 pt-6 lg:justify-end lg:pb-20 lg:pt-0">
+          <div className="flex flex-col items-center pb-12 pt-6 sm:pb-24 lg:items-end lg:pb-20 lg:pt-0">
             <ReportMockup />
+            {/* Phones only: below the report and clear of the Content
+                Specialist note that hangs off its bottom. */}
+            <TalkHeroCard className="mt-28 w-full max-w-md sm:hidden" />
           </div>
         </div>
       </div>
