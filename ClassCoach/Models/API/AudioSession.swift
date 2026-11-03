@@ -717,6 +717,22 @@ private struct CalledOnLog: Decodable {
     let calledOnLog: [Moment]?
 }
 
+/// Read on its own for the same reason as TeacherPauseLog.
+private struct StudentSpansLog: Decodable {
+    let studentSpans: [StudentSpan]?
+}
+
+/// Words a student said inside a line the transcript gave the teacher, found
+/// by the server from the conversation (server/src/lib/studentWords.ts) and
+/// already counted in the room trace's Student Talk. `text` is the
+/// transcript's own words.
+struct StudentSpan: Decodable {
+    let lineStartSec: Double
+    let startSec: Double
+    let endSec: Double
+    let text: String
+}
+
 /// Think Time as the server stored it (server/src/lib/thinkTime.ts): after
 /// each question, how long until anyone spoke, teacher or student. It needs
 /// no voices told apart, so it is the Summary's tile.
@@ -806,6 +822,8 @@ struct AudioSession: Decodable, Identifiable {
     /// metricsLogs.calledOnLog: the start of each teacher line that called
     /// on a student by name; absent on lessons not yet worked out.
     let calledOnTimes: [Double]?
+    /// metricsLogs.studentSpans; absent on lessons not yet read for them.
+    let studentSpans: [StudentSpan]?
     let highlights: [AudioHighlight]?
     let phases: [AudioPhase]?
     let questionLog: [AudioQuestionLogEntry]?
@@ -913,6 +931,7 @@ struct AudioSession: Decodable, Identifiable {
         pauseGates = (try? container.decodeIfPresent(PauseGatesLog.self, forKey: .metricsLogs))?.pauseGates
         thinkTime = (try? container.decodeIfPresent(ThinkTimeLog.self, forKey: .metricsLogs))?.thinkTime
         calledOnTimes = (try? container.decodeIfPresent(CalledOnLog.self, forKey: .metricsLogs))?.calledOnLog?.map(\.timestampSec)
+        studentSpans = (try? container.decodeIfPresent(StudentSpansLog.self, forKey: .metricsLogs))?.studentSpans
         highlights = try container.decodeIfPresent([AudioHighlight].self, forKey: .highlights)
         phases = try container.decodeIfPresent([AudioPhase].self, forKey: .phases)
         questionLog = try container.decodeIfPresent([AudioQuestionLogEntry].self, forKey: .questionLog)
@@ -1006,6 +1025,7 @@ struct AudioSessionWithSegments: Decodable, Identifiable {
     var teacherPause: StoredTeacherPause? { session.teacherPause }
     var thinkTime: StoredThinkTime? { session.thinkTime }
     var calledOnTimes: [Double]? { session.calledOnTimes }
+    var studentSpans: [StudentSpan]? { session.studentSpans }
     var highlights: [AudioHighlight]? { session.highlights }
     var phases: [AudioPhase]? { session.phases }
     var questionLog: [AudioQuestionLogEntry]? { session.questionLog }

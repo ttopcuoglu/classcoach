@@ -40,11 +40,11 @@ export const ROOM_COLOR: Record<RoomKind, string> = {
 }
 
 export const ROOM_LABEL: Record<RoomKind, string> = {
-  teacher: 'Teacher Voice',
-  student: 'Student Voice',
+  teacher: 'Teacher Talk',
+  student: 'Student Talk',
   video: 'Video/Audio',
-  other: 'Room Talk Time',
-  quiet: 'Quiet Time',
+  other: 'Group Talk',
+  quiet: 'Silence',
 }
 
 const ROOM_ORDER: RoomKind[] = ['teacher', 'student', 'video', 'other', 'quiet']
@@ -140,7 +140,7 @@ export default function TalkFlowStrip({
   shares: ShareSlice[]
   /// The server's per-second breakdown, when the lesson has one.
   room?: RoomBreakdown | null
-  /// A Teacher Voice or Student Voice block or legend entry was clicked: show
+  /// A Teacher Talk or Student Talk block or legend entry was clicked: show
   /// what was said there. The others had no words to show.
   onPick?: (pick: { kind: 'teacher' | 'student' } | { startSec: number; endSec: number }) => void
 }) {
@@ -243,9 +243,10 @@ export default function TalkFlowStrip({
       </div>
       {room ? (
         <p className="text-xs text-ink-soft">
-          “Teacher Voice” and “Student Voice” are seconds with words the transcript gave to you or to a student, and the
-          short pauses between them. “Room Talk Time” is sound with no transcribed words — most often students talking
-          together; music or other room sound is counted here too.
+          “Teacher Talk” and “Student Talk” are seconds with your words or a student’s, and the short pauses between them —
+          who said what is read from the conversation as well as the voices, so a student’s answer inside your line counts
+          as theirs. “Group Talk” is voices with no clear words, most often students talking together; other room sound is
+          counted here too. “Silence” is no talk at all.
           {room.videoSec > 0 ? ' “Video/Audio” is the voice you marked as one.' : ''}
         </p>
       ) : (

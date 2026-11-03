@@ -1,8 +1,9 @@
 import { cloneElement, createContext, isValidElement, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
-import TalkFlowStrip, { FLOW_COLOR, ROOM_COLOR, type ShareSlice } from '../components/TalkFlowStrip'
+import TalkFlowStrip, { FLOW_COLOR, ROOM_COLOR, ROOM_LABEL, type ShareSlice } from '../components/TalkFlowStrip'
 import { roomBreakdown, type RoomBreakdown } from '../lib/roomBreakdown'
+import { withStudentSpans } from '../lib/studentSpans'
 import RoomMoments, { type RoomPick } from '../components/RoomMoments'
 import { DashedLinePoint, NoDataLabel } from '../components/unavailableChart'
 import { UpgradeMessage } from '../components/UpgradeMessage'
@@ -59,7 +60,6 @@ import {
   type ReflectChatErrorKind,
   type SpeakerSample,
   type StoredTeacherPause,
-  type StoredThinkTime,
   type TalkVoice,
   type TranscriptSegment,
 } from '../lib/api'
@@ -2961,22 +2961,22 @@ function SummaryTab({
   const tiles: { label: string; metric: ConfidentMetric; unit?: string; note?: string; accent: Accent; swatch?: string }[] = [
     ...(room
       ? [
-          { label: 'Teacher Voice', metric: roomPct(room.pct.teacher), unit: '%', accent: ACCENTS.terracotta, swatch: ROOM_COLOR.teacher },
-          { label: 'Room Talk Time', metric: roomPct(room.pct.other), unit: '%', accent: ACCENTS.lavender, swatch: ROOM_COLOR.other },
-          { label: 'Quiet Time', metric: roomPct(room.pct.quiet), unit: '%', accent: ACCENTS.sky, swatch: ROOM_COLOR.quiet },
+          { label: 'Teacher Talk', metric: roomPct(room.pct.teacher), unit: '%', accent: ACCENTS.terracotta, swatch: ROOM_COLOR.teacher },
+          { label: 'Group Talk', metric: roomPct(room.pct.other), unit: '%', accent: ACCENTS.lavender, swatch: ROOM_COLOR.other },
+          { label: 'Silence', metric: roomPct(room.pct.quiet), unit: '%', accent: ACCENTS.sky, swatch: ROOM_COLOR.quiet },
         ]
       : [
-          { label: 'Teacher Voice', metric: getPresenceMetric(teacherPct), unit: '%', accent: ACCENTS.terracotta },
+          { label: 'Teacher Talk', metric: getPresenceMetric(teacherPct), unit: '%', accent: ACCENTS.terracotta },
           // Older recordings with no sound reading cannot split the rest
           // into talk with no words and quiet.
           {
-            label: 'Room Talk Time',
+            label: 'Group Talk',
             metric: split ? getPresenceMetric(soundPct) : { state: 'not_measurable' as const, display: '—', reason: 'Not measured on this older recording.' },
             unit: '%',
             accent: ACCENTS.lavender,
           },
           {
-            label: 'Quiet Time',
+            label: 'Silence',
             metric: split ? getPresenceMetric(quietPct) : { state: 'not_measurable' as const, display: '—', reason: 'Not measured on this older recording.' },
             unit: '%',
             accent: ACCENTS.sky,
@@ -3213,9 +3213,9 @@ function SummaryTab({
           <span className="hidden group-open:inline">How to read these numbers ▾</span>
         </summary>
         <dl className="mt-2 grid gap-x-6 gap-y-1.5 text-sm text-ink-soft sm:grid-cols-2">
-          <div><dt className="inline font-semibold text-ink">Teacher Voice · </dt><dd className="inline">the share of the recording with words the transcript gave to you.</dd></div>
-          <div><dt className="inline font-semibold text-ink">Room Talk Time · </dt><dd className="inline">sound the microphone caught but couldn’t turn into words, usually students talking together or too far away; other room sound is counted here too.</dd></div>
-          <div><dt className="inline font-semibold text-ink">Quiet Time · </dt><dd className="inline">no sound at all: quiet work, pauses, a settled room.</dd></div>
+          <div><dt className="inline font-semibold text-ink">Teacher Talk · </dt><dd className="inline">the share of the recording with your words; a student’s answer the conversation shows was theirs is not counted in it.</dd></div>
+          <div><dt className="inline font-semibold text-ink">Group Talk · </dt><dd className="inline">voices the microphone caught but couldn’t turn into words, usually students talking together or too far away; other room sound is counted here too.</dd></div>
+          <div><dt className="inline font-semibold text-ink">Silence · </dt><dd className="inline">no talk: quiet work, pauses, a settled room.</dd></div>
           <div><dt className="inline font-semibold text-ink">Students Called On · </dt><dd className="inline">how many different students you addressed by name, as the transcript caught them.</dd></div>
           <div><dt className="inline font-semibold text-ink">Pace · </dt><dd className="inline">your words a minute, short pauses included. Everyday conversation usually runs about {CONVERSATIONAL_WPM_RANGE}.</dd></div>
           <div><dt className="inline font-semibold text-ink">Questions · </dt><dd className="inline">the questions you asked, as the transcript caught them.</dd></div>
@@ -5707,11 +5707,12 @@ function TalkParticipationTab({
           </p>
           {room ? (
             <p className="text-sm text-ink-soft">
-              "Teacher Voice" and "Student Voice" count only seconds with words the transcript gave to you or to a
-              student, and the short pauses between them. Student Voice is a minimum: students the microphone couldn't
-              make out aren't in it. "Room Talk Time" is sound with no transcribed words, most often students talking
-              together; music or other room sound is counted there too. "Video/Audio" is a voice you marked as one.
-              Click any of them to see the moments behind it.
+              "Teacher Talk" and "Student Talk" count only seconds with your words or a student's, and the short
+              pauses between them. Who said what is read from the conversation as well as the voices, so a student's
+              answer inside your line counts as theirs. Student Talk is a minimum: students the microphone couldn't
+              make out aren't in it. "Group Talk" is voices with no clear words, most often students talking together;
+              other room sound is counted there too. "Silence" is no talk at all. "Video/Audio" is a voice you marked
+              as one. Click Teacher Talk or Student Talk to read the transcript behind it.
             </p>
           ) : (
           <p className="text-sm text-ink-soft">
@@ -5754,11 +5755,8 @@ function TalkParticipationTab({
           teacherPct={session.teacherTalkPct}
           wpm={wpm}
           room={room}
-          calledOn={session.metricsDetail?.studentsCalledOn ?? undefined}
-          calledOnTimes={session.metricsLogs?.calledOnLog?.length ?? 0}
-          think={session.metricsLogs?.thinkTime}
           picked={talkOpenOf(pick)}
-          onPick={(open) => setPick(talkOpenOf(pick) === open ? null : open === 'teacher' ? { kind: 'teacher' } : { moments: open })}
+          onPick={(open) => setPick(talkOpenOf(pick) === open ? null : { kind: open })}
         />
         <TalkFlowStrip
           segments={session.segments}
@@ -5774,10 +5772,8 @@ function TalkParticipationTab({
         />
         {pick && (
           <RoomMoments
-            segments={session.segments}
+            segments={withStudentSpans(session.segments, session.metricsLogs?.studentSpans)}
             pick={pick}
-            calledOn={session.metricsLogs?.calledOnLog}
-            think={session.metricsLogs?.thinkTime}
             onClose={() => setPick(null)}
           />
         )}
@@ -5909,35 +5905,25 @@ function KeepAndTry({ keep, tryNext, tryGoal }: { keep: KeepLine | null; tryNext
 /// Which card an open transcript panel belongs to, if any.
 function talkOpenOf(pick: RoomPick | null): TalkOpen | null {
   if (!pick) return null
-  if ('moments' in pick) return pick.moments
-  if ('kind' in pick && pick.kind === 'teacher') return 'teacher'
-  return null
+  return 'kind' in pick ? pick.kind : null
 }
 
-/// The six numbers Talk & Participation leads with — the Summary's, in the
-/// same words: Teacher Voice, Room Talk Time, Quiet Time, Students Called On,
-/// Pace, Think Time (chosen 2026-11-02, all of them holding when students were
-/// not told apart). Teacher Voice, Students Called On and Think Time open the
-/// transcript behind them.
-type TalkOpen = 'teacher' | 'calledOn' | 'think'
+/// The five numbers Talk & Participation leads with (chosen 2026-11-02):
+/// Teacher Talk, Student Talk, Group Talk, Silence and Pace. Student Talk is
+/// the students' words the recording caught, including those the transcript
+/// gave the teacher and the conversation gave back (server
+/// lib/studentWords.ts). Teacher Talk and Student Talk open their transcript.
+type TalkOpen = 'teacher' | 'student'
 function TalkNumbers({
   teacherPct,
   wpm,
   room,
-  calledOn,
-  calledOnTimes,
-  think,
   picked,
   onPick,
 }: {
   teacherPct: number | null
   wpm: number | null
   room: RoomBreakdown | null
-  /// Different students called on by name; undefined before it was stored.
-  calledOn: number | undefined
-  /// How many lines called on one, to open.
-  calledOnTimes: number
-  think: StoredThinkTime | undefined
   picked: TalkOpen | null
   onPick: (open: TalkOpen) => void
 }) {
@@ -5948,47 +5934,28 @@ function TalkNumbers({
     return m ? `${m} min${sec % 60 ? ` ${sec % 60} s` : ''}` : `${sec} s`
   }
   const older = 'not measured on this older recording'
-  const timed = think ? think.questions.filter((q) => q.sec != null).length : 0
   const cards: { key: string; label: string; value: string; sub: string; color?: string; opens?: TalkOpen; link?: string }[] = [
     room
-      ? { key: 'teacher', label: 'Teacher Voice', value: minutes(room.pct.teacher), sub: `${Math.round(room.pct.teacher)}% · your words, and pauses between them`, color: ROOM_COLOR.teacher, opens: 'teacher', link: 'See your lines' }
-      : { key: 'teacher', label: 'Teacher Voice', value: teacherPct != null ? `${Math.round(teacherPct)}%` : '—', sub: teacherPct != null ? 'of the recording' : 'unavailable', color: FLOW_COLOR.you, opens: 'teacher', link: 'See your lines' },
+      ? { key: 'teacher', label: ROOM_LABEL.teacher, value: minutes(room.pct.teacher), sub: `${Math.round(room.pct.teacher)}% · your words, and pauses between them`, color: ROOM_COLOR.teacher, opens: 'teacher', link: 'See the transcript' }
+      : { key: 'teacher', label: ROOM_LABEL.teacher, value: teacherPct != null ? `${Math.round(teacherPct)}%` : '—', sub: teacherPct != null ? 'of the recording' : 'unavailable', color: FLOW_COLOR.you, opens: 'teacher', link: 'See the transcript' },
     room
-      ? { key: 'other', label: 'Room Talk Time', value: minutes(room.pct.other), sub: `${Math.round(room.pct.other)}% · no transcribed words — most often students talking together`, color: ROOM_COLOR.other }
-      : { key: 'other', label: 'Room Talk Time', value: '—', sub: older },
+      ? { key: 'student', label: ROOM_LABEL.student, value: minutes(room.pct.student), sub: `${Math.round(room.pct.student)}% · students’ words the recording caught`, color: ROOM_COLOR.student, opens: 'student', link: 'See the transcript' }
+      : { key: 'student', label: ROOM_LABEL.student, value: '—', sub: older },
     room
-      ? { key: 'quiet', label: 'Quiet Time', value: minutes(room.pct.quiet), sub: `${Math.round(room.pct.quiet)}% · the microphone heard nothing`, color: ROOM_COLOR.quiet }
-      : { key: 'quiet', label: 'Quiet Time', value: '—', sub: older },
-    {
-      key: 'calledOn',
-      label: 'Students Called On',
-      value: calledOn != null ? String(calledOn) : '—',
-      sub: calledOn != null ? 'different students you addressed by name' : 'worked out for lessons analysed from now on',
-      ...(calledOnTimes > 0 ? { opens: 'calledOn' as const, link: 'See the conversation' } : {}),
-    },
+      ? { key: 'other', label: ROOM_LABEL.other, value: minutes(room.pct.other), sub: `${Math.round(room.pct.other)}% · voices with no clear words, most often students talking together`, color: ROOM_COLOR.other }
+      : { key: 'other', label: ROOM_LABEL.other, value: '—', sub: older },
+    room
+      ? { key: 'quiet', label: ROOM_LABEL.quiet, value: minutes(room.pct.quiet), sub: `${Math.round(room.pct.quiet)}% · no talk: quiet work, pauses, a settled room`, color: ROOM_COLOR.quiet }
+      : { key: 'quiet', label: ROOM_LABEL.quiet, value: '—', sub: older },
     {
       key: 'pace',
-      label: 'Your pace',
+      label: 'Pace',
       value: wpm != null ? String(Math.round(wpm)) : '—',
-      sub: wpm != null ? `words a minute · conversation usually runs ${CONVERSATIONAL_WPM_RANGE}` : 'unavailable',
-    },
-    {
-      key: 'think',
-      label: 'Think Time',
-      value: think?.average != null ? `${think.average.toFixed(1)} s` : '—',
-      sub:
-        think?.average != null
-          ? `quiet after a question, before anyone spoke · average of ${timed}`
-          : !think
-            ? 'worked out for lessons analysed from now on'
-            : think.reason === 'no_questions'
-              ? 'no questions in this recording'
-              : 'no question could be timed',
-      ...(timed > 0 ? { opens: 'think' as const, link: 'See the questions' } : {}),
+      sub: wpm != null ? `your words a minute · conversation usually runs ${CONVERSATIONAL_WPM_RANGE}` : 'unavailable',
     },
   ]
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {cards.map((c) => {
         const inner = (
           <>

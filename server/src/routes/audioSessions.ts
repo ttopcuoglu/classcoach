@@ -15,6 +15,7 @@ import { parseLevelTrace, splitNonSpeech, teacherIntervals } from '../lib/settle
 import { pauseGatesOf, shownWaitTime, shownWaitTime2 } from '../lib/pauseGates.ts'
 import { storedTeacherPause, teacherPauseOf } from '../lib/teacherPause.ts'
 import { thinkTimeOf } from '../lib/thinkTime.ts'
+import { dropTeacherQuotes, readStudentWords, STUDENT_WORDS_VERSION, teacherQuotesOf, withStudentSpans } from '../lib/studentWords.ts'
 import { buildRoomTrace, openingWasRecorderOnly, roomFacts, roomShares, type RoomFacts } from '../lib/roomTrace.ts'
 import { buildSoundTimeline } from '../lib/soundTimeline.ts'
 import { enrichLessonContent } from '../lib/lessonObjective.ts'
@@ -896,7 +897,7 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
   // The escalation read rides along with these: it needs the teacher's speech
   // and the coverage figure the phrase scan already computed, and nothing
   // from the other reads.
-  const [analysis, lessonContent, momentToRevisit, escalation, teachingMoves, participation, stretch, arc] = await Promise.all([
+  const [analysis, lessonContent, momentToRevisit, escalation, teachingMoves, participation, stretch, arc, studentWords] = await Promise.all([
     enrichClassroomMoves(scanned, segments),
     enrichLessonContent(detectLessonContent(segments, scanned.phases), segments),
     readMomentToRevisit(segments),
@@ -910,7 +911,14 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
     readStretch(segments),
     // How the lesson moved, stage by stage.
     readLessonArc(segments, segments.reduce((max, seg) => Math.max(max, seg.endSec), 0)),
+    // Student words the transcript gave the teacher, found from the
+    // conversation — Student Talk's share of the room trace.
+    readStudentWords(segments),
   ])
+  // Checked against what the other reads quoted as the teacher's.
+  const studentSpans = studentWords
+    ? dropTeacherQuotes(studentWords, teacherQuotesOf(teachingMoves, analysis.questionLog))
+    : null
 
   // What each set of directions was for, and invitations to ask for help.
   // Needs the directions the teaching-moves read found, so it runs after it.
@@ -960,7 +968,7 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
           select: { speakerLabel: true, startSec: true, endSec: true },
         })
       : []
-  const roomTrace = voiceClasses.voiceTrace !== undefined ? buildRoomTrace(voiceClasses, [...segments, ...videoLines]) : null
+  const roomTrace = voiceClasses.voiceTrace !== undefined ? buildRoomTrace(voiceClasses, [...withStudentSpans(segments, studentSpans ?? []), ...videoLines]) : null
   const nonSpeech = trace
     ? splitNonSpeech(
         trace,
@@ -1007,6 +1015,9 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
         ...(nonSpeech ? { quietSec: nonSpeech.quietSec, unresolvedSec: nonSpeech.unresolvedSec } : {}),
         ...voiceClasses,
         ...(roomTrace ? { roomTrace, ...roomShares(roomTrace) } : {}),
+        // The words behind Student Talk that the transcript gave the
+        // teacher, for the transcript views. Absent when the read failed.
+        ...(studentSpans ? { studentSpans: studentSpans as unknown as Prisma.InputJsonValue, studentWordsVersion: STUDENT_WORDS_VERSION } : {}),
         // Worked out once, here, and only shown by the web and the iPhone,
         // so the figure a teacher sees cannot move after the fact.
         teacherPause: teacherPause as unknown as Prisma.InputJsonValue,

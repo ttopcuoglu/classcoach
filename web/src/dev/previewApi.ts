@@ -548,6 +548,12 @@ function previewReport(): Json {
       // the page only shows them.
       pauseGates: { version: 1, waitTime: { shown: true }, waitTime2: { shown: true } },
       calledOnLog: [{ timestampSec: 319.8 }],
+      // As server lib/studentWords.ts stores them: students' words inside a
+      // teacher line, cut out for the Student Talk transcript.
+      studentSpans: [
+        { lineStartSec: 319.79, startSec: 319.79, endSec: 321.6, text: 'an iron that was a meter.' },
+        { lineStartSec: 319.79, startSec: 329.4, endSec: 331.55, text: 'Oh, I actually also said the' },
+      ],
       thinkTime: {
         version: 1,
         average: 1.4,

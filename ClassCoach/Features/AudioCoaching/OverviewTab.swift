@@ -593,17 +593,17 @@ struct OverviewTab: View {
             let voice = { (kind: RoomBreakdown.Kind, label: String) in
                 Tile(label: label, value: Self.whole(room.pct[kind]), unit: "%", tint: kind.color, swatch: kind.color)
             }
-            out = [voice(.teacher, "Teacher Voice"), voice(.other, "Room Talk Time"), voice(.quiet, "Quiet Time")]
+            out = [voice(.teacher, "Teacher Talk"), voice(.other, "Group Talk"), voice(.quiet, "Silence")]
         } else {
-            out = [Tile(label: "Teacher Voice", value: Self.pct(teacher), unit: "%", tint: Color(hex: 0xF5DBC8))]
+            out = [Tile(label: "Teacher Talk", value: Self.pct(teacher), unit: "%", tint: Color(hex: 0xF5DBC8))]
             // Older recordings with no sound reading cannot split the rest.
             if let silence, let quiet = detail["quietSec"], let unresolved = detail["unresolvedSec"], quiet + unresolved > 0 {
                 let sound = (silence * unresolved / (quiet + unresolved) * 10).rounded() / 10
-                out.append(Tile(label: "Room Talk Time", value: Self.pct(sound), unit: "%", tint: Color(hex: 0xE5E0EF)))
-                out.append(Tile(label: "Quiet Time", value: Self.pct(max(0, silence - sound)), unit: "%", tint: Color(hex: 0xDDE8F4)))
+                out.append(Tile(label: "Group Talk", value: Self.pct(sound), unit: "%", tint: Color(hex: 0xE5E0EF)))
+                out.append(Tile(label: "Silence", value: Self.pct(max(0, silence - sound)), unit: "%", tint: Color(hex: 0xDDE8F4)))
             } else {
-                out.append(Tile(label: "Room Talk Time", value: nil, unit: "%", tint: Color(hex: 0xE5E0EF), hint: "Not measured on this older recording."))
-                out.append(Tile(label: "Quiet Time", value: nil, unit: "%", tint: Color(hex: 0xDDE8F4), hint: "Not measured on this older recording."))
+                out.append(Tile(label: "Group Talk", value: nil, unit: "%", tint: Color(hex: 0xE5E0EF), hint: "Not measured on this older recording."))
+                out.append(Tile(label: "Silence", value: nil, unit: "%", tint: Color(hex: 0xDDE8F4), hint: "Not measured on this older recording."))
             }
         }
         // Different students addressed by name, from the words alone.
@@ -664,9 +664,9 @@ struct OverviewTab: View {
             }
             DisclosureGroup(isExpanded: $readingOpen) {
                 VStack(alignment: .leading, spacing: 6) {
-                    readingLine("Teacher Voice", "the share of the recording with words the transcript gave to you.")
-                    readingLine("Room Talk Time", "sound the microphone caught but couldn\u{2019}t turn into words, usually students talking together or too far away; other room sound is counted here too.")
-                    readingLine("Quiet Time", "no sound at all: quiet work, pauses, a settled room.")
+                    readingLine("Teacher Talk", "the share of the recording with your words; a student\u{2019}s answer the conversation shows was theirs is not counted in it.")
+                    readingLine("Group Talk", "voices the microphone caught but couldn\u{2019}t turn into words, usually students talking together or too far away; other room sound is counted here too.")
+                    readingLine("Silence", "no talk: quiet work, pauses, a settled room.")
                     readingLine("Students Called On", "how many different students you addressed by name, as the transcript caught them.")
                     readingLine("Pace", "your words a minute, short pauses included. Everyday conversation usually runs about \(AudioInsights.conversationalWpmRange).")
                     readingLine("Questions", "the questions you asked, as the transcript caught them.")

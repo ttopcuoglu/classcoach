@@ -1192,6 +1192,10 @@ export type AudioSession = {
     /// Each teacher line that called on a student by name (server
     /// studentsCalledOn), for Talk & Participation's Students Called On.
     calledOnLog?: { timestampSec: number }[]
+    /// Students' words the transcript gave the teacher, found from the
+    /// conversation (server lib/studentWords.ts); already counted in the room
+    /// trace's Student Talk.
+    studentSpans?: StudentSpan[]
   } | null
   /// The one focus for next lesson the teacher picked from Try next time.
   /// `lines`: the focus said simply, one per item made the focus, keyed by
@@ -1212,6 +1216,8 @@ export type AudioSession = {
   createdAt: string
   updatedAt: string
 }
+
+export type StudentSpan = { lineStartSec: number; startSec: number; endSec: number; text: string }
 
 export type TranscriptSegment = {
   id: string
