@@ -27,7 +27,7 @@ export function DashedLinePoint({ cx, cy, colorVar }: { cx: number; cy: number; 
       cy={cy}
       r={3.5}
       fill="var(--color-canvas)"
-      stroke={`var(${colorVar})`}
+      stroke={colorVar.startsWith('--') ? `var(${colorVar})` : colorVar}
       strokeWidth={1.5}
       strokeDasharray="2,2"
     />

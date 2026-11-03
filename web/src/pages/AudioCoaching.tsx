@@ -90,7 +90,7 @@ import {
 import { buildNextTimeItems, workedNote, type NoticeCandidate } from '../lib/reportHighlights'
 import { checkCount } from '../lib/questionMix'
 import { focusLineKey, lineIgnoresPause, stepIgnoresPause } from '../lib/focusLine'
-import { shownWaitTime, shownWaitTime2 } from '../lib/pauseGates'
+import { shownWaitTime } from '../lib/pauseGates'
 
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60)
@@ -3451,9 +3451,12 @@ function MyGrowthTab({
   )
 
   // Every trend counts the way that lesson's own cards count, so a point on
-  // a chart is the number the teacher saw on the report. A lesson where no
-  // student voice was told apart leaves a gap in the trends that need it.
-  const teacherTalk = analyzed.map((s) => (noStudentVoice(s) ? null : teacherVoicePct(s)))
+  // a chart is the number the teacher saw on the report. Student Talk, Group
+  // Talk and Silence need the per-second breakdown; older lessons leave a gap.
+  const teacherTalk = analyzed.map((s) => teacherVoicePct(s))
+  const studentTalk = analyzed.map((s) => voicePct(s, ['roomStudentSec', 'roomGroupSec']))
+  const groupTalk = analyzed.map((s) => voicePct(s, ['roomUnclearSec', 'roomOtherSec']))
+  const silence = analyzed.map((s) => voicePct(s, ['roomQuietSec']))
 
   const cfuFrequency = analyzed.map((s) => {
     const duration = s.durationSec ?? 0
@@ -3462,32 +3465,8 @@ function MyGrowthTab({
   })
   const cfuMax = Math.max(4, ...cfuFrequency.filter((v): v is number => v != null)) * 1.2
 
-  // Answers followed up, of the student answers heard — the number the
-  // focus card and Questioning use. Below three answers a share is one or
-  // two exchanges; with no student voice there are none to follow up.
-  const followUpFrequency = analyzed.map((s) => {
-    const heard = metricsNum(s, 'answersHeardCount')
-    const followed = metricsNum(s, 'answersFollowedUpCount')
-    if (noStudentVoice(s) || heard == null || followed == null || heard < 3) return null
-    return Math.round((followed / heard) * 100)
-  })
-  const followUpMax = 100
-
-
   const teacherPace = analyzed.map((s) => metricsNum(s, 'teacherWordsPerMinute'))
   const paceMax = Math.max(220, ...teacherPace.filter((v): v is number => v != null)) * 1.1
-  const longestMonologue = analyzed.map((s) => {
-    // A stretch ends when a student is heard; with none separated it runs
-    // through every answer, so the card hides it and so does this.
-    if (noStudentVoice(s)) return null
-    const sec = metricsNum(s, 'longestTeacherMonologueSec')
-    return sec == null ? null : Math.round((sec / 60) * 10) / 10
-  })
-  const monologueMax = Math.max(4, ...longestMonologue.filter((v): v is number => v != null)) * 1.2
-  // Only lessons whose stored decision lets the pause be shown — the same
-  // ones whose own page shows it.
-  const waitTime2 = analyzed.map(shownWaitTime2)
-  const waitTime2Max = Math.max(4, ...waitTime2.filter((v): v is number => v != null)) * 1.2
   // Count AND total on one chart rather than a share on its own: a share is
   // 100% when one question was asked and one went beyond recall, which reads
   // as a triumph. The gap between the two lines is the recall questions, and
@@ -3500,20 +3479,34 @@ function MyGrowthTab({
 
   const insight = buildTrendInsight(analyzed)
 
-  // Seven, not ten. Each one earned its place on three tests measured against
-  // real lessons: is there a value on most of them, is it about something the
-  // teacher controls, and does movement mean the same thing every time? What
-  // went: wait time after a question (measurable on a quarter of lessons),
-  // tone ratio and feedback specificity (fewer still, and the limit is per
-  // lesson so more lessons never fix it), redirections (rise with a hard group
-  // as readily as with anything the teacher did), and the plain counts of
-  // directions and names (no better direction to move in).
+  // The Summary's numbers (2026-11-02): the four talk shares on one chart,
+  // Pace, Questions and Checks. Longest stretch, the pause after an answer
+  // and answers followed up went with them: each needs students told apart
+  // from the teacher, which many recordings cannot do.
   const charts: { key: FocusMetric; node: React.ReactNode }[] = [
+    {
+      key: 'talkRatio',
+      node: (
+        <TrendChart
+          title="Talk time"
+          unit="%"
+          maxValue={100}
+          labels={labels}
+          series={[
+            { label: ROOM_LABEL.teacher, colorVar: ROOM_COLOR.teacher, values: teacherTalk },
+            { label: ROOM_LABEL.student, colorVar: ROOM_COLOR.student, values: studentTalk },
+            { label: ROOM_LABEL.other, colorVar: ROOM_COLOR.other, values: groupTalk },
+            { label: ROOM_LABEL.quiet, colorVar: ROOM_COLOR.quiet, values: silence },
+          ]}
+          emptyMessage="Not enough sessions with a measured talk split yet to trend this."
+        />
+      ),
+    },
     {
       key: 'teacherPace',
       node: (
         <TrendChart
-          title="Your pace"
+          title="Pace"
           unit=" wpm"
           maxValue={paceMax}
           labels={labels}
@@ -3523,68 +3516,16 @@ function MyGrowthTab({
       ),
     },
     {
-      key: 'talkRatio',
-      node: (
-        <TrendChart
-          title="Your share of the talk"
-          unit="%"
-          maxValue={100}
-          labels={labels}
-          series={[{ label: 'You', colorVar: '--color-terracotta', values: teacherTalk }]}
-          emptyMessage="Not enough sessions with a measured talk split yet to trend this."
-        />
-      ),
-    },
-    {
-      key: 'longestMonologue',
-      node: (
-        <TrendChart
-          title="Longest unbroken stretch"
-          unit=" min"
-          maxValue={monologueMax}
-          labels={labels}
-          series={[{ label: 'Minutes', colorVar: '--color-terracotta', values: longestMonologue }]}
-          emptyMessage="Not enough sessions yet to trend this."
-        />
-      ),
-    },
-    {
-      key: 'waitTime2',
-      node: (
-        <TrendChart
-          title="Pause after an answer"
-          unit="s"
-          maxValue={waitTime2Max}
-          labels={labels}
-          series={[{ label: 'Seconds', colorVar: '--color-terracotta', values: waitTime2 }]}
-          emptyMessage="Not enough exchanges where a student answered and you replied, yet."
-        />
-      ),
-    },
-    {
-      key: 'followUpQuestionCount',
-      node: (
-        <TrendChart
-          title="Answers followed up"
-          unit="%"
-          maxValue={followUpMax}
-          labels={labels}
-          series={[{ label: 'Of the answers heard', colorVar: '--color-terracotta', values: followUpFrequency }]}
-          emptyMessage="Not enough student answers heard yet to trend this."
-        />
-      ),
-    },
-    {
       key: 'higherOrderPct',
       node: (
         <TrendChart
-          title="Questions beyond recall"
+          title="Questions"
           unit=""
           maxValue={questionMax}
           labels={labels}
           series={[
-            { label: 'Beyond recall', colorVar: '--color-terracotta', values: beyondRecall },
             { label: 'All questions', colorVar: '--color-hairline', values: allQuestions },
+            { label: 'Beyond recall', colorVar: '--color-terracotta', values: beyondRecall },
           ]}
           emptyMessage="No questions detected yet to trend."
         />
@@ -3594,7 +3535,7 @@ function MyGrowthTab({
       key: 'cfuCount',
       node: (
         <TrendChart
-          title="Checks for understanding"
+          title="Checks"
           unit=" per 10 min"
           maxValue={cfuMax}
           labels={labels}
@@ -6902,7 +6843,10 @@ function buildTrendInsight(sessions: AudioSession[]): string | null {
   return null
 }
 
+/// `colorVar` is a CSS variable name (--color-terracotta) or a plain colour
+/// (#2F855A), for the talk shares drawn in the strip's own colours.
 type TrendSeries = { label: string; colorVar: string; values: (number | null)[] }
+const paint = (c: string) => (c.startsWith('--') ? `var(${c})` : c)
 
 function TrendChart({
   title,
@@ -6940,7 +6884,7 @@ function TrendChart({
         <div className="flex items-center gap-3">
           {series.map((s, i) => (
             <span key={s.label} className="flex items-center gap-1.5 text-xs text-ink-soft">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: `var(${s.colorVar})` }} />
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: paint(s.colorVar) }} />
               {s.label}
               {latestBySeries[i] != null ? `: ${latestBySeries[i]}${unit}` : ''}
             </span>
@@ -6983,14 +6927,14 @@ function TrendChart({
                       key={i}
                       d={d}
                       fill="none"
-                      stroke={`var(${s.colorVar})`}
+                      stroke={paint(s.colorVar)}
                       strokeWidth={2}
                       strokeLinecap="round"
                     />
                   ))}
                   {coords.map((c, i) =>
                     c.y == null ? null : (
-                      <circle key={i} cx={c.x} cy={c.y} r={3} fill={`var(${s.colorVar})`} />
+                      <circle key={i} cx={c.x} cy={c.y} r={3} fill={paint(s.colorVar)} />
                     ),
                   )}
                   {/* Chart #4 — sessions with no measured value for this metric never

@@ -27,7 +27,7 @@ struct MyGrowthTab: View {
         )
     }
 
-    /// The seven My Growth can defend, with the chosen focus lifted to the
+    /// The four My Growth charts, with the chosen focus lifted to the
     /// top. A stored focus that has since been retired is still charted — it
     /// is what this teacher asked to watch — but it is not offered to anyone
     /// new.
@@ -229,6 +229,7 @@ private struct TrendChartView: View {
                     PointMark(x: .value("Session", point.index), y: .value("Value", point.value))
                         .foregroundStyle(by: .value("Series", point.seriesLabel))
                 }
+                .chartForegroundStyleScale(domain: series.map(\.label), range: series.map { FocusMetrics.color($0.label) })
                 .chartXAxis(.hidden)
                 .frame(height: 120)
             }

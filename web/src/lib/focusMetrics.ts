@@ -3,14 +3,14 @@
 import type { FocusMetric } from './api'
 
 export const FOCUS_METRIC_LABELS: Record<FocusMetric, string> = {
-  talkRatio: 'Your share of the talk',
-  teacherPace: 'Your pace',
+  talkRatio: 'Talk time (Teacher, Student, Group, Silence)',
+  teacherPace: 'Pace',
+  higherOrderPct: 'Questions',
+  cfuCount: 'Checks',
+  // Retired from the picker, kept so an account that chose one still renders.
   longestMonologue: 'Longest unbroken stretch',
   waitTime2: 'Pause after an answer',
   followUpQuestionCount: 'Answers followed up',
-  higherOrderPct: 'Questions beyond recall',
-  cfuCount: 'Checks for understanding',
-  // Retired from the picker, kept so an account that chose one still renders.
   avgWaitTime: 'Avg. wait time',
   redirectionCount: 'Redirection language',
   toneRatio: 'Positive vs. corrective tone',
@@ -19,25 +19,11 @@ export const FOCUS_METRIC_LABELS: Record<FocusMetric, string> = {
   feedbackSpecificity: 'Feedback specificity',
 }
 
-/// What My Growth will actually chart, in order.
-///
-/// Measured across a teacher's real lessons rather than chosen by taste, on
-/// three tests: is there a value on most lessons, is it about something the
-/// teacher controls, and does movement mean the same thing every time?
-///
-/// Four of the six core entries are about the teacher's own talk, and that is
-/// deliberate rather than a gap — the microphone sits with the teacher, so
-/// those are the numbers it can hold. Everything cut depended on hearing
-/// students well, which is what a room recording does worst.
-export const TRENDABLE_FOCUS_METRICS: FocusMetric[] = [
-  'teacherPace',
-  'talkRatio',
-  'longestMonologue',
-  'waitTime2',
-  'followUpQuestionCount',
-  'higherOrderPct',
-  'cfuCount',
-]
+/// What My Growth will actually chart, in order: the Summary's numbers
+/// (2026-11-02). Talk time holds the four talk shares on one chart — Teacher
+/// Talk, Student Talk, Group Talk and Silence — under the talkRatio key, so no
+/// stored focus changes and no installed iPhone meets a value it cannot read.
+export const TRENDABLE_FOCUS_METRICS: FocusMetric[] = ['talkRatio', 'teacherPace', 'higherOrderPct', 'cfuCount']
 
 /// Shown below the core set and never used to claim an improvement. Its
 /// median across real lessons is 1 with a range of 0-7, and a model-read count
@@ -49,6 +35,12 @@ export const SECONDARY_FOCUS_METRICS: FocusMetric[] = ['cfuCount']
 /// reasons attached rather than a list that quietly shrank. Shown to a teacher
 /// whose stored focus is one of these.
 export const RETIRED_FOCUS_METRICS: Partial<Record<FocusMetric, string>> = {
+  longestMonologue:
+    'A stretch ends when a student is heard, so it needs students told apart from you — and on many lessons they are not. The Summary dropped it on 2026-11-02.',
+  waitTime2:
+    'The pause after an answer needs to know when a student answered, which the recording often cannot tell. The Summary dropped it on 2026-11-02.',
+  followUpQuestionCount:
+    'Answers followed up needs the student answers heard, which the recording often cannot tell apart from you. The Summary dropped it on 2026-11-02.',
   avgWaitTime:
     'Wait time after a question needs a detected question AND an audible answer, so it lands on about a quarter of lessons. The pause after an answer measures the neighbouring thing three times as often.',
   toneRatio:
@@ -69,6 +61,6 @@ export function isTrendable(metric: FocusMetric): boolean {
 // Grouped the way the report's own sections are, so the picker reads
 // consistently with the rest of the app.
 export const FOCUS_METRIC_GROUPS: { category: string; metrics: FocusMetric[] }[] = [
-  { category: 'Talk & Participation', metrics: ['teacherPace', 'talkRatio', 'longestMonologue'] },
-  { category: 'Questioning & Checking', metrics: ['waitTime2', 'followUpQuestionCount', 'higherOrderPct', 'cfuCount'] },
+  { category: 'Talk & Participation', metrics: ['talkRatio', 'teacherPace'] },
+  { category: 'Questioning & Checking', metrics: ['higherOrderPct', 'cfuCount'] },
 ]

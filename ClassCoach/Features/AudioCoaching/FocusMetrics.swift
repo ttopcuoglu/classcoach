@@ -1,22 +1,15 @@
-import Foundation
+import SwiftUI
 
 /// Ported from `web/src/lib/focusMetrics.ts` — shared labels, grouping and
 /// series for the My Growth picker and charts.
 enum FocusMetrics {
-    /// What My Growth actually charts, in order.
-    ///
-    /// Measured against real lessons rather than chosen by taste, on three
-    /// tests: is there a value on most lessons, is it about something the
-    /// teacher controls, and does movement mean the same thing every time?
-    ///
-    /// Four of the seven are about the teacher's own talk, which is the
-    /// finding rather than a gap — the microphone sits with the teacher, so
-    /// those are the numbers it can hold. Everything cut depended on hearing
-    /// students well, which is what a room recording does worst.
-    static let trendable: [FocusMetric] = [
-        .teacherPace, .talkRatio, .longestMonologue,
-        .waitTime2, .followUpQuestionCount, .higherOrderPct, .cfuCount,
-    ]
+    /// What My Growth actually charts, in order: the Summary's numbers
+    /// (2026-11-02). Talk time holds the four talk shares on one chart —
+    /// Teacher Talk, Student Talk, Group Talk and Silence — under the
+    /// talkRatio key, so no stored focus changes. Longest stretch, the pause
+    /// after an answer and answers followed up were dropped: each needs
+    /// students told apart from the teacher, which many recordings cannot do.
+    static let trendable: [FocusMetric] = [.talkRatio, .teacherPace, .higherOrderPct, .cfuCount]
 
     /// Shown last and never used to claim an improvement: its median across
     /// real lessons is 1 with a range of 0-7, and a model-read count drifts by
@@ -25,14 +18,14 @@ enum FocusMetrics {
 
     static func label(_ metric: FocusMetric) -> String {
         switch metric {
-        case .teacherPace: return "Your pace"
-        case .talkRatio: return "Your share of the talk"
+        case .talkRatio: return "Talk time (Teacher, Student, Group, Silence)"
+        case .teacherPace: return "Pace"
+        case .higherOrderPct: return "Questions"
+        case .cfuCount: return "Checks"
+        // Retired from the picker, kept so an account that chose one renders.
         case .longestMonologue: return "Longest unbroken stretch"
         case .waitTime2: return "Pause after an answer"
         case .followUpQuestionCount: return "Answers followed up"
-        case .higherOrderPct: return "Questions beyond recall"
-        case .cfuCount: return "Checks for understanding"
-        // Retired from the picker, kept so an account that chose one renders.
         case .avgWaitTime: return "Avg. wait time"
         case .redirectionCount: return "Redirection language"
         case .toneRatio: return "Positive vs. corrective tone"
@@ -43,19 +36,19 @@ enum FocusMetrics {
     }
 
     static let groups: [(category: String, metrics: [FocusMetric])] = [
-        ("Talk & Participation", [.teacherPace, .talkRatio, .longestMonologue]),
-        ("Questioning & Checking", [.waitTime2, .followUpQuestionCount, .higherOrderPct, .cfuCount]),
+        ("Talk & Participation", [.talkRatio, .teacherPace]),
+        ("Questioning & Checking", [.higherOrderPct, .cfuCount]),
     ]
 
     static func title(_ metric: FocusMetric) -> String {
         switch metric {
-        case .teacherPace: return "Your pace (words a minute)"
-        case .talkRatio: return "Your share of the talk (%)"
+        case .teacherPace: return "Pace (words a minute)"
+        case .talkRatio: return "Talk time (%)"
         case .longestMonologue: return "Longest unbroken stretch (min)"
         case .waitTime2: return "Pause after an answer (s)"
         case .followUpQuestionCount: return "Answers followed up (%)"
-        case .higherOrderPct: return "Questions beyond recall"
-        case .cfuCount: return "Checks for understanding (/10min)"
+        case .higherOrderPct: return "Questions"
+        case .cfuCount: return "Checks (/10min)"
         case .avgWaitTime: return "Avg. wait time (s)"
         case .redirectionCount: return "Redirection language (/10min)"
         case .toneRatio: return "Positive vs. corrective tone (%)"
@@ -105,17 +98,44 @@ enum FocusMetrics {
         return total > 0 ? (teacher / total * 100).rounded() : session.teacherTalkPct
     }
 
-    /// One named series, or two where a single number would mislead.
+    /// A share of the recording from the per-second totals alone: nil on a
+    /// lesson that has none.
+    static func roomPct(_ session: AudioSession, _ keys: [String]) -> Double? {
+        let d = session.metricsDetail ?? [:]
+        guard d["roomTeacherSec"] != nil else { return nil }
+        let total = ["roomTeacherSec", "roomStudentSec", "roomGroupSec", "roomVideoSec", "roomUnclearSec", "roomOtherSec", "roomQuietSec"]
+            .reduce(0) { $0 + (d[$1] ?? 0) }
+        return total > 0 ? (keys.reduce(0) { $0 + (d[$1] ?? 0) } / total * 100).rounded() : nil
+    }
+
+    /// The colour each series is drawn in: the talk shares as the strip draws
+    /// them, everything else terracotta with its total in grey.
+    static func color(_ label: String) -> Color {
+        switch label {
+        case RoomBreakdown.Kind.teacher.label: return RoomBreakdown.Kind.teacher.color
+        case RoomBreakdown.Kind.student.label: return RoomBreakdown.Kind.student.color
+        case RoomBreakdown.Kind.other.label: return RoomBreakdown.Kind.other.color
+        case RoomBreakdown.Kind.quiet.label: return RoomBreakdown.Kind.quiet.color
+        case "All questions": return AppTheme.textSecondary.opacity(0.5)
+        default: return AppTheme.terracotta
+        }
+    }
+
+    /// One named series, or more where a single number would mislead.
     static func series(_ metric: FocusMetric, sessions: [AudioSession]) -> [(label: String, values: [Double?])] {
         switch metric {
         case .teacherPace:
             return [("Words a minute", sessions.map { $0.metricsDetail?["teacherWordsPerMinute"] })]
         case .talkRatio:
-            // The teacher's own share only. The student share is the least
-            // reliable number in this report — diarization folds student
-            // speech into teacher segments — so trending it would draw a line
-            // through measurement noise.
-            return [("You", sessions.map { noStudentVoice($0) ? nil : teacherVoicePct($0) })]
+            // The four shares as Talk & Participation's cards show them.
+            // Student Talk, Group Talk and Silence need the per-second
+            // breakdown; older lessons leave a gap.
+            return [
+                (RoomBreakdown.Kind.teacher.label, sessions.map(teacherVoicePct)),
+                (RoomBreakdown.Kind.student.label, sessions.map { roomPct($0, ["roomStudentSec", "roomGroupSec"]) }),
+                (RoomBreakdown.Kind.other.label, sessions.map { roomPct($0, ["roomUnclearSec", "roomOtherSec"]) }),
+                (RoomBreakdown.Kind.quiet.label, sessions.map { roomPct($0, ["roomQuietSec"]) }),
+            ]
         case .longestMonologue:
             return [("Minutes", sessions.map { session in
                 guard !noStudentVoice(session), let sec = session.metricsDetail?["longestTeacherMonologueSec"] else { return nil }
