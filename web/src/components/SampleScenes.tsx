@@ -105,6 +105,39 @@ function PlanScene() {
   )
 }
 
+/// Lesson Debrief: the biology sample's teacher at the board, with the moments
+/// the Content Specialist noted pinned along the lesson's timeline. Drawn for
+/// the dark sample band, so the board and timeline are light on forest.
+export function LessonScene() {
+  return (
+    <svg viewBox="0 0 320 120" className="h-full w-full" role="img" aria-label="A teacher at the board explains cellular respiration, with three noted moments marked along the lesson timeline">
+      <rect x="96" y="8" width="150" height="78" rx="6" fill="#f7f3ea" />
+      {/* A cell with its mitochondria, and the equation that "went up as one line". */}
+      <ellipse cx="140" cy="44" rx="30" ry="22" fill="none" stroke="#2f6f66" strokeWidth="3" />
+      <ellipse cx="132" cy="40" rx="10" ry="6" fill="#d08a2a" />
+      <path d="M126 40 q3 -4 6 0 q3 4 6 0" stroke="#f7f3ea" strokeWidth="1.5" fill="none" />
+      <circle cx="152" cy="52" r="5" fill="#8b7bc2" />
+      <path d="M182 32 h50M182 44 h40M182 56 h46" stroke="#c9d6cf" strokeWidth="3" strokeLinecap="round" />
+      <path d="M48 112 q4 -40 28 -44 q24 4 28 44z" fill="#c96a45" />
+      <circle cx="76" cy="50" r="14" fill="#c58b62" />
+      <path d="M61 48 q0 -18 15 -18 q15 0 15 18 q-4 -8 -15 -8 q-11 0 -15 8z" fill="#20140d" />
+      <path d="M98 82 q12 -12 22 -28" stroke="#c58b62" strokeWidth="9" fill="none" strokeLinecap="round" />
+      {/* The lesson's 22 minutes, with the three noted moments. */}
+      <path d="M130 104 h176" stroke="#f7f3ea" strokeOpacity=".35" strokeWidth="4" strokeLinecap="round" />
+      {[
+        { x: 158, c: '#2f855a' },
+        { x: 214, c: '#c96a45' },
+        { x: 268, c: '#e4b84a' },
+      ].map(({ x, c }) => (
+        <g key={x}>
+          <path d={`M${x} 104 v-10`} stroke={c} strokeWidth="2" />
+          <circle cx={x} cy="92" r="6" fill={c} />
+        </g>
+      ))}
+    </svg>
+  )
+}
+
 export type SampleScene = 'talk' | 'email' | 'redesign' | 'improve'
 
 export const SAMPLE_SCENES: Record<SampleScene, { Scene: ComponentType; tint: string }> = {

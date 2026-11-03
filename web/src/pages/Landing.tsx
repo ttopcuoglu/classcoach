@@ -26,7 +26,7 @@ import {
 import { introVideo, MEET_PLAYLIST_ID, VideoFacade } from '../components/TrainingVideos'
 import FooterContact from '../components/FooterContact'
 import RecordYourWay from '../components/RecordYourWay'
-import { SAMPLE_SCENES, type SampleScene } from '../components/SampleScenes'
+import { LessonScene, SAMPLE_SCENES, type SampleScene } from '../components/SampleScenes'
 import { ROOM_COLOR, ROOM_LABEL } from '../components/TalkFlowStrip'
 import { PLUS_DEBRIEF_PER_MONTH, PLUS_MONTHLY_PRICE, PLUS_YEARLY_PER_MONTH, PLUS_YEARLY_PRICE } from '../lib/pricing'
 
@@ -791,6 +791,9 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           className="group mb-6 grid gap-6 rounded-3xl bg-forest p-6 text-cream shadow-sm transition-shadow hover:shadow-md sm:p-8 lg:grid-cols-[1fr_1.1fr] lg:items-center"
         >
           <div>
+            <div className="mb-5 h-32 rounded-xl bg-cream/5 px-4 pt-3">
+              <LessonScene />
+            </div>
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Lesson Debrief · Sample report</span>
             <h3 className="mt-2 font-heading text-2xl font-bold leading-snug sm:text-3xl">
               Twenty-two minutes of class, read like a content specialist would<span className="text-gold">.</span>
