@@ -295,6 +295,7 @@ struct ProfileView: View {
             }
 
             Section {
+                CheckForUpdatesRow()
                 Link("Terms of Service", destination: URL(string: "https://www.wivoza.com/terms")!)
                 Link("Privacy Policy", destination: URL(string: "https://www.wivoza.com/terms")!)
             } header: {

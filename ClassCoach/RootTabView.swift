@@ -101,22 +101,33 @@ final class UpdateChecker: ObservableObject {
     @AppStorage("updateLaterUntil") private var laterUntil: Double = 0
     private var lastChecked: Date?
 
-    private var installed: String {
+    static var installed: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
     }
 
     func check() async {
-        // Once every few hours is plenty; coming back to the app often
-        // should not hit Apple each time.
-        if let lastChecked, Date().timeIntervalSince(lastChecked) < 6 * 3600 { return }
+        // Hourly, not every few hours: an app left signed in and running in
+        // the background only checks again when it comes back to the front,
+        // and a six-hour gap could hide a release for most of a school day.
+        // Still never on every return to the app.
+        if let lastChecked, Date().timeIntervalSince(lastChecked) < 3600 { return }
         lastChecked = Date()
-        guard let url = URL(string: "https://itunes.apple.com/lookup?id=\(Self.appStoreID)&country=us"),
-              let (data, _) = try? await URLSession.shared.data(from: url),
-              let reply = try? JSONDecoder().decode(Lookup.self, from: data),
-              let store = reply.results.first?.version
-        else { return }
+        guard let store = await Self.storeVersion() else { return }
         let snoozed = store == laterVersion && Date().timeIntervalSince1970 < laterUntil
-        available = Self.isNewer(store, than: installed) && !snoozed ? store : nil
+        available = Self.isNewer(store, than: Self.installed) && !snoozed ? store : nil
+    }
+
+    /// The version live on the App Store right now, or nil when Apple could
+    /// not be reached. Shared by the banner and Profile's Check for Updates.
+    static func storeVersion() async -> String? {
+        // Cache-busting: the lookup is served through a CDN, and a teacher
+        // who taps Check minutes after a release should not be told an hour-old
+        // answer.
+        guard let url = URL(string: "https://itunes.apple.com/lookup?id=\(appStoreID)&country=us&t=\(Int(Date().timeIntervalSince1970))"),
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let reply = try? JSONDecoder().decode(Lookup.self, from: data)
+        else { return nil }
+        return reply.results.first?.version
     }
 
     func later(_ version: String) {
@@ -169,6 +180,55 @@ struct UpdateBanner: View {
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
         .background(AppTheme.forest)
+    }
+}
+
+/// Profile's on-demand check, for a teacher who wants to know now rather than
+/// wait for the banner — which checks at most every six hours and stays
+/// quiet for a day after "Not now". This ignores both.
+struct CheckForUpdatesRow: View {
+    private enum Status: Equatable {
+        case idle, checking, upToDate, available(String), failed
+    }
+
+    @State private var state: Status = .idle
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        switch state {
+        case .available(let version):
+            Button {
+                openURL(UpdateChecker.appStoreURL)
+            } label: {
+                Label("Update to Version \(version)", systemImage: "arrow.down.circle.fill")
+                    .fontWeight(.semibold)
+            }
+        default:
+            Button {
+                Task { await check() }
+            } label: {
+                HStack {
+                    Text("Check for Updates")
+                    Spacer()
+                    switch state {
+                    case .checking: ProgressView()
+                    case .upToDate: Text("Up to date").foregroundStyle(.secondary)
+                    case .failed: Text("Couldn't reach the App Store").font(.caption).foregroundStyle(.secondary)
+                    default: EmptyView()
+                    }
+                }
+            }
+            .disabled(state == .checking)
+        }
+    }
+
+    private func check() async {
+        state = .checking
+        guard let store = await UpdateChecker.storeVersion() else {
+            state = .failed
+            return
+        }
+        state = UpdateChecker.isNewer(store, than: UpdateChecker.installed) ? .available(store) : .upToDate
     }
 }
 
