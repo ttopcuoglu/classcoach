@@ -10,9 +10,9 @@
 // falls through to the app's catch-all index.html.
 
 const SITE = 'https://www.wivoza.com'
-const DEFAULT_TITLE = 'Wivoza — AI coaching for K-12 teachers'
+const DEFAULT_TITLE = 'Wivoza — a content coach after every lesson'
 const DEFAULT_DESCRIPTION =
-  'Wivoza is a private, judgment-free AI coaching app for K-12 teachers. Prepare for hard conversations, reflect on real lessons, and grow — one practical next step at a time.'
+  'A content coach after every lesson. Record a class and Wivoza shows how you taught the content — what worked, where it could go further, and where students usually get stuck — then helps you plan the next one. Private, never scored.'
 
 type Meta = { title: string; description: string }
 
@@ -48,7 +48,7 @@ export const PUBLIC_PAGE_META: Record<string, Meta> = {
   },
   '/guide/lesson-debrief': {
     title: 'Lesson Debrief — a teacher’s guide | Wivoza',
-    description: 'Record one class period and get a private report on talk time, questioning, wait time, and routines — then talk it through with your coach.',
+    description: 'Record one class period and get a private report on how you taught the content — what worked, where it could go further, where students get stuck — plus your questions, talk and routines.',
   },
   // Route kept from when this surface was Ask & Practice; the page is Practice now.
   '/guide/ask-practice': {

@@ -20,7 +20,7 @@ const OFFER = [
     badge: 'bg-terracotta text-cream',
     card: 'bg-peach-tint/50',
     title: 'Every teacher gets Plus',
-    body: 'Lesson Debrief, Planning Coach, Communication Coach, and Coach’s memory — on top of Talk It Through and Practice. Each teacher’s account stays their own, even if they change schools.',
+    body: 'Lesson Debrief with content coaching after every recorded lesson, Planning Coach, Communication Coach, and Coach’s memory — on top of Talk It Through and Practice. Each teacher’s account stays their own, even if they change schools.',
   },
   {
     icon: ChartBarIcon,
@@ -50,7 +50,7 @@ const PRIVACY_POINTS = [
 // leader. Kept to what the report actually contains.
 const LEADER_VIEW = [
   { title: 'Is it being used?', body: 'Who activated, who is active, who keeps coming back, and who could use a nudge, with what tends to help.' },
-  { title: 'Where should PD go?', body: 'Shared strengths and growth areas from recorded lessons, including wait time, the pause after a student answers, and pace, each explained in plain words, by grade or subject once groups are large enough.' },
+  { title: 'Where should PD go?', body: 'Shared strengths and growth areas from recorded lessons, including questions beyond recall, checks for understanding, real-world connections, and wait time, each explained in plain words, by grade or subject once groups are large enough.' },
   { title: 'Did the PD work?', body: 'Track a focus area and see whether it shows up in fewer lessons since you started, for example 43% of lessons down to 22%.' },
   { title: 'What should we do next?', body: 'The most common need you are not working on yet, with a suggested PD session, ready for your next staff meeting.' },
 ]
@@ -320,8 +320,9 @@ export default function ForSchools() {
             Private coaching for every teacher in your building<span className="text-gold">.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-lg text-cream/75">
-            Give your whole staff Wivoza Plus, see how coaching is taking hold across your school, and keep every
-            teacher’s individual work private to them.
+            Give every teacher a content coach after every lesson they record — feedback on how they taught it, not
+            another observation. See how coaching is taking hold across your school, and keep every teacher’s
+            individual work private to them.
           </p>
           <a
             href="#inquiry"

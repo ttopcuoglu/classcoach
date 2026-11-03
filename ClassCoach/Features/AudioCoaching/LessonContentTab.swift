@@ -147,7 +147,7 @@ struct ContentSpecialistTab: View {
                     Text("A specialist\u{2019}s ideas for teaching this subject.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                 }
             }
-            Text("\u{2726} Ideas for teaching \(subject), not a read of this lesson")
+            Text("\u{2726} How you taught \(subject), read by a specialist")
                 .font(.caption.weight(.semibold)).foregroundStyle(Self.lavender)
                 .padding(.horizontal, 10).padding(.vertical, 5)
                 .background(Self.lavenderTint, in: Capsule())
@@ -177,7 +177,7 @@ struct ContentSpecialistTab: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 DetailRow(title: "How to read this") {
-                    readingNote("These are a specialist\u{2019}s ideas for teaching \(subject), written from excerpts of what you said. They may miss context, they are a starting point for your own reflection rather than a review, and your subject expertise is the final word.")
+                    readingNote("These notes read how you taught \(subject) the way a specialist in the subject would, from excerpts of what you said. They may miss context, they are a starting point for your own reflection rather than a review, and your subject expertise is the final word.")
                 }
                 Divider()
             }

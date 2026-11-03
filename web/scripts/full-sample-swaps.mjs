@@ -88,13 +88,74 @@ export const SWAPS = {
       'Yeah. Carbon dioxide. So the carbon leaves as a gas you breathe out.',
     'No. Disease had nothing to do with it. It was just climate change.': 'No. Light has nothing to do with it. That’s photosynthesis, not this.',
     'Being left behind. Very good.': 'Lactic acid. Very good.',
+
+    // Content Specialist, printed after the Summary since 2026-11-02.
+    "Your framing of internal choices versus external forces gave students a lens they could use: several answers reached for it on their own when explaining the Harappan decline.":
+      "Your “what if the cell had no oxygen?” question gave students something to reason with: several answers reached for the oxygen at the end of the chain on their own when explaining fermentation.",
+    "Next time, you could ask students to sort each cause into internal or external before the simulation starts, so the categories become tools they use while playing rather than a frame you narrate.":
+      "Next time, you could follow one glucose molecule through each stage on the board, so students see where the energy actually leaves rather than reciting the equation.",
+    "an iron that was a meter. No. Resistance of rust. Very good. So they created a number system that used zero as an actual number, and they created metal that was persistent to us. Harlem? Oh, I actually also said the":
+      "so glucose comes in, oxygen comes in. Good. And then where does the carbon end up? Carbon dioxide, very good. So we're breathing out the carbon from the sugar we ate. Okay? Oh, I actually also said the",
+    "Explicitly naming all three empires (Indus Valley, Mauryan, Gupta) right before launching the simulation is a nice anchor—it reminds students of the full set they're choosing among, which should make the \"figure out which one\" task more solvable.":
+      "Naming all three stages — glycolysis, the Krebs cycle, the electron transport chain — right before the group task is a nice anchor: students know the full set they are reasoning across, which makes “which stage stops first?” more solvable.",
+    "that simulated the fall of one of the major":
+      "that walks through each of the three stages",
+    "Empires fall for a variety of reasons. Sometimes leaders just make bad choices. Sometimes forces from outside the empire's control causes the empire to collapse. And in the case of the Indus River civilization, the Mauryans and the Gupta,":
+      "Cells get their energy in a few different ways. Sometimes there's plenty of oxygen. Sometimes, like in a sprint, the muscle runs short. And in the case of the muscle cell, the yeast and the bacteria,",
+    "Having students define \"abandoned\" is a good vocabulary check for the Harappan passage—you could extend it by asking whether the evidence suggests a sudden abandonment or a slow decline, since that distinction is central to how historians actually debate the Indus Valley's end.":
+      "Having students define “ATP” in their own words is a good vocabulary check — you could extend it by tracking a single glucose molecule through each stage, so students see where the energy actually leaves.",
+    "me. Circle one of the reasons for the decline of the empire. So what was the big one? And from the next part, a one two two essentially define the word abandoned. I'm gonna give you guys five minutes to just work on the Harappan part.":
+      "me. Circle the stage that makes the most ATP. So what was the big one? And for the next part, number two, define ATP in your own words. I'm gonna give you guys five minutes to just work on the glycolysis part.",
+    "When poetry comes up as a Gupta achievement, naming a specific example or figure could help it land alongside the more concrete items like zero and the iron pillar, so literature doesn't feel like a thinner category by comparison.":
+      "When photosynthesis comes up in the recap, showing how the two equations mirror each other could help it land, so respiration doesn’t feel like a separate topic from the one students just finished.",
+    "But about literature, I meant, like, mainly poetry. Yep. So you made a lot of poetry. We'll do Willow then.":
+      "But about plants, I meant, like, mainly the leaves. Yep. So they make a lot of sugar. We'll do mitochondria then.",
+    "Students often assume the Indus Valley decline was a single dramatic event (like an invasion) rather than a gradual process involving multiple environmental factors, so emphasizing the combination of causes over time helps correct that.":
+      "Many students think plants photosynthesize instead of respiring; asking what a plant does at night surfaces the idea that plants respire all the time.",
+    "Learners can conflate \"decline\" with \"disappearance,\" missing that Harappan culture and people likely persisted and dispersed rather than vanishing, which is worth distinguishing explicitly.":
+      "Learners often treat energy as a substance stored inside ATP, so describing ATP as a carrier that moves energy, not the energy itself, is worth making explicit.",
+    "Students sometimes assume all three empires fell the same way, so contrasting the specific mix of causes for each (climate/river shift for Indus, administrative overextension for Mauryan, invasions/fragmentation for Gupta) prevents a one-size-fits-all explanation.":
+      "Students sometimes hear “respiration” as “breathing,” so separating the lungs’ gas exchange from the chemistry inside every cell prevents a one-word confusion.",
+    "world history":
+      "biology",
+
+    // Talk & Participation's longest stretch, shown since the sample carries a
+    // room trace (2026-11-02).
+    "we're going to be doing another little simulation. This is going to be a two day thing. So":
+      "we're going to be doing a little lab. This is going to be a two day thing. So",
+    "this will take A day? Two day. I got it. Can pass out... Tell you what. You can pass out Can I pass out some?":
+      "this will take a day? Two days. I got it. Can you pass out... Tell you what. You can pass out the yeast cups. Can I pass out some?",
+    "This half of the room. So Not right now. So what we got... This will probably be done both today and tomorrow. What we're gonna do is that we're actually gonna look at a simulation":
+      "This half of the room. So, not right now. So what we got... This will probably be done both today and tomorrow. What we're gonna do is that we're actually gonna look at a model",
+    "Indian empires we talked about. We":
+      "of the three stages we talked about. We",
+    "talked about the Indus... Snow River Valley. We've talked about the Gupta, and we've talked about the Morians.":
+      "talked about glycolysis... in the cytoplasm. We've talked about the Krebs cycle, and we've talked about the electron chain.",
+    "So what we're gonna do Ow.":
+      "So what we're gonna do, okay.",
+    "Wait. Don't They're getting rid tires. Say he was kidding me. My Hell. Was this.":
+      "Wait. Don't open those yet. They need to sit for a minute. Okay.",
+    "So what we're gonna do, we're gonna have a little simulation. I'm gonna explain the rules in a bit. So, basically, just go over how all three of these empires fell. Then for today and tomorrow, we're gonna play a little game and see if you guys can":
+      "So what we're gonna do, we're gonna have a little lab. I'm gonna explain the steps in a bit. So, basically, just go over how all three of these stages work. Then for today and tomorrow, we're gonna watch the yeast and see if you guys can",
+    "run a simulation with one of the":
+      "figure out which of the",
+    "empires on how they fall and figure out which one it is. We'll go through the first part first, and then we will... Thank you. And then we will go through the simulation game. So first things first,":
+      "three stages keeps running when the oxygen is gone. We'll go through the first part first, and then we will... Thank you. And then we will go through the lab. So first things first,",
+    "is a packet that goes over the simulation. The front page should be a":
+      "is a packet that goes over the lab. The front page should be a",
+    "series of passages. So here are the rules. Oh my gosh.":
+      "series of diagrams. So here are the steps. Okay.",
+    "we're going to set the stage. Does anybody here wanna read, like, this little sentence up here real quick? Let's go. Hunter, go ahead. Throughout":
+      "we're going to set the stage. Does anybody here wanna read, like, this little sentence up here real quick? Let's go. Go ahead. Throughout",
   },
   // Substrings, wherever they appear (a quote shown inside quotation marks).
   parts: [
+    ['Introducing the fall-of-empires simulation', 'Walking through the respiration equation'],
+    ['world history specialist', 'biology specialist'],
     ['Robert and Aramis, if I have to talk to you guys again, it’s going to be a DBS.', 'You two, if I have to stop again for the side conversation, you’ll be moving seats.'],
   ],
 }
 
 // The real lesson's words. None of them may be on the printed page.
 export const LEAK =
-  '\\b(empires?|Gupta|Harappan|Mauryan|Indus|bromine|Moroccan|simulation|transitional phrase|Robert|Aramis|River|DBS|DPSs?|abandoned|feudalism|serfs?|black death|wages|supply and demand|climate change|zero|rust|earthquakes?|trade routes?|civilizations?)\\b'
+  '\\b(empires?|Gupta|Harappan|Mauryan|Indus|bromine|Moroccan|simulation|transitional phrase|Robert|Aramis|Hunter|River|DBS|DPSs?|abandoned|feudalism|serfs?|black death|wages|supply and demand|climate change|zero|rust|earthquakes?|trade routes?|civilizations?)\\b'

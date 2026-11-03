@@ -86,7 +86,13 @@ try {
       const seconds = env.join('');
       let quietSec = 0, unresolvedSec = 0;
       for (let t = 0; t < total; t++) if (!speech[t]) (env[t] === 'q' ? quietSec++ : unresolvedSec++);
-      return { ...s, soundTimeline: { ...(s.soundTimeline ?? {}), seconds }, metricsDetail: { ...(s.metricsDetail ?? {}), quietSec, unresolvedSec } };
+      // The per-second room trace a lesson analysed today carries, from the same
+      // transcript and loudness track, so Student Talk shows a share rather than
+      // "not measured on this older recording".
+      const who = new Array(total).fill(null);
+      for (const g of s.segments) if (g.text?.trim()) for (let t = Math.floor(g.startSec); t < Math.min(total, Math.ceil(g.endSec)); t++) who[t] = g.speakerLabel === 'Teacher' ? 't' : 's';
+      const roomTrace = who.map((w, t) => w ?? (env[t] === 'q' ? 'q' : 'o')).join('');
+      return { ...s, soundTimeline: { ...(s.soundTimeline ?? {}), seconds }, metricsDetail: { ...(s.metricsDetail ?? {}), quietSec, unresolvedSec }, metricsLogs: { ...(s.metricsLogs ?? {}), roomTrace } };
     };
     window.fetch = async (input, init) => {
       const res = await inner(input, init);

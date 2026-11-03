@@ -26,9 +26,9 @@ import {
 
 const BENEFITS = [
   { title: 'See what you can’t see while teaching', body: 'You’re running the room. The recording isn’t.' },
-  { title: 'Trade impressions for evidence', body: '“That discussion went well” — and here’s what the talk time actually shows.' },
+  { title: 'Trade impressions for evidence', body: '“That explanation landed” — and here are the exact moments that show whether it did.' },
   { title: 'Find patterns, not verdicts', body: 'One lesson is a snapshot. Four start to tell you something.' },
-  { title: 'Notice the small levers', body: 'Wait time, follow-up questions, whose names you say out loud.' },
+  { title: 'Get a content coach’s eye', body: 'Your examples, models and vocabulary, read the way a specialist in your subject would.' },
   { title: 'Stop guessing what to work on', body: 'Pick one focus metric and watch just that one move.' },
   { title: 'Get credit for what’s working', body: 'The report names a strength before it names anything else.' },
   { title: 'Walk in prepared', body: 'Your own read on your teaching, before anyone else offers theirs.' },
@@ -37,7 +37,8 @@ const BENEFITS = [
 const MOMENTS = [
   'You’re trying a new discussion structure',
   'Participation feels uneven and you can’t say why',
-  'You’re working on one specific move — wait time, cold call, checks',
+  'You’re teaching a concept students always find hard',
+  'You’re working on one specific move — questioning, follow-ups, checks',
   'A unit isn’t landing the way it did last year',
   'A coach or AP named a focus and you want your own read on it',
   'You’re curious how much of the period is actually you talking',
@@ -55,7 +56,7 @@ const STEPS = [
   },
   {
     title: 'Read the report',
-    body: 'Summary first: one thing to try next lesson, what the lesson covered, how the lesson moved, its numbers — talk, sound and quiet, pace, questions, wait time and checks — and one thing to keep doing. Insights holds the detail. My Growth shows the same numbers trending across every session you’ve recorded.',
+    body: 'Summary first: one thing to try next lesson, what the lesson covered, an idea for taking the content further, how the lesson moved, and its numbers — talk, pace, questions and checks. Content Specialist reads how you taught the content. Insights holds the detail. My Growth shows the same numbers trending across every session you’ve recorded.',
   },
   {
     title: 'Talk it through',
@@ -74,7 +75,7 @@ const TABS = [
   },
   {
     name: 'Content Specialist',
-    body: 'A subject specialist’s ideas for teaching this topic — what worked, where it could go further, where students get stuck. Ideas for the subject, not a read of your teaching.',
+    body: 'How you taught this content, read the way a specialist in the subject would — what worked and why, where it could go further, each tied to a moment you said. Then where students usually get stuck in this topic, and the move that heads it off.',
   },
   {
     name: 'Rubric lens',
@@ -86,17 +87,17 @@ const TABS = [
   },
   {
     name: 'My Growth',
-    body: 'Seven measures trended over time. Choose one as your focus and it’s highlighted here and on Summary.',
+    body: 'The Summary’s numbers — talk time, pace, questions and checks — trended over time. Choose one as your focus and it’s highlighted here and on Summary.',
   },
 ]
 
 const STORY = [
-  'Mr. Boateng is proud of third-period science. It’s discussion-based, students argue about evidence, and the room is never quiet. He records it expecting the report to confirm what he already believes.',
-  'It doesn’t, exactly. Talk & Participation shows he was speaking for 74% of the period. His Teacher Pause Time — how long he leaves a thinking question with the class before he speaks again — is 1.2 seconds.',
-  'His first reaction is to argue with it — a lot of that talk was him restating student ideas so the class could hear them. Which is true, and it’s also the finding.',
-  'In the Reflect tab he says exactly that out loud. Coach asks what would happen if he waited instead of restating. He doesn’t love the answer: probably silence, and he’d fill it.',
-  'His next step is small enough to actually do: after each open question, count to five in his head before saying anything. He writes it in his notes and sets a follow-up date for two weeks out.',
-  'The next recording isn’t a transformation. His wait time is 2.9 seconds and his talk share is 66% — better, not fixed. But My Growth now has two points on a line instead of one opinion, and he knows which direction it’s going.',
+  'Mr. Boateng is proud of his cellular respiration lesson. He has taught it for nine years, the equation goes up on the board, and students can recite it by the end of the period. He records it expecting the report to confirm what he already believes.',
+  'Content Specialist agrees with part of it. His “what if the cell had no oxygen?” question made students predict before he named fermentation — that worked, and the note says why. But the equation went up as one line, and the note at 9:42 suggests tracking a single glucose molecule through each stage, so students can see where the energy actually leaves.',
+  'His first reaction is to argue with it: the students knew the equation. Which is true, and it’s also the point — knowing the equation isn’t the same as knowing where the energy goes.',
+  'In the Reflect tab he says exactly that out loud. Coach asks what a student would say if he asked where the energy goes. He doesn’t love the answer: probably “into the ATP,” with no idea how.',
+  'His next step is small enough to actually do: one glucose molecule, followed on the board through glycolysis, the Krebs cycle and the electron transport chain. He carries it into Planning Coach for next year’s unit, and tries it with a different section on Thursday.',
+  'The Thursday recording isn’t a transformation. But the “What worked” note now names the glucose walk-through, students’ questions are about the stages rather than the formula, and My Growth shows more of his questions going beyond recall.',
 ]
 
 const DEBRIEF_QUESTIONS = [
@@ -144,6 +145,12 @@ function SampleReport() {
           Students worked through cell respiration, moving from a modelled example to small-group analysis of
           what happens when oxygen runs short.
         </p>
+        <div className="mt-3 border-l-4 border-terracotta pl-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">An idea for next time</p>
+          <p className="mt-1 text-sm italic text-ink">
+            Follow one glucose molecule through each stage on the board, so students see where the energy actually leaves.
+          </p>
+        </div>
       </div>
 
       <div className="rounded-xl border border-hairline bg-cream-card p-4">
@@ -165,13 +172,12 @@ function SampleReport() {
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
-          { label: 'You spoke', value: '62', unit: '%', tint: 'bg-peach-tint' },
-          { label: 'Students spoke', value: '27', unit: '%', tint: 'bg-gold-tint' },
-          { label: 'Sound, no words', value: '7', unit: '%', tint: 'bg-lavender-tint' },
-          { label: 'Quiet', value: '4', unit: '%', tint: 'bg-mint-tint' },
+          { label: 'Teacher Talk', value: '62', unit: '%', tint: 'bg-peach-tint' },
+          { label: 'Student Talk', value: '18', unit: '%', tint: 'bg-gold-tint' },
+          { label: 'Group Talk', value: '9', unit: '%', tint: 'bg-lavender-tint' },
+          { label: 'Silence', value: '11', unit: '%', tint: 'bg-mint-tint' },
           { label: 'Pace', value: '148', unit: 'wpm', tint: 'bg-peach-tint' },
           { label: 'Questions', value: '22', unit: '', tint: 'bg-mint-tint' },
-          { label: 'Teacher pause', value: '2.4', unit: 's', tint: 'bg-mint-tint' },
           { label: 'Checks', value: '3', unit: '', tint: 'bg-gold-tint' },
         ].map((t) => (
           <div key={t.label} className={`rounded-xl px-3 py-2.5 ${t.tint}`}>
@@ -202,7 +208,7 @@ export default function GuideLessonDebrief() {
         title="Lesson Debrief"
         paragraphs={[
           'You can’t watch your own class while you’re teaching it. Lesson Debrief records one period and turns it into something you can actually look at afterward.',
-          'Wivoza transcribes the recording and hands back a report: how the talking was shared, what kinds of questions you asked, how you followed up on answers, how your directions sounded. Then you talk it through with your coach and decide what to change. No score, no rating, no one else sees it.',
+          'Wivoza transcribes the recording and hands back a report on how you taught the content: what worked in your explanations and examples, where they could go further, and where students usually get stuck in this topic. Alongside it, the questions you asked, how the talking was shared, and how your directions sounded. Then you talk it through with your coach and decide what to change. No score, no rating, no one else sees it.',
         ]}
       />
 
@@ -311,7 +317,7 @@ export default function GuideLessonDebrief() {
           id="teacher-story"
           eyebrow="Teacher story"
           title="Mr. Boateng’s story"
-          lede="A lesson he was proud of, a number he didn’t like, and a change small enough to keep."
+          lede="A lesson he was proud of, a note he didn’t expect, and a change small enough to keep."
         >
           <div className="mt-8 rounded-3xl border border-hairline bg-cream-card p-7 shadow-sm sm:p-9">
             <QuoteIcon className="h-7 w-7 text-gold" />

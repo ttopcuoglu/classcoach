@@ -14,7 +14,7 @@ const CATEGORIES: Category[] = [
     items: [
       {
         q: 'Does my principal or administrator see my recordings or feedback?',
-        a: 'No. Admins — at the school level or platform-wide — only ever see aggregate trends across their staff, like how many teachers are using Wivoza, or how often clear directions or wait time come up across recorded lessons. No number is tied to a teacher, and they never see anyone\'s recordings, transcripts, reports, answers, or ratings. Every admin view says this plainly on screen.',
+        a: 'No. Admins — at the school level or platform-wide — only ever see aggregate trends across their staff, like how many teachers are using Wivoza, or how often clear directions or questions beyond recall come up across recorded lessons. No number is tied to a teacher, and they never see anyone\'s recordings, transcripts, reports, answers, or ratings. Every admin view says this plainly on screen.',
       },
       {
         q: 'My school shared a focus. Does my admin know whether I turned it on?',
@@ -77,15 +77,15 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'What do I get from a Lesson Debrief?',
-        a: 'A private report with six tabs. Summary is the 60-second read: one thing to try next lesson, what the lesson covered, how the lesson moved, its numbers (your share of the talk and the students’, sound and quiet, pace, questions, Teacher Pause Time and checks for understanding), and one thing to keep doing. Insights has the detail in those four sections — Talk & Participation, Questioning & Checking, Clarity & Content, and Climate & Routines — always shown in your own words, with the time you said them. Content Specialist offers a subject specialist\'s ideas for teaching the topic. Rubric lens, Reflect, and My Growth cover the rest.',
+        a: 'A private report with six tabs, built around how you taught the content. Summary is the 60-second read: one thing to try next lesson, what the lesson covered, an idea for taking the content further, how the lesson moved, and its numbers (Teacher Talk, Student Talk, Group Talk, Silence, pace, questions and checks for understanding). Content Specialist reads how you taught the content the way a specialist in your subject would: what worked and why, where it could go further, and where students usually get stuck in this topic. Insights has the detail in four sections — Talk & Participation, Questioning & Checking, Clarity & Content, and Climate & Routines — always shown in your own words, with the time you said them. Rubric lens, Reflect, and My Growth cover the rest.',
       },
       {
-        q: 'What is Teacher Pause Time?',
-        a: 'After each question that asks students to explain or reason, how long you left it with the class before you spoke again, with any student answer included. The report lists each of those questions with its time, and whether a student answered, no one did, or you kept talking. It measures your side of the pause, which the microphone hears reliably even when students are faint. When no one answered, three seconds or more of silence gives most students time to think.',
+        q: 'What does Content Specialist look at — and does it check whether my content is right?',
+        a: 'It reads how you taught the content: your explanations, examples, models and vocabulary, the order you put ideas in, and what the next layer of depth would be. Every note points to a moment you actually said, with its time, and you always get both what worked and where it could go further. It then lists where students usually get stuck in the topic — that part is subject knowledge, not a claim about your class. It does not grade your accuracy: it works from a transcript, so anything that may need a second look is put as a gentle check, never a correction. It recognises math, ELA, science, social studies and the arts; a world-language class taught in the target language is not yet recognised.',
       },
       {
         q: 'Can I save or share a Lesson Debrief?',
-        a: 'Yes. On the Summary, choose Save the full report as a PDF. You get the Summary and all four Insights sections, each on its own page, with every list opened up. The Hard Look is never included. The PDF is yours to keep or pass on; nothing is shared unless you send it.',
+        a: 'Yes. On the Summary, choose Save the full report as a PDF. You get the Summary, Content Specialist, and all four Insights sections, each on its own page, with every list opened up. The Hard Look is never included. The PDF is yours to keep or pass on; nothing is shared unless you send it.',
       },
       {
         q: 'What if the recording only caught part of the lesson?',

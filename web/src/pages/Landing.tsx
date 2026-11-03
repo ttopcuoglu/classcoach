@@ -33,20 +33,20 @@ const PROCESS = [
   {
     icon: HeadsetIcon,
     tint: 'bg-mint-tint text-forest',
-    title: 'Bring the moment',
-    description: 'Talk it through, record a lesson, or describe a challenge while it is still fresh.',
+    title: 'Teach the lesson',
+    description: 'Record a class on your phone or in your browser — or talk through a moment while it is still fresh.',
   },
   {
     icon: BrainIcon,
     tint: 'bg-peach-tint text-terracotta',
-    title: 'See what matters',
-    description: 'Get clear patterns and coaching — not a wall of scores or generic advice.',
+    title: 'See how the content landed',
+    description: 'What worked and why, where it could go further, and where students usually get stuck in this topic — not a wall of scores.',
   },
   {
     icon: TargetIcon,
     tint: 'bg-gold-tint text-terracotta-600',
-    title: 'Try one next step',
-    description: 'Carry it into your next plan, rehearse it, use it in class, and see your progress build over time.',
+    title: 'Plan the next one',
+    description: 'Your one thing to try carries straight into Planning Coach, so the next lesson starts from what you learned in this one.',
   },
 ]
 
@@ -86,7 +86,7 @@ const MOMENTS = [
         tint: 'bg-peach-tint text-terracotta',
         title: 'Lesson Debrief',
         slug: 'lesson-debrief',
-        description: 'See who was heard, what you asked, and how you followed up — in your own words, with one focus for next lesson. Add a specialist’s ideas, the Danielson rubric, or the Hard Look.',
+        description: 'See how you taught the content — what worked, where it could go further, where students usually get stuck — plus the questions you asked, talk and pace, and one focus for next lesson. Add the Danielson rubric or the Hard Look.',
       },
       {
         icon: HeadsetIcon,
@@ -273,23 +273,37 @@ function SampleCard({ feature, eyebrow, title, before, after, pdf }: (typeof SAM
   )
 }
 
-// The sample band's tiles: a miniature of the Summary's numbers. The figures
-// are the ones in the published sample report (/samples/lesson-debrief.pdf,
-// the report's own "Save the full report as a PDF", made by
-// scripts/capture-full-sample.mjs) — an invented class, not a real one — and
-// the frame says "Sample" so nobody reads them as someone's results.
-const SAMPLE_TILES = [
-  { label: 'You spoke', value: '34.3', unit: '%', card: 'bg-peach-tint', ink: 'text-terracotta-600' },
-  { label: 'Students spoke', value: '13.5', unit: '%', card: 'bg-gold-tint', ink: 'text-terracotta-600' },
-  { label: 'Questions', value: '7', unit: '', card: 'bg-mint-tint', ink: 'text-forest' },
-  { label: 'Teacher pause', value: '7.4', unit: 's', note: 'from 4 questions', card: 'bg-mint-tint', ink: 'text-forest' },
+// The sample band: the Content Specialist's notes in miniature, as real text.
+// Same invented class as the hero and the published sample report
+// (/samples/lesson-debrief.pdf, made by scripts/capture-full-sample.mjs) — a
+// biology lesson on cellular respiration, not a real one — and the frame says
+// "Sample" so nobody reads them as someone's results.
+const SAMPLE_NOTES = [
+  {
+    label: 'What worked',
+    text: 'Asking “what if the cell had no oxygen?” before naming fermentation made students predict first, so the new term arrived as an answer to their own question.',
+    card: 'bg-mint-tint',
+    ink: 'text-forest',
+  },
+  {
+    label: 'Where it could go further',
+    text: 'The equation went up as one line. Next time, track a single glucose molecule through each stage so students see where the energy actually leaves.',
+    card: 'bg-peach-tint',
+    ink: 'text-terracotta-600',
+  },
+  {
+    label: 'Where students usually get stuck',
+    text: 'Many students think plants photosynthesize instead of respiring. Ask what a plant does at night, and the misconception surfaces before the test does.',
+    card: 'bg-gold-tint',
+    ink: 'text-terracotta-600',
+  },
 ]
 
-// Two screenshots of the real report (the Summary, and Talk & Participation's
-// numbers and minute-by-minute bars), taken from the dev preview with the
-// lesson swapped for an invented one (topic, date and every quoted line), so
-// no real class appears on the public site, with a loudness track added so
-// the talk chart shows all four colours (see scripts/capture-hero.mjs). Retake them when the report's layout changes.
+// A screenshot of the real report's Summary, taken from the dev preview with
+// the lesson swapped for an invented one (topic, date and every quoted line),
+// so no real class appears on the public site (see scripts/capture-hero.mjs),
+// with one Content Specialist note from the same lesson laid over it as text.
+// Retake the screenshot when the Summary's layout changes.
 function ReportMockup() {
   return (
     <div className="relative w-full max-w-md">
@@ -311,23 +325,27 @@ function ReportMockup() {
             src="/samples/hero-debrief-summary.png"
             alt="A sample Lesson Debrief Summary for an invented biology lesson: one thing to try next lesson, what the lesson covered, how the lesson moved, and the lesson's numbers."
             width={1440}
-            height={2114}
+            height={2179}
             className="w-full"
           />
         </div>
       </div>
 
-      {/* Talk & Participation: your share, your pace, and the recording
-          minute by minute. Same lesson as the Summary, so the 34% matches. */}
-      <div className="absolute -bottom-20 -right-3 w-72 overflow-hidden rounded-xl border border-hairline bg-cream shadow-lg sm:-right-12 sm:w-96">
-        <img
-          src="/samples/hero-debrief-talk.png"
-          alt="Talk and pace: the teacher spoke for 34% of the recording and students for 14%, the rest sound with no words or quiet, at 214 words a minute, with a bar for each moment of the lesson."
-          width={1340}
-          height={646}
-          loading="lazy"
-          className="w-full"
-        />
+      {/* A Content Specialist note from the same invented lesson: the thing
+          the home page leads with, as real text rather than a screenshot. */}
+      <div className="absolute -bottom-20 -right-3 w-72 rounded-xl border border-hairline bg-cream-card p-4 text-left shadow-lg sm:-right-12 sm:w-96">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-terracotta-600">Content Specialist</p>
+          <p className="text-[11px] text-ink-soft">at 13:00</p>
+        </div>
+        <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.12em] text-forest">Where it could go further</p>
+        <p className="mt-0.5 text-sm leading-snug text-ink">
+          Track a single glucose molecule through each stage, so students see where the energy actually leaves.
+        </p>
+        <p className="mt-3 text-[10px] font-bold uppercase tracking-[0.12em] text-forest">Where students usually get stuck</p>
+        <p className="mt-0.5 text-sm leading-snug text-ink">
+          Many students think plants photosynthesize instead of respiring. Ask what a plant does at night.
+        </p>
       </div>
 
       {/* Beside the report header, clear of the chart. Hidden on a phone, where
@@ -509,12 +527,12 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           <div>
             <span className="inline-flex items-center gap-2 rounded-full bg-mint-tint px-4 py-2 text-sm font-semibold text-forest">
               <SparkleIcon className="h-4 w-4" />
-              AI coaching made for real teaching
+              Content coaching for every teacher
             </span>
             <h1 className="mt-6 font-heading text-5xl font-extrabold leading-[1.05] tracking-tight text-forest sm:text-6xl">
-              Every teacher deserves a place to{' '}
+              A content coach after every{' '}
               <span className="relative inline-block text-terracotta">
-                practice.
+                lesson.
                 <svg
                   viewBox="0 0 220 14"
                   className="absolute -bottom-1.5 left-0 w-full text-gold"
@@ -531,9 +549,10 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               </span>
             </h1>
             <p className="mt-6 max-w-md text-lg text-ink-soft">
-              Record a lesson and see what your class really sounded like — who talked, what you
-              asked, how you followed up. Then plan, prepare, and practice with a private AI coach
-              that understands classrooms.
+              Record a lesson and Wivoza reads how you taught the content: your explanations, your
+              examples, the models you used, the questions you asked. You get what worked, where it
+              could go further, and one thing to try next class — each tied to a moment in your own
+              words.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-6">
@@ -614,10 +633,10 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       <section id="how-it-works" className="mx-auto w-full max-w-6xl px-6 py-16">
         <div className="mx-auto mb-11 max-w-2xl text-center">
           <h2 className="font-heading text-3xl font-extrabold text-forest sm:text-4xl">
-            Turn everyday teaching into meaningful growth.
+            Teach it. See how it landed. Plan the next one.
           </h2>
           <p className="mt-4 text-ink-soft">
-            Wivoza helps you move from a real moment to one practical next step — without
+            The content coaching most teachers never get, after every lesson you record — without
             evaluation, paperwork, or pressure.
           </p>
         </div>
@@ -772,36 +791,27 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           <div>
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">Lesson Debrief · Sample report</span>
             <h3 className="mt-2 font-heading text-2xl font-bold leading-snug sm:text-3xl">
-              Twenty-two minutes of class, seen clearly<span className="text-gold">.</span>
+              Twenty-two minutes of class, read like a content specialist would<span className="text-gold">.</span>
             </h3>
             <p className="mt-3 text-sm leading-relaxed text-cream/75">
-              Who was heard and for how long, what you asked and how long you left the thinking with the
-              class, how your directions and redirections sounded — with the exact moments, timestamps, and
-              what to try next time. Then how you made the content clear: your examples, your connections,
-              and the key terms students used. An invented class; no real teacher or student.
+              How you explained the idea, the examples and models you chose, the key terms students picked
+              up, and the questions that asked them to think — each with the exact moment and timestamp.
+              Then one focus for next lesson that carries straight into your next plan. Talk time, pace
+              and checks for understanding are there too, when you want them. An invented class; no real teacher or student.
             </p>
             <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-gold">
               View the full sample report
               <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-3 rounded-2xl bg-cream p-4 text-left sm:grid-cols-4 lg:grid-cols-2">
-            {SAMPLE_TILES.map((t) => (
-              <div key={t.label} className={`rounded-xl px-3 py-3 ${t.card}`}>
-                <p className={`text-[10px] font-bold uppercase tracking-[0.12em] ${t.ink}`}>{t.label}</p>
-                <p className="font-heading text-2xl font-extrabold leading-tight text-forest">
-                  {t.value}
-                  {t.unit && <span className="ml-0.5 text-sm font-bold">{t.unit}</span>}
-                </p>
-                {t.note && <p className="text-[11px] text-ink-soft">{t.note}</p>}
+          <div className="flex flex-col gap-3 rounded-2xl bg-cream p-4 text-left">
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-ink-soft">Content Specialist · Biology</p>
+            {SAMPLE_NOTES.map((n) => (
+              <div key={n.label} className={`rounded-xl px-3.5 py-3 ${n.card}`}>
+                <p className={`text-[10px] font-bold uppercase tracking-[0.12em] ${n.ink}`}>{n.label}</p>
+                <p className="mt-0.5 text-sm leading-snug text-ink">{n.text}</p>
               </div>
             ))}
-            <div className="col-span-2 rounded-xl border-l-4 border-gold bg-gold-tint/60 px-3 py-2.5 sm:col-span-4 lg:col-span-2">
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-terracotta-600">What Teacher Pause Time measures</p>
-              <p className="mt-0.5 text-sm leading-snug text-ink">
-                Teacher Pause Time: after a question that asked students to explain or reason, how long until you spoke again, any answer included. When no one answered, three seconds or more of silence gives most students time to think.
-              </p>
-            </div>
           </div>
         </a>
         <div className="grid gap-6 md:grid-cols-2">

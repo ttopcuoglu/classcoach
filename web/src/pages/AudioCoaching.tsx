@@ -1338,7 +1338,7 @@ const INSIGHTS_SECTION_META: Record<InsightsSection, { n: number; blurb: string;
   // of the lesson.
   topic: {
     n: 5,
-    blurb: 'A specialist’s ideas for teaching this subject.',
+    blurb: 'How you taught it, read by a specialist.',
     accent: { band: 'bg-[#6E62A0]', chip: 'bg-[#ECE8F4]', tint: 'bg-[#ECE8F4]/50', ink: 'text-[#6E62A0]' },
   },
 }
@@ -2325,8 +2325,24 @@ function ReportPanel({
         />
       )}
 
-      {/* On paper: the four Insights sections after the Summary, each on its
-          own page, with no Hard Look and no buttons. */}
+      {/* On paper: Content Specialist after the Summary, when its notes are
+          written, then the four Insights sections, each on its own page, with
+          no Hard Look and no buttons. */}
+      {printing && session.contentNotes && (
+        <div className="break-before-page">
+          <SectionAccentContext.Provider value={INSIGHTS_SECTION_META.topic.accent}>
+            <TopicTab
+              lessonContent={session.lessonContent}
+              contentNotes={session.contentNotes}
+              isShort={coverage.isShort}
+              sending={false}
+              error={null}
+              onGenerate={handleGenerateContentNotes}
+              onDiscuss={() => {}}
+            />
+          </SectionAccentContext.Provider>
+        </div>
+      )}
       {printing &&
         (['talk', 'questions', 'content', 'routines'] as const).map((sec) => (
           <div key={sec} className="break-before-page">
@@ -2768,8 +2784,10 @@ function TryNextTimeList({
   )
 
   if (part === 'planning') {
+    // On paper only the school-focus idea, if any, is left in here, so the
+    // card's own frame goes too rather than printing as an empty box.
     return (
-      <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4">
+      <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4 print:border-0 print:bg-transparent print:p-0">
         <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} />
         {!choosing ? (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
@@ -3234,7 +3252,7 @@ function SummaryTab({
       >
         <span>
           <span className="block text-sm font-semibold text-forest">Save the full report as a PDF</span>
-          <span className="block text-xs text-ink-soft">This Summary and all four Insights sections, every moment opened up.</span>
+          <span className="block text-xs text-ink-soft">This Summary, Content Specialist and all four Insights sections, every moment opened up.</span>
         </span>
         <span className="shrink-0 text-sm font-semibold text-terracotta-600">Save PDF →</span>
       </button>
@@ -4658,15 +4676,15 @@ function TopicTab({
       onDiscuss={onDiscuss}
       howToRead={
         <p className="text-sm text-ink-soft">
-          These are a specialist's ideas for teaching {subject}, written from excerpts of what you said. They may miss
-          context, they are a starting point for your own reflection rather than a review, and your subject expertise is
-          the final word.
+          These notes read how you taught {subject} the way a specialist in the subject would, from excerpts of what you
+          said. They may miss context, they are a starting point for your own reflection rather than a review, and your
+          subject expertise is the final word.
         </p>
       }
     >
       <div className="flex flex-col gap-4">
         <span className="self-start rounded-full bg-[#ECE8F4] px-3 py-1 text-xs font-semibold text-[#6E62A0]">
-          ✦ Ideas for teaching {subject}, not a read of this lesson
+          ✦ How you taught {subject}, read by a specialist
         </span>
         {isShort && contentNotes && (
           <p className="text-xs font-semibold text-terracotta-600">
@@ -4693,7 +4711,7 @@ function TopicTab({
               type="button"
               onClick={onGenerate}
               disabled={sending}
-              className="self-start text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60"
+              className="self-start text-sm font-medium text-ink-soft hover:text-terracotta-600 disabled:opacity-60 print:hidden"
             >
               {sending ? 'Writing new notes...' : 'Write these notes again ↻'}
             </button>

@@ -119,9 +119,10 @@ const FEATURES: Feature[] = [
     badge: 'bg-forest text-gold',
     need: 'An honest look at your own lesson',
     intro:
-      'While you teach, you are busy running the lesson. Lesson Debrief listens to one class period and gives you a private report on what the conversation in your room actually sounded like.',
+      'While you teach, you are busy running the lesson. Lesson Debrief listens to one class period and gives you a private report on how you taught the content, and what the conversation in your room actually sounded like.',
     does: [
-      'Talk share, wait time, questioning, and how transitions went',
+      'How you taught the content: your explanations and examples, where they could go further, and where students usually get stuck',
+      'Questioning, talk share, and how transitions went',
       'One named strength, with the moment it came from',
       'A “Try next time” list to carry into your next plan',
     ],
@@ -219,7 +220,7 @@ const SCHOOL_POINTS = [
     icon: ChartBarIcon,
     badge: 'bg-gold text-forest',
     title: 'PD aimed at real needs',
-    body: 'Leaders see school-wide patterns from recorded lessons, such as wait time and pace, explained in plain words, so professional learning can target what teachers actually need.',
+    body: 'Leaders see school-wide patterns from recorded lessons, such as questions beyond recall and checks for understanding, explained in plain words, so professional learning can target what teachers actually need.',
   },
   {
     icon: CheckIcon,

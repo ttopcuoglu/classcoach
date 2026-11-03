@@ -78,7 +78,13 @@ await evaluate(`(() => {
     const seconds = env.join('');
     let quietSec = 0, unresolvedSec = 0;
     for (let t = 0; t < total; t++) if (!speech[t]) (env[t] === 'q' ? quietSec++ : unresolvedSec++);
-    return { ...s, soundTimeline: { ...(s.soundTimeline ?? {}), seconds }, metricsDetail: { ...(s.metricsDetail ?? {}), quietSec, unresolvedSec } };
+    // The per-second room trace a lesson analysed today carries, from the same
+    // transcript and loudness track, so Student Talk shows a share rather than
+    // "not measured on this older recording".
+    const who = new Array(total).fill(null);
+    for (const g of s.segments) if (g.text?.trim()) for (let t = Math.floor(g.startSec); t < Math.min(total, Math.ceil(g.endSec)); t++) who[t] = g.speakerLabel === 'Teacher' ? 't' : 's';
+    const roomTrace = who.map((w, t) => w ?? (env[t] === 'q' ? 'q' : 'o')).join('');
+    return { ...s, soundTimeline: { ...(s.soundTimeline ?? {}), seconds }, metricsDetail: { ...(s.metricsDetail ?? {}), quietSec, unresolvedSec }, metricsLogs: { ...(s.metricsLogs ?? {}), roomTrace } };
   };
   window.fetch = async (input, init) => {
     const res = await inner(input, init);
@@ -120,6 +126,11 @@ await evaluate(`
       'The lesson covers cellular respiration — how cells turn glucose and oxygen into usable energy — moving from a modelled walk through the equation to small groups predicting what happens when oxygen runs short.',
     'The framing of internal bad choices versus external forces is a strong organizing lens for comparing why empires fall—next time you could have students sort the specific causes (climate shift, earthquakes, river course changes, leadership decisions) into those two buckets for each empire before the simulation starts, so the categories are active tools rather than background narration.':
       'After a student answers, ask one more “why?” before you move on — today you followed up on 3 of the 9 answers the recording could hear.',
+    // The summary's second paragraph, and its idea for next time.
+    'Your framing of internal choices versus external forces gave students a lens they could use: several answers reached for it on their own when explaining the Harappan decline.':
+      'Your “what if the cell had no oxygen?” question gave students something to reason with: several answers reached for the oxygen at the end of the chain on their own when explaining fermentation.',
+    'Next time, you could ask students to sort each cause into internal or external before the simulation starts, so the categories become tools they use while playing rather than a frame you narrate.':
+      'Next time, you could follow one glucose molecule through each stage on the board, so students see where the energy actually leaves rather than reciting the equation.',
     // Next lesson, try this: what went well and the one thing to try.
     'Your “bad choices vs. outside forces” framing gave students a strong lens.': 'Your “what if the cell had no oxygen?” question got students reasoning.',
     'Have pairs sort the causes into those two groups before the simulation starts.': 'After a student answers, ask one more “why?” before you move on.',
@@ -149,7 +160,7 @@ const shoot = async (name, clip) => {
 // 1. Summary: from the report title down to the row of the lesson's numbers.
 const summaryClip = await evaluate(`(() => {
   const top = [...document.querySelectorAll('p,span')].find((e) => e.textContent.trim() === 'Wivoza · Lesson Debrief');
-  const tile = [...document.querySelectorAll('p')].find((e) => e.textContent.trim() === 'TAWT');
+  const tile = [...document.querySelectorAll('p')].find((e) => e.textContent.trim() === 'Checks');
   const t = top.getBoundingClientRect().top + scrollY - 20;
   const b = tile.closest('.grid').getBoundingClientRect().bottom + scrollY + 16;
   return { x: 0, y: t, width: ${W}, height: b - t };
