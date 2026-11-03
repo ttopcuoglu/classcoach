@@ -1,24 +1,59 @@
 <!doctype html><html><head><meta charset="utf-8">
-<!-- The 1200x630 card a shared wivoza.com link shows (public/og-image.png). Regenerate:
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars --window-size=1200,630 --virtual-time-budget=5000 --screenshot=public/og-image.png "file://$PWD/scripts/og-image.html"
+<!-- The 1200x630 card a shared wivoza.com link shows (public/og-image.png): the
+  home page's sample report with its Content Specialist note, plus a Talk &
+  Participation card, so the card shows both the content and the teaching.
+  The report image is public/samples/hero-debrief-summary.png (an invented
+  lesson, see scripts/capture-hero.mjs); the talk numbers are invented too.
+  Regenerate:
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars --allow-file-access-from-files --window-size=1200,630 --virtual-time-budget=5000 --screenshot=public/og-image.png "file://$PWD/scripts/og-image.html"
   (run from web/) -->
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600&family=Baloo+2:wght@800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&family=Baloo+2:wght@800&display=swap" rel="stylesheet">
 <style>
 html,body{margin:0;width:1200px;height:630px;overflow:hidden}
-body{background:#1b2e28;font-family:Inter,sans-serif;position:relative}
-.glow{position:absolute;right:-160px;top:-120px;width:720px;height:720px;border-radius:50%;background:radial-gradient(circle,rgba(228,184,74,.22),rgba(228,184,74,0) 65%)}
-.logo{position:absolute;left:66px;top:62px;width:270px}
-.eyebrow{position:absolute;left:80px;top:208px;color:#e4b84a;font-weight:600;font-size:22px;letter-spacing:.14em;text-transform:uppercase}
-h1{position:absolute;left:80px;top:236px;margin:0;width:1040px;font-family:'Baloo 2',sans-serif;font-weight:800;font-size:92px;line-height:1.02;color:#f7f3ea;letter-spacing:-.01em}
+body{background:#1b2e28;font-family:Inter,sans-serif;position:relative;color:#2f2a24}
+.glow{position:absolute;right:40px;top:40px;width:640px;height:640px;border-radius:50%;background:radial-gradient(circle,rgba(228,184,74,.22),rgba(228,184,74,0) 65%)}
+.logo{position:absolute;left:62px;top:54px;width:220px}
+.eyebrow{position:absolute;left:68px;top:196px;width:470px;color:#e4b84a;font-weight:600;font-size:17px;line-height:1.4;letter-spacing:.12em;text-transform:uppercase}
+h1{position:absolute;left:68px;top:252px;margin:0;width:500px;font-family:'Baloo 2',sans-serif;font-weight:800;font-size:76px;line-height:1.0;color:#f7f3ea}
 h1 span{color:#e4b84a}
-.sub{position:absolute;left:80px;top:448px;color:rgba(247,243,234,.75);font-size:28px;font-weight:500}
-.chips{position:absolute;left:80px;top:520px;display:flex;gap:14px}
-.chips span{background:#dfeae2;color:#1b2e28;font-weight:600;font-size:22px;padding:10px 22px;border-radius:999px}
+.chips{position:absolute;left:68px;top:500px;display:flex;gap:8px;width:540px}
+.chips span{background:#dfeae2;color:#1b2e28;font-weight:600;font-size:14px;padding:7px 12px;border-radius:999px;white-space:nowrap}
+.win{position:absolute;left:640px;top:58px;width:400px;background:#fffdf8;border-radius:18px;padding:7px;box-shadow:0 24px 50px rgba(0,0,0,.35)}
+.bar3{display:flex;align-items:center;justify-content:space-between;padding:7px 10px 8px;font-size:12px;color:#6b6259}
+.dots{display:flex;gap:5px}.dots i{width:9px;height:9px;border-radius:50%;display:block}
+.shot{height:470px;overflow:hidden;border-radius:12px;background:#f7f3ea}
+.shot img{width:100%;display:block}
+.float{position:absolute;background:#fffdf8;border-radius:14px;box-shadow:0 16px 36px rgba(0,0,0,.30)}
+.lock{left:582px;top:168px;display:flex;gap:10px;align-items:center;padding:10px 14px}
+.lock .ic{width:32px;height:32px;border-radius:9px;background:#1b2e28;display:flex;align-items:center;justify-content:center}
+.lock b{display:block;font-size:15px}.lock small{font-size:12px;color:#6b6259}
+.saved{left:952px;top:30px;display:flex;gap:9px;align-items:center;padding:9px 14px;font-size:15px;font-weight:600}
+.saved .ck{width:26px;height:26px;border-radius:50%;background:#e4b84a;display:flex;align-items:center;justify-content:center}
+.cs{left:842px;top:228px;width:318px;padding:15px 18px}
+.k{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.cs .top{display:flex;justify-content:space-between;align-items:center}
+.cs .top .k{color:#b35a38}.cs .top span{font-size:12px;color:#6b6259}
+.cs .k.f{color:#1b2e28;margin-top:10px}
+.cs p{margin:3px 0 0;font-size:15px;line-height:1.35}
+.talk{left:600px;top:446px;width:300px;padding:14px 16px 12px}
+.talk .k{color:#1b2e28}
+.share{display:flex;height:14px;border-radius:999px;overflow:hidden;margin-top:10px;gap:2px}.share b{display:block;height:100%}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;margin-top:9px;font-size:12px;font-weight:600;white-space:nowrap}
+.legend div{display:flex;align-items:center;gap:6px}.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.legend span{margin-left:auto;padding-left:4px;color:#6b6259}
+.strip{display:flex;gap:2px;margin-top:10px;height:20px}.strip i{flex:1;border-radius:2px}
 </style></head><body>
 <div class="glow"></div>
 <img class="logo" src="../public/logo/wivoza-lockup-dark.png">
-<div class="eyebrow">Content coaching for every teacher</div>
-<h1>A content coach after<br>every <span>lesson.</span></h1>
-<div class="sub">How you taught it, what worked, and what to try next</div>
+<div class="eyebrow">Coaching for your content and your teaching</div>
+<h1>A coach after every <span>lesson.</span></h1>
 <div class="chips"><span>Only you see your reports</span><span>Never scored</span><span>Audio never kept</span></div>
+<div class="win"><div class="bar3"><div class="dots"><i style="background:rgba(201,106,69,.6)"></i><i style="background:rgba(228,184,74,.7)"></i><i style="background:rgba(27,46,40,.3)"></i></div>Your Lesson Debrief · Sample<span></span></div>
+<div class="shot"><img src="../public/samples/hero-debrief-summary.png"></div></div>
+<div class="float lock"><div class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e4b84a" stroke-width="2.4"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div><div><b>Only you see this</b><small>never scored, never shared</small></div></div>
+<div class="float saved"><div class="ck"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1b2e28" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg></div>Next step saved</div>
+<div class="float cs"><div class="top"><div class="k">Content Specialist</div><span>at 13:00</span></div>
+<div class="k f">Where it could go further</div><p>Track a single glucose molecule through each stage, so students see where the energy leaves.</p>
+<div class="k f">Where students usually get stuck</div><p>Many think plants photosynthesize instead of respiring.</p></div>
+<div class="float talk"><div class="k">Talk &amp; Participation</div><div class="share"><b style="width:39%;background:#2F855A"></b><b style="width:26%;background:#8B7BC2"></b><b style="width:23%;background:#D08A2A"></b><b style="width:12%;background:#3F8FD8"></b></div><div class="legend"><div><i style="background:#2F855A"></i>Teacher Talk<span>39%</span></div><div><i style="background:#8B7BC2"></i>Student Talk<span>26%</span></div><div><i style="background:#D08A2A"></i>Group Talk<span>23%</span></div><div><i style="background:#3F8FD8"></i>Silence<span>12%</span></div></div><div class="strip"><i style="background:#2F855A"></i><i style="background:#2F855A"></i><i style="background:#2F855A"></i><i style="background:#2F855A"></i><i style="background:#2F855A"></i><i style="background:#2F855A"></i><i style="background:#2F855A"></i><i style="background:#8B7BC2"></i><i style="background:#2F855A"></i><i style="background:#8B7BC2"></i><i style="background:#2F855A"></i><i style="background:#2F855A"></i><i style="background:#8B7BC2"></i><i style="background:#3F8FD8"></i><i style="background:#D08A2A"></i><i style="background:#D08A2A"></i><i style="background:#D08A2A"></i><i style="background:#8B7BC2"></i><i style="background:#D08A2A"></i><i style="background:#D08A2A"></i><i style="background:#D08A2A"></i><i style="background:#3F8FD8"></i><i style="background:#D08A2A"></i><i style="background:#D08A2A"></i><i style="background:#2F855A"></i><i style="background:#8B7BC2"></i><i style="background:#8B7BC2"></i><i style="background:#2F855A"></i><i style="background:#8B7BC2"></i><i style="background:#2F855A"></i><i style="background:#3F8FD8"></i><i style="background:#2F855A"></i><i style="background:#8B7BC2"></i><i style="background:#2F855A"></i></div></div>
 </body></html>
