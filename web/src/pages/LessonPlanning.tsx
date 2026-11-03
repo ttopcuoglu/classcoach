@@ -44,7 +44,7 @@ import {
   type LessonPlanPresentationReview,
   type WeekDayName,
 } from '../lib/api'
-import { takePlanningPrefill } from '../lib/communicationsPrefill'
+import { takePlanningPrefill, type PlanningPrefill } from '../lib/communicationsPrefill'
 import { DURATION_CHOICES } from '../lib/lessonCopy'
 
 // Assignment Coach is the fourth chip rather than a seventh menu item. Every
@@ -519,6 +519,7 @@ function BuildPanel() {
   const [fromChat, setFromChat] = useState<string[]>([])
   // The lesson a Debrief finding was carried over from, when there is one.
   const [fromDebrief, setFromDebrief] = useState<string | null>(null)
+  const [lastLesson, setLastLesson] = useState<PlanningPrefill['lastLesson'] | null>(null)
   // The latest form, for the arriving handoff below: it merges onto
   // whatever the profile defaults have already put there, without having to
   // wait for a render.
@@ -599,6 +600,7 @@ function BuildPanel() {
       additionalContext: prefill.additionalContext,
     }))
     setFromDebrief(prefill.source)
+    setLastLesson(prefill.lastLesson ?? null)
   }, [])
 
   function set<K extends keyof BuildForm>(key: K, value: BuildForm[K]) {
@@ -940,6 +942,34 @@ function BuildPanel() {
                 className={INPUT_CLASS}
               />
             </label>
+
+            {/* From a debrief: what last lesson was about, as a reminder, and
+                a reteach the teacher can tap. Nothing goes in the box unless
+                they do; Planning Coach turns a rough topic into an objective. */}
+            {fromDebrief && lastLesson && (
+              <div className="-mt-2 flex flex-col gap-2 text-xs text-ink-soft">
+                {lastLesson.covered && (
+                  <p>
+                    <span className="font-semibold text-ink">Last lesson covered:</span> {lastLesson.covered}
+                  </p>
+                )}
+                {lastLesson.objective && (
+                  <p>
+                    <span className="font-semibold text-ink">Your stated objective:</span> “{lastLesson.objective}”
+                  </p>
+                )}
+                {!form.topic.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => set('topic', `Reteach: ${lastLesson.covered ?? lastLesson.objective}`)}
+                    disabled={generating}
+                    className="self-start rounded-full border border-hairline bg-cream px-3 py-1 font-semibold text-forest hover:border-forest/40"
+                  >
+                    Same topic, reteach it
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Starting material — slides, a reading, a worksheet, an activity. */}
             {reading ? (

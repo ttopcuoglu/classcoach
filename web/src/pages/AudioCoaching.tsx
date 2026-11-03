@@ -2761,7 +2761,11 @@ function TryNextTimeList({
   const toggle = (id: string) => flip(setSkipped, id)
 
   function planNextLesson() {
+    const said = session.lessonContent?.statedObjective
+    const objective = said?.found && said.quote?.trim() ? said.quote.trim() : undefined
+    const covered = session.lessonContent?.summary?.trim() || undefined
     setPlanningPrefill({
+      lastLesson: objective || covered ? { objective, covered } : undefined,
       subject: session.classSubject ?? session.lessonContent?.subject ?? undefined,
       gradeLevel: session.gradeLevel ?? undefined,
       additionalContext: [

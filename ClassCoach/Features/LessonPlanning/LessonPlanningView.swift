@@ -17,6 +17,11 @@ struct PlanningPrefill {
     let additionalContext: String
     /// Which lesson this came from, for the note above the form.
     let source: String
+    /// Shown under the topic box, never put in it: what the lesson covered,
+    /// and the objective the teacher said out loud (a quote) when there was
+    /// one. Reteach uses what was covered — a spoken objective can be thin.
+    var lastObjective: String? = nil
+    var lastCovered: String? = nil
 }
 
 struct LessonPlanningView: View {
@@ -218,6 +223,7 @@ private struct BuildPanel: View {
                     Text(isWeek ? "e.g. how cells move materials in and out" : "e.g. introducing cells")
                         .font(.caption).foregroundStyle(AppTheme.textSecondary)
                 }
+                lastLessonHint
             }
 
             materialRow
@@ -528,6 +534,36 @@ private struct BuildPanel: View {
             plan = known
         } else if let fetched = try? await LessonPlanningService.getLessonPlan(id: id) {
             plan = fetched
+        }
+    }
+
+    /// From a debrief: what last lesson was about, as a reminder, and a
+    /// reteach the teacher can tap. Nothing goes in the box unless they do —
+    /// mirrors the web's Planning Coach.
+    @ViewBuilder private var lastLessonHint: some View {
+        let said = prefill?.lastObjective
+        let covered = prefill?.lastCovered
+        if fromDebrief != nil, let line = covered ?? said {
+            VStack(alignment: .leading, spacing: 6) {
+                if let covered {
+                    (Text("Last lesson covered: ").fontWeight(.semibold).foregroundColor(AppTheme.textPrimary) + Text(covered))
+                        .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let said {
+                    (Text("Your stated objective: ").fontWeight(.semibold).foregroundColor(AppTheme.textPrimary) + Text("\u{201C}\(said)\u{201D}"))
+                        .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if topic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button("Same topic, reteach it") { topic = "Reteach: \(line)" }
+                        .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .overlay(Capsule().strokeBorder(AppTheme.hairline))
+                        .disabled(generating)
+                }
+            }
+            .padding(.top, 4)
         }
     }
 

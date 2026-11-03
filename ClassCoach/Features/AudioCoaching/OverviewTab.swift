@@ -783,11 +783,18 @@ struct OverviewTab: View {
         if !ways.isEmpty {
             lines += ["", "Ways in to use in the plan:"] + ways.map { "- \($0.text)" }
         }
+        let content = session.lessonContent
+        let quote = content?.statedObjectiveQuote?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let objective = content?.statedObjectiveFound == true && !quote.isEmpty ? quote : nil
+        let summary = content?.summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let covered = summary.isEmpty ? nil : summary
         return PlanningPrefill(
             subject: session.classSubject ?? session.lessonContent?.subject,
             gradeLevel: session.gradeLevel,
             additionalContext: (["From the debrief of my last lesson with this class, build these into the plan:"] + lines).joined(separator: "\n"),
-            source: "\(session.displayTitle), \(formattedDate(session.sessionDate))"
+            source: "\(session.displayTitle), \(formattedDate(session.sessionDate))",
+            lastObjective: objective,
+            lastCovered: covered
         )
     }
 

@@ -62,6 +62,12 @@ export type PlanningPrefill = {
   additionalContext: string
   /// Which lesson this came from, for the note above the form.
   source: string
+  /// Shown under the topic box, never put in it: what the lesson covered, and
+  /// the objective the teacher said out loud (a quote) when there was one.
+  /// The report knows what was taught, not what comes next, so the topic
+  /// stays the teacher's. Reteach uses what was covered: a spoken objective
+  /// can be as thin as "we're doing another simulation today".
+  lastLesson?: { objective?: string; covered?: string }
 }
 
 const KEYS = {
