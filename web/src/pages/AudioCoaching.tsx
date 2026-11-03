@@ -5752,34 +5752,26 @@ const INVITE_FORMAT_LABEL = {
 const EXTEND_KIND_LABEL = { probe: 'Probing', reasoning: 'Asking for reasoning', build_on_peer: 'Building on a classmate' } as const
 
 /// The lesson summary on Summary: the first paragraph — what the lesson was
-/// about — then what went well behind "Read more", beside Wivo's mark. The
-/// third paragraph is the recommendation (one idea to take the content
-/// further), so it is always shown, set apart with its own label
-/// (2026-11-02). A shorter summary, from a thin recording, has no
-/// recommendation paragraph and shows as it is.
+/// about — with the other two behind "Read more", beside Wivo's mark. The
+/// third paragraph, the recommendation (one idea to take the content
+/// further), is set in italics (2026-11-02); a shorter summary, from a thin
+/// recording, has none.
 function SummaryNoteCard({ text }: { text: string }) {
   const [openState, setOpen] = useState(false)
   // Everything is open on paper.
   const open = openState || usePrintAll()
   const paras = splitParagraphs(text.trim())
-  const idea = paras.length >= 3 ? paras[paras.length - 1] : null
-  const body = idea ? paras.slice(0, -1) : paras
+  const idea = paras.length >= 3 ? paras.length - 1 : -1
   return (
     <div className="flex items-start gap-3 rounded-2xl bg-mint-tint/70 p-5">
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-forest font-heading text-sm font-bold text-gold">W</span>
       <div className="flex flex-col gap-3">
-        {(open ? body : body.slice(0, 1)).map((para, i) => (
-          <p key={i} className="text-base leading-relaxed text-ink">
+        {(open ? paras : paras.slice(0, 1)).map((para, i) => (
+          <p key={i} className={`text-base leading-relaxed text-ink${i === idea ? ' italic' : ''}`}>
             {para}
           </p>
         ))}
-        {idea && (
-          <div className="rounded-r-xl border-l-4 border-terracotta bg-cream-card/80 px-4 py-3">
-            <p className="text-xs font-bold uppercase tracking-wide text-terracotta-600">An idea for next time</p>
-            <p className="mt-1 text-base italic leading-relaxed text-ink">{idea}</p>
-          </div>
-        )}
-        {body.length > 1 && (
+        {paras.length > 1 && (
           <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-sm font-semibold text-terracotta-600 hover:underline print:hidden">
             {open ? 'Show less' : 'Read more'}
           </button>

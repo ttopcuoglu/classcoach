@@ -418,34 +418,21 @@ struct OverviewTab: View {
     @State private var noteOpen = false
 
     /// Wivo's note: the "W" mark beside the summary's first paragraph — what
-    /// the lesson was about — with what went well behind "Read more". The
-    /// third paragraph is the recommendation, always shown and set apart with
-    /// its own label — mirrors SummaryNoteCard in AudioCoaching.tsx.
+    /// the lesson was about — with the other two behind "Read more". The
+    /// third, the recommendation, is in italics — mirrors SummaryNoteCard in
+    /// AudioCoaching.tsx.
     private func noteCard(_ text: String) -> some View {
-        let all = text.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        let idea = all.count >= 3 ? all.last : nil
-        let paras = idea != nil ? Array(all.dropLast()) : all
+        let paras = text.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let idea = paras.count >= 3 ? paras.count - 1 : -1
         return HStack(alignment: .top, spacing: 12) {
             Text("W")
                 .font(.heading(.subheadline)).foregroundStyle(AppTheme.gold)
                 .frame(width: 30, height: 30)
                 .background(AppTheme.forest, in: Circle())
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(noteOpen ? paras : Array(paras.prefix(1)), id: \.self) { para in
-                    Text(para).font(.body).foregroundStyle(AppTheme.textPrimary)
+                ForEach(Array((noteOpen ? paras : Array(paras.prefix(1))).enumerated()), id: \.offset) { i, para in
+                    Text(para).font(i == idea ? .body.italic() : .body).foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
-                }
-                if let idea {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("AN IDEA FOR NEXT TIME").font(.caption.weight(.bold)).foregroundStyle(AppTheme.terracotta600)
-                        Text(idea).font(.body.italic()).foregroundStyle(AppTheme.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AppTheme.card.opacity(0.8))
-                    .overlay(alignment: .leading) { Rectangle().fill(AppTheme.terracotta).frame(width: 4) }
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
                 if paras.count > 1 {
                     Button(noteOpen ? "Show less" : "Read more") { withAnimation { noteOpen.toggle() } }
