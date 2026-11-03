@@ -26,6 +26,7 @@ import {
 import { introVideo, MEET_PLAYLIST_ID, VideoFacade } from '../components/TrainingVideos'
 import FooterContact from '../components/FooterContact'
 import RecordYourWay from '../components/RecordYourWay'
+import { SAMPLE_SCENES, type SampleScene } from '../components/SampleScenes'
 import { ROOM_COLOR, ROOM_LABEL } from '../components/TalkFlowStrip'
 import { PLUS_DEBRIEF_PER_MONTH, PLUS_MONTHLY_PRICE, PLUS_YEARLY_PER_MONTH, PLUS_YEARLY_PRICE } from '../lib/pricing'
 
@@ -155,6 +156,7 @@ const SAMPLES = [
       text: 'Written answers first, a ten-second neighbor check, then call on students by name — opening class by saying you want to hear more voices.',
     },
     pdf: '/samples/talk-it-through.pdf',
+    scene: 'talk' as SampleScene,
   },
   {
     feature: 'Communication Coach',
@@ -169,6 +171,7 @@ const SAMPLES = [
       text: '“I’m glad to sit down with your son, walk through the rubric point by point, and show him exactly where points were earned or lost.”',
     },
     pdf: '/samples/second-read.pdf',
+    scene: 'email' as SampleScene,
   },
   {
     feature: 'Planning Coach',
@@ -183,6 +186,7 @@ const SAMPLES = [
       text: 'A short check-in where students explain their food chain and defend what would happen if one organism disappeared.',
     },
     pdf: '/samples/redesign-ai.pdf',
+    scene: 'redesign' as SampleScene,
   },
   {
     feature: 'Planning Coach',
@@ -197,10 +201,12 @@ const SAMPLES = [
       text: 'Model the move once before pairs try it: read one sentence together and think aloud, “this line makes me think X, because it says Y.”',
     },
     pdf: '/samples/lesson-plan-feedback.pdf',
+    scene: 'improve' as SampleScene,
   },
 ]
 
-function SampleCard({ feature, eyebrow, title, before, after, pdf }: (typeof SAMPLES)[number]) {
+function SampleCard({ feature, eyebrow, title, before, after, pdf, scene }: (typeof SAMPLES)[number]) {
+  const { Scene, tint } = SAMPLE_SCENES[scene]
   return (
     <a
       href={pdf}
@@ -208,6 +214,11 @@ function SampleCard({ feature, eyebrow, title, before, after, pdf }: (typeof SAM
       rel="noreferrer"
       className="group flex flex-col rounded-2xl border border-hairline bg-cream-card p-6 shadow-sm transition-shadow hover:shadow-md"
     >
+      {/* A drawing of the moment the sample comes from, so the band is not all
+          text. See components/SampleScenes. */}
+      <div className={`-mx-2 -mt-2 mb-5 h-32 overflow-hidden rounded-xl px-4 pt-3 ${tint}`}>
+        <Scene />
+      </div>
       {/* Title first, held to two lines, so the three cards line up across the
           row no matter how long each excerpt below runs. */}
       <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">{feature}</span>
@@ -250,19 +261,19 @@ function SampleCard({ feature, eyebrow, title, before, after, pdf }: (typeof SAM
 const SAMPLE_NOTES = [
   {
     label: 'What worked',
-    text: 'Asking “what if the cell had no oxygen?” before naming fermentation got students predicting first.',
+    text: 'Asking “what if the cell had no oxygen?” before naming fermentation made students predict first, so the new term arrived as an answer to their own question.',
     card: 'bg-mint-tint',
     ink: 'text-forest',
   },
   {
     label: 'Where it could go further',
-    text: 'Track one glucose molecule through each stage, so students see where the energy leaves.',
+    text: 'The equation went up as one line. Next time, track a single glucose molecule through each stage so students see where the energy actually leaves.',
     card: 'bg-peach-tint',
     ink: 'text-terracotta-600',
   },
   {
     label: 'Where students usually get stuck',
-    text: 'Many think plants photosynthesize instead of respiring. Ask what a plant does at night.',
+    text: 'Many students think plants photosynthesize instead of respiring. Ask what a plant does at night, and the misconception surfaces before the test does.',
     card: 'bg-gold-tint',
     ink: 'text-terracotta-600',
   },
@@ -769,7 +780,8 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             See what you walk away with.
           </h2>
           <p className="mt-4 text-ink-soft">
-            Not a wall of scores: the specific catch, and what to do about it. All samples are invented.
+            Not a wall of scores — the specific catch, and what to do about it. Every sample is an
+            invented scenario.
           </p>
         </div>
         <a
@@ -784,8 +796,10 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               Twenty-two minutes of class, read like a content specialist would<span className="text-gold">.</span>
             </h3>
             <p className="mt-3 text-sm leading-relaxed text-cream/75">
-              Your explanations, examples and questions, each tied to its moment, then one focus for
-              next lesson. Talk time and pace are there too. An invented class.
+              How you explained the idea, the examples and models you chose, the key terms students picked
+              up, and the questions that asked them to think — each with the exact moment and timestamp.
+              Then one focus for next lesson that carries straight into your next plan. Talk time, pace
+              and checks for understanding are there too, when you want them. An invented class; no real teacher or student.
             </p>
             <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-gold">
               View the full sample report
