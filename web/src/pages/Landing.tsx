@@ -6,7 +6,6 @@ import {
   ArrowRightIcon,
   BookIcon,
   BrainIcon,
-  BrowserIcon,
   ChartBarIcon,
   CheckIcon,
   ChatBubbleIcon,
@@ -17,7 +16,6 @@ import {
   LockIcon,
   MailIcon,
   MenuIcon,
-  PhoneIcon,
   PlayIcon,
   QuoteIcon,
   SparkleIcon,
@@ -135,37 +133,6 @@ const COLUMN_BADGES = ['bg-gold text-forest', 'bg-terracotta text-cream', 'bg-fo
 
 // The three places Coach can be reached. Telegram and the iPhone app shipped
 // without the home page ever saying so.
-const PLACES = [
-  {
-    icon: BrowserIcon,
-    tint: 'bg-mint-tint text-forest',
-    brand: false,
-    title: 'In your browser',
-    description: 'Every tool, on a phone, tablet, or laptop. Nothing to install.',
-    href: null,
-    cta: null,
-  },
-  {
-    icon: PhoneIcon,
-    tint: 'bg-peach-tint text-terracotta',
-    brand: false,
-    title: 'On your iPhone',
-    description: 'Record a lesson from the phone in your pocket, with the same account.',
-    href: 'https://apps.apple.com/us/app/wivoza/id6808223345',
-    cta: 'Download on the App Store',
-  },
-  {
-    icon: TelegramIcon,
-    tint: 'bg-gold-tint text-terracotta-600',
-    // Telegram's own mark, shown whole instead of on a tinted badge.
-    brand: true,
-    title: 'In Telegram',
-    description: 'Text Coach, send a voice note on the way home, photograph the worksheet in front of you, or forward the email you need to answer. Connect it from your Profile.',
-    href: null,
-    cta: null,
-  },
-]
-
 const VALUE_PROPS = ['Private by design', 'Judgment-free', 'Built for busy educators', 'Actionable, not overwhelming']
 
 // Sample reports. A shrunken screenshot of a page shows the shape of a report
@@ -283,19 +250,19 @@ function SampleCard({ feature, eyebrow, title, before, after, pdf }: (typeof SAM
 const SAMPLE_NOTES = [
   {
     label: 'What worked',
-    text: 'Asking “what if the cell had no oxygen?” before naming fermentation made students predict first, so the new term arrived as an answer to their own question.',
+    text: 'Asking “what if the cell had no oxygen?” before naming fermentation got students predicting first.',
     card: 'bg-mint-tint',
     ink: 'text-forest',
   },
   {
     label: 'Where it could go further',
-    text: 'The equation went up as one line. Next time, track a single glucose molecule through each stage so students see where the energy actually leaves.',
+    text: 'Track one glucose molecule through each stage, so students see where the energy leaves.',
     card: 'bg-peach-tint',
     ink: 'text-terracotta-600',
   },
   {
     label: 'Where students usually get stuck',
-    text: 'Many students think plants photosynthesize instead of respiring. Ask what a plant does at night, and the misconception surfaces before the test does.',
+    text: 'Many think plants photosynthesize instead of respiring. Ask what a plant does at night.',
     card: 'bg-gold-tint',
     ink: 'text-terracotta-600',
   },
@@ -781,38 +748,16 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               Browse all training videos
             </Link>
           </div>
-        </div>
-      </section>
-
-      {/* Where Coach is */}
-      <section id="wherever-you-are" className="mx-auto w-full max-w-6xl px-6 pt-16">
-        <div className="mx-auto mb-10 max-w-2xl text-center">
-          <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Wherever you are</span>
-          <h2 className="mt-3 font-heading text-3xl font-extrabold text-forest sm:text-4xl">
-            At your desk, in the hallway, on the drive home.
-          </h2>
-        </div>
-        <div className="grid gap-6 sm:grid-cols-3">
-          {PLACES.map(({ icon: Icon, tint, brand, title, description, href, cta }) => (
-            <div key={title} className={`flex flex-col rounded-3xl p-7 ${TINT_STYLES[tint].card}`}>
-              {brand ? (
-                <Icon className="h-12 w-12" />
-              ) : (
-                <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${TINT_STYLES[tint].badge}`}>
-                  <Icon className="h-6 w-6" />
-                </span>
-              )}
-              <h3 className="mt-5 font-heading text-xl font-bold text-forest">{title}</h3>
-              <p className="mt-2 text-sm text-ink-soft">{description}</p>
-              {/* Apple's own badge, unaltered and at its minimum 40px height, as
-                  its marketing guidelines ask; it replaces a text link. */}
-              {href && (
-                <a href={href} target="_blank" rel="noreferrer" className="mt-4 inline-block self-start">
-                  <img src="/badges/app-store-badge.svg" alt={cta ?? ''} className="h-10 w-auto" />
-                </a>
-              )}
-            </div>
-          ))}
+          {/* Telegram used to have a card of its own in a "Wherever you are"
+              section; it is a way to reach Coach, not a feature, so it is one
+              line here. */}
+          <p className="mx-auto mt-6 flex max-w-xl items-center justify-center gap-2 text-center text-sm text-ink-soft">
+            <TelegramIcon className="h-5 w-5 shrink-0" />
+            <span>
+              Coach is on <strong className="font-semibold text-forest">Telegram</strong> too: text it, send a voice note,
+              or photograph a worksheet. Connect it from your Profile.
+            </span>
+          </p>
         </div>
       </section>
 
@@ -824,8 +769,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             See what you walk away with.
           </h2>
           <p className="mt-4 text-ink-soft">
-            Not a wall of scores — the specific catch, and what to do about it. Every sample is an
-            invented scenario.
+            Not a wall of scores: the specific catch, and what to do about it. All samples are invented.
           </p>
         </div>
         <a
@@ -840,10 +784,8 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               Twenty-two minutes of class, read like a content specialist would<span className="text-gold">.</span>
             </h3>
             <p className="mt-3 text-sm leading-relaxed text-cream/75">
-              How you explained the idea, the examples and models you chose, the key terms students picked
-              up, and the questions that asked them to think — each with the exact moment and timestamp.
-              Then one focus for next lesson that carries straight into your next plan. Talk time, pace
-              and checks for understanding are there too, when you want them. An invented class; no real teacher or student.
+              Your explanations, examples and questions, each tied to its moment, then one focus for
+              next lesson. Talk time and pace are there too. An invented class.
             </p>
             <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-gold">
               View the full sample report

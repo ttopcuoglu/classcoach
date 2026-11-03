@@ -20,7 +20,7 @@ const OFFER = [
     badge: 'bg-terracotta text-cream',
     card: 'bg-peach-tint/50',
     title: 'Every teacher gets Plus',
-    body: 'Lesson Debrief with content coaching after every recorded lesson, Planning Coach, Communication Coach, and Coach’s memory — on top of Talk It Through and Practice. Each teacher’s account stays their own, even if they change schools.',
+    body: 'Lesson Debrief with coaching on content and teaching after every recorded lesson, Planning Coach, Communication Coach, and Coach’s memory — on top of Talk It Through and Practice. Each teacher’s account stays their own, even if they change schools.',
   },
   {
     icon: ChartBarIcon,
@@ -320,8 +320,8 @@ export default function ForSchools() {
             Private coaching for every teacher in your building<span className="text-gold">.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-lg text-cream/75">
-            Give every teacher a content coach after every lesson they record — feedback on how they taught it, not
-            another observation. See how coaching is taking hold across your school, and keep every teacher’s
+            Give every teacher a coach after every lesson they record, for their content and their teaching. Feedback
+            on how they taught it, not another observation. See how coaching is taking hold across your school, and keep every teacher’s
             individual work private to them.
           </p>
           <a

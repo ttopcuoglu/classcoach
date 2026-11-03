@@ -107,6 +107,16 @@ export default function RecordYourWay() {
         <p className="mt-4 text-ink-soft">
           Press record with whatever you have on you. Every lesson lands in the same Lesson Debrief.
         </p>
+        {/* Apple's own badge, unaltered and at its minimum 40px height, as its
+            marketing guidelines ask. The iPhone app carries the watch app. */}
+        <a
+          href="https://apps.apple.com/us/app/wivoza/id6808223345"
+          target="_blank"
+          rel="noreferrer"
+          className="mt-5 inline-block"
+        >
+          <img src="/badges/app-store-badge.svg" alt="Download on the App Store" className="h-10 w-auto" />
+        </a>
       </div>
       <div className="grid gap-6 sm:grid-cols-3">
         {WAYS.map(({ Scene, icon: Icon, card, title, description, pill }) => (
