@@ -548,17 +548,21 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           the words read, with the report over the brighter side. Neither home
           page video teacher is in the photo, on purpose. */}
       <section className="relative overflow-hidden bg-forest">
+        {/* On a phone the hero is ~1500px tall, and a photo stretched over all
+            of it showed only a blurred corner of the room. There it is a band
+            across the top instead, fading into forest under the headline; from
+            lg up it fills the hero behind a left-to-right shade. */}
         <img
           src="/hero-classroom.jpg"
           alt=""
           aria-hidden="true"
-          className="absolute inset-0 h-full w-full object-cover object-[62%_center]"
+          className="absolute inset-x-0 top-0 h-80 w-full object-cover object-[62%_30%] lg:inset-0 lg:h-full lg:object-[62%_center]"
         />
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-forest/90 lg:bg-transparent lg:bg-[linear-gradient(90deg,rgba(27,46,40,.97)_0%,rgba(27,46,40,.93)_42%,rgba(27,46,40,.5)_64%,rgba(27,46,40,.35)_100%)]"
+          className="absolute inset-x-0 top-0 h-80 bg-[linear-gradient(180deg,rgba(27,46,40,.25)_0%,rgba(27,46,40,.7)_55%,#1b2e28_100%)] lg:inset-0 lg:h-full lg:bg-[linear-gradient(90deg,rgba(27,46,40,.97)_0%,rgba(27,46,40,.93)_42%,rgba(27,46,40,.5)_64%,rgba(27,46,40,.35)_100%)]"
         />
-      <div className="relative mx-auto w-full max-w-6xl px-6 pb-12 pt-10 sm:pt-16">
+      <div className="relative mx-auto w-full max-w-6xl px-6 pb-12 pt-44 sm:pt-48 lg:pt-16">
         <div className="grid gap-14 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full bg-cream/10 px-4 py-2 text-sm font-semibold text-gold">
