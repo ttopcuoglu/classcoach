@@ -474,8 +474,7 @@ struct ReportView: View {
             Group {
                 switch section {
                 case .talk:
-                    TalkSection(session: session, note: AudioInsights.buildTalkInsight(session), hardLook: nil, onDiscuss: discussSection,
-                                onRetag: session.status == "analyzed" ? { retagging = true } : nil)
+                    TalkSection(session: session, note: AudioInsights.buildTalkInsight(session), hardLook: nil, onDiscuss: discussSection)
                 case .questions:
                     QuestionsSection(session: session, note: AudioInsights.buildQuestioningInsight(session, higherOrderRatio: m.higherOrderRatio),
                                      hardLook: nil, onDiscuss: discussSection)

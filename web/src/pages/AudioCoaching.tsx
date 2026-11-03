@@ -2425,7 +2425,6 @@ function ReportPanel({
                 talkInsight={talkInsight}
                 lastRow={null}
                 onDiscuss={discussThisSection}
-                onRetag={locked ? undefined : () => void handleRetag()}
               />
             )}
 
@@ -2926,9 +2925,9 @@ function SummaryTab({
     }
   }
 
-  // How the lesson moved, then the lesson's eight numbers. Chosen 2026-11-02
-  // to be ones that hold even when students were not told apart from the
-  // teacher: no Student Voice, and Think Time in place of Teacher Pause.
+  // How the lesson moved, then the lesson's eight numbers: Talk &
+  // Participation's four shares and pace, then Questions, Think Time and
+  // Checks (2026-11-02).
   const { questions, selfAnswered: answeredSelf } = countedQuestions(session)
   const mixCount = (k: MixKey) => questions.filter((q) => q.mix === k).length
   const arc = moves?.arc ?? []
@@ -2950,30 +2949,37 @@ function SummaryTab({
   // 28 a tab away read as two different numbers.
   const roomPct = (n: number) => getPresenceMetric(Math.round(n))
   const wpm = session.metricsDetail?.teacherWordsPerMinute ?? null
-  // Think Time and Students Called On never ask who spoke, so they hold on a
-  // recording where students were not told apart from the teacher. Both are
-  // stored by the server at analysis; a lesson from before shows "—".
+  // Think Time never asks who spoke. It is stored by the server at
+  // analysis; a lesson from before shows "—".
   const think = session.metricsLogs?.thinkTime
   const thinkTimed = think ? think.questions.filter((q) => q.sec != null).length : 0
-  const calledOn = session.metricsDetail?.studentsCalledOn
   const notYet = 'Worked out for lessons analysed from now on.'
   // The voices take the colours the Talk & Participation strip draws them in.
   const tiles: { label: string; metric: ConfidentMetric; unit?: string; note?: string; accent: Accent; swatch?: string }[] = [
     ...(room
       ? [
           { label: 'Teacher Talk', metric: roomPct(room.pct.teacher), unit: '%', accent: ACCENTS.terracotta, swatch: ROOM_COLOR.teacher },
-          { label: 'Group Talk', metric: roomPct(room.pct.other), unit: '%', accent: ACCENTS.lavender, swatch: ROOM_COLOR.other },
+          { label: 'Student Talk', metric: roomPct(room.pct.student), unit: '%', accent: ACCENTS.lavender, swatch: ROOM_COLOR.student },
+          { label: 'Group Talk', metric: roomPct(room.pct.other), unit: '%', accent: ACCENTS.rose, swatch: ROOM_COLOR.other },
           { label: 'Silence', metric: roomPct(room.pct.quiet), unit: '%', accent: ACCENTS.sky, swatch: ROOM_COLOR.quiet },
         ]
       : [
           { label: 'Teacher Talk', metric: getPresenceMetric(teacherPct), unit: '%', accent: ACCENTS.terracotta },
+          // As Talk & Participation: Student Talk needs the per-second
+          // breakdown.
+          {
+            label: 'Student Talk',
+            metric: { state: 'not_measurable' as const, display: '—', reason: 'Not measured on this older recording.' },
+            unit: '%',
+            accent: ACCENTS.lavender,
+          },
           // Older recordings with no sound reading cannot split the rest
           // into talk with no words and quiet.
           {
             label: 'Group Talk',
             metric: split ? getPresenceMetric(soundPct) : { state: 'not_measurable' as const, display: '—', reason: 'Not measured on this older recording.' },
             unit: '%',
-            accent: ACCENTS.lavender,
+            accent: ACCENTS.rose,
           },
           {
             label: 'Silence',
@@ -2982,13 +2988,6 @@ function SummaryTab({
             accent: ACCENTS.sky,
           },
         ]),
-    // Different students the teacher addressed by name ("Aya, which one did
-    // you pick?"), from the words alone.
-    {
-      label: 'Students Called On',
-      metric: calledOn != null ? { state: 'measured', display: String(calledOn) } : { state: 'not_measurable', display: '—', reason: notYet },
-      accent: ACCENTS.rose,
-    },
     // Words a minute of the teacher's own speaking time, as Talk & Participation shows it.
     { label: 'Pace', metric: speechRateMetric(wpm != null ? Math.round(wpm) : null), unit: 'wpm', accent: ACCENTS.gold },
     // The questions Questioning counts, with the ones you answered yourself
@@ -3214,9 +3213,9 @@ function SummaryTab({
         </summary>
         <dl className="mt-2 grid gap-x-6 gap-y-1.5 text-sm text-ink-soft sm:grid-cols-2">
           <div><dt className="inline font-semibold text-ink">Teacher Talk · </dt><dd className="inline">the share of the recording with your words; a student’s answer the conversation shows was theirs is not counted in it.</dd></div>
+          <div><dt className="inline font-semibold text-ink">Student Talk · </dt><dd className="inline">the share of the recording with students’ words the microphone caught, including answers the conversation shows were theirs. Students it couldn’t make out aren’t in it.</dd></div>
           <div><dt className="inline font-semibold text-ink">Group Talk · </dt><dd className="inline">voices the microphone caught but couldn’t turn into words, usually students talking together or too far away; other room sound is counted here too.</dd></div>
           <div><dt className="inline font-semibold text-ink">Silence · </dt><dd className="inline">no talk: quiet work, pauses, a settled room.</dd></div>
-          <div><dt className="inline font-semibold text-ink">Students Called On · </dt><dd className="inline">how many different students you addressed by name, as the transcript caught them.</dd></div>
           <div><dt className="inline font-semibold text-ink">Pace · </dt><dd className="inline">your words a minute, short pauses included. Everyday conversation usually runs about {CONVERSATIONAL_WPM_RANGE}.</dd></div>
           <div><dt className="inline font-semibold text-ink">Questions · </dt><dd className="inline">the questions you asked, as the transcript caught them.</dd></div>
           <div><dt className="inline font-semibold text-ink">Think Time · </dt><dd className="inline">after each question, how long the room was quiet before anyone spoke — you or a student — averaged. Three seconds or more gives most students time to think.</dd></div>
@@ -5642,7 +5641,6 @@ function TalkParticipationTab({
   talkInsight,
   lastRow,
   onDiscuss,
-  onRetag,
 }: {
   session: AudioSessionWithSegments
   silencePct: number | null
@@ -5650,8 +5648,6 @@ function TalkParticipationTab({
   /// The section's Hard Look, opened from the card's footer.
   lastRow: React.ReactNode
   onDiscuss: () => void
-  /// Opens "which voice is the teacher?" again; absent on a locked report.
-  onRetag?: () => void
 }) {
   // What students talked about is no longer shown. The count could only ever
   // describe the turns the microphone caught, and those are the ones spoken
@@ -5734,23 +5730,6 @@ function TalkParticipationTab({
     >
       {/* Who was heard and how fast, then the lesson minute by minute. */}
       <div id="stat-talkRatio" className="flex flex-col gap-3">
-        {noStudents && (session.segments ?? []).length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gold/60 bg-gold-tint/40 px-4 py-3">
-            <p className="text-sm text-ink">
-              <span className="font-semibold">No student voice was told apart from yours in this recording,</span> so students’
-              answers are counted as your talk. Your longest stretch needs students separated, so it isn’t shown.
-            </p>
-            {onRetag && (
-              <button
-                type="button"
-                onClick={onRetag}
-                className="shrink-0 rounded-full border border-forest px-3 py-1.5 text-sm font-semibold text-forest hover:bg-forest hover:text-cream print:hidden"
-              >
-                Fix who’s who
-              </button>
-            )}
-          </div>
-        )}
         <TalkNumbers
           teacherPct={session.teacherTalkPct}
           wpm={wpm}
@@ -5762,10 +5741,9 @@ function TalkParticipationTab({
           segments={session.segments}
           durationSec={session.durationSec}
           seconds={session.soundTimeline?.seconds ?? null}
-          // Only the students called on by name about the lesson are marked:
-          // invitations and follow-ups were taken off as crowded, and
-          // Questioning shows follow-ups and checks.
-          marks={(session.metricsLogs?.calledOnLog ?? []).map((m) => ({ t: m.timestampSec, kind: 'calledOn' as const }))}
+          // No marks: invitations and follow-ups were taken off as crowded,
+          // and students called on by name on 2026-11-02.
+          marks={[]}
           shares={recordingShares(session.teacherTalkPct, session.studentTalkPct, nonSpeech)}
           room={room}
           onPick={room ? setPick : undefined}

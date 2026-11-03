@@ -314,11 +314,10 @@ struct OptionalBlock<Content: View>: View {
 
 /// The shapes "How you brought students in" and the flow strip share.
 enum MoveShape: String, CaseIterable {
-    case invite, probe, voices, check, calledOn
+    case invite, probe, voices, check
 
     var color: Color {
         switch self {
-        case .calledOn: return Color(hex: 0xB5476B)
         case .invite: return Color(hex: 0xB8674A)
         case .probe: return Color(hex: 0x3F7D58)
         case .voices: return Color(hex: 0xB88A1F)
@@ -332,7 +331,6 @@ enum MoveShape: String, CaseIterable {
         case .probe: return Color(hex: 0xE3EFE6)
         case .voices: return Color(hex: 0xF7EED6)
         case .check: return AppTheme.mintTint
-        case .calledOn: return Color(hex: 0xF6E1E8)
         }
     }
 
@@ -342,7 +340,6 @@ enum MoveShape: String, CaseIterable {
         case .probe: return "Follow-ups that pushed students further"
         case .voices: return "Reaching beyond volunteers"
         case .check: return "Check for understanding"
-        case .calledOn: return "Student called on by name"
         }
     }
 
@@ -353,8 +350,6 @@ enum MoveShape: String, CaseIterable {
         case .voices: Rectangle().fill(color).frame(width: size * 0.72, height: size * 0.72).rotationEffect(.degrees(45))
             .frame(width: size, height: size)
         case .check: Circle().strokeBorder(color, lineWidth: 2).frame(width: size, height: size)
-        // A triangle pointing down at the moment on the strip.
-        case .calledOn: Triangle().fill(color).frame(width: size, height: size).rotationEffect(.degrees(180))
         }
     }
 }
@@ -423,8 +418,6 @@ struct TalkSection: View {
     let note: String?
     let hardLook: AnyView?
     let onDiscuss: () -> Void
-    /// Opens "which voice is the teacher?" again; nil on a locked report.
-    var onRetag: (() -> Void)? = nil
 
     @State private var moments: TalkMoments?
 
@@ -452,12 +445,10 @@ struct TalkSection: View {
             section: .talk, note: note, keep: moves.keep, tryNext: session.nextSteps?.talk,
             howToRead: read, hardLook: hardLook, onDiscuss: onDiscuss
         ) {
-            if noStudents && !session.segments.isEmpty { noStudentsNotice }
             talkCards
-            // Only the students called on by name about the lesson are marked:
-            // "How you brought students in" was removed as crowded (web
-            // 5239b52); Questioning shows follow-ups and checks.
-            FlowStrip(session: session, marks: (session.calledOnTimes ?? []).map { ($0, .calledOn) }, room: room, onPick: { moments = $0 })
+            // No marks: "How you brought students in" was removed as crowded
+            // (web 5239b52), and students called on by name on 2026-11-02.
+            FlowStrip(session: session, marks: [], room: room, onPick: { moments = $0 })
             // With the per-second breakdown, your longest stretch is always
             // shown, as one of the measured facts beside the shares — unless
             // no student was told apart, when it runs through every answer.
@@ -466,27 +457,6 @@ struct TalkSection: View {
             }
         }
         .sheet(item: $moments) { TalkMomentsSheet(session: session, moments: $0) }
-    }
-
-    /// No student was told apart from the teacher — mirrors the notice in
-    /// AudioCoaching.tsx, with the way to fix it right there.
-    private var noStudentsNotice: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            (Text("No student voice was told apart from yours in this recording,").fontWeight(.semibold)
-                + Text(" so students\u{2019} answers are counted as your talk. Your longest stretch needs students separated, so it isn\u{2019}t shown."))
-                .font(.footnote).foregroundStyle(AppTheme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-            if let onRetag {
-                Button("Fix who\u{2019}s who", action: onRetag)
-                    .font(.footnote.weight(.semibold)).foregroundStyle(AppTheme.forest)
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .overlay(Capsule().strokeBorder(AppTheme.forest))
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.goldTint.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(AppTheme.gold.opacity(0.6)))
     }
 
     /// The five numbers Talk & Participation leads with (chosen 2026-11-02):

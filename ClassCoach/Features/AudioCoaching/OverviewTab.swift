@@ -587,15 +587,18 @@ struct OverviewTab: View {
         let silence = teacher != nil && students != nil ? max(0, ((100 - teacher! - students!) * 10).rounded() / 10) : nil
         let notYet = "Worked out for lessons analysed from now on."
         var out: [Tile]
-        // The eight numbers chosen 2026-11-02 to hold even when students were
-        // not told apart from the teacher — the same as the web Summary.
+        // The eight numbers (2026-11-02): Talk & Participation's four shares
+        // and pace, then Questions, Think Time and Checks — the same as the
+        // web Summary.
         if let room = RoomBreakdown(session.roomTrace) {
             let voice = { (kind: RoomBreakdown.Kind, label: String) in
                 Tile(label: label, value: Self.whole(room.pct[kind]), unit: "%", tint: kind.color, swatch: kind.color)
             }
-            out = [voice(.teacher, "Teacher Talk"), voice(.other, "Group Talk"), voice(.quiet, "Silence")]
+            out = [voice(.teacher, "Teacher Talk"), voice(.student, "Student Talk"), voice(.other, "Group Talk"), voice(.quiet, "Silence")]
         } else {
-            out = [Tile(label: "Teacher Talk", value: Self.pct(teacher), unit: "%", tint: Color(hex: 0xF5DBC8))]
+            out = [Tile(label: "Teacher Talk", value: Self.pct(teacher), unit: "%", tint: Color(hex: 0xF5DBC8)),
+                   // As Talk & Participation: Student Talk needs the per-second breakdown.
+                   Tile(label: "Student Talk", value: nil, unit: "%", tint: Color(hex: 0xE5E0EF), hint: "Not measured on this older recording.")]
             // Older recordings with no sound reading cannot split the rest.
             if let silence, let quiet = detail["quietSec"], let unresolved = detail["unresolvedSec"], quiet + unresolved > 0 {
                 let sound = (silence * unresolved / (quiet + unresolved) * 10).rounded() / 10
@@ -606,10 +609,6 @@ struct OverviewTab: View {
                 out.append(Tile(label: "Silence", value: nil, unit: "%", tint: Color(hex: 0xDDE8F4), hint: "Not measured on this older recording."))
             }
         }
-        // Different students addressed by name, from the words alone.
-        let calledOn = detail["studentsCalledOn"]
-        out.append(Tile(label: "Students Called On", value: calledOn.map { "\(Int($0))" }, unit: "", tint: Color(hex: 0xF4DFE4),
-                        hint: calledOn == nil ? notYet : nil))
         out.append(Tile(label: "Pace", value: detail["teacherWordsPerMinute"].map { "\(Int($0.rounded()))" }, unit: "wpm",
                         tint: Color(hex: 0xF5E7C4)))
         // The questions Questioning counts, with the ones you answered
@@ -665,9 +664,9 @@ struct OverviewTab: View {
             DisclosureGroup(isExpanded: $readingOpen) {
                 VStack(alignment: .leading, spacing: 6) {
                     readingLine("Teacher Talk", "the share of the recording with your words; a student\u{2019}s answer the conversation shows was theirs is not counted in it.")
+                    readingLine("Student Talk", "the share of the recording with students\u{2019} words the microphone caught, including answers the conversation shows were theirs. Students it couldn\u{2019}t make out aren\u{2019}t in it.")
                     readingLine("Group Talk", "voices the microphone caught but couldn\u{2019}t turn into words, usually students talking together or too far away; other room sound is counted here too.")
                     readingLine("Silence", "no talk: quiet work, pauses, a settled room.")
-                    readingLine("Students Called On", "how many different students you addressed by name, as the transcript caught them.")
                     readingLine("Pace", "your words a minute, short pauses included. Everyday conversation usually runs about \(AudioInsights.conversationalWpmRange).")
                     readingLine("Questions", "the questions you asked, as the transcript caught them.")
                     readingLine("Think Time", "after each question, how long the room was quiet before anyone spoke \u{2014} you or a student \u{2014} averaged. Three seconds or more gives most students time to think.")
