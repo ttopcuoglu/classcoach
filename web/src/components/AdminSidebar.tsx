@@ -50,10 +50,16 @@ export function isAdminRole(user: UserProfile | null): boolean {
   return user != null && user.role !== 'teacher'
 }
 
+/// Leader's Corner is hidden from everyone for now (2026-11-04, the user's
+/// call): no menu item, the page sends people away, and a level alone no
+/// longer opens School Admin. Levels already given are kept, so turning this
+/// back on restores each leader's access as it was.
+export const LEADERS_CORNER_ON = false
+
 /// Leader's Corner is on for this person: a superadmin gave them a level.
 /// A level alone opens the School Admin side, showing only Leader's Corner.
 export function isLeader(user: UserProfile | null): boolean {
-  return user?.leaderLevel != null
+  return LEADERS_CORNER_ON && user?.leaderLevel != null
 }
 
 /// My Coaching | School Admin. Only for someone who can open School Admin;

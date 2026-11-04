@@ -2,6 +2,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
+import { isLeader } from './components/AdminSidebar'
 import Landing from './pages/Landing'
 import { getMe, type UserProfile } from './lib/api'
 import { applyPageMeta } from './lib/pageMeta'
@@ -285,14 +286,14 @@ export default function App() {
                   not. The server checks the level on every call. */}
               <Route
                 path="admin/leaders-corner"
-                element={user?.leaderLevel ? <LeadersCorner /> : <Navigate to={user != null && user.role !== 'teacher' ? '/admin' : '/'} replace />}
+                element={isLeader(user) ? <LeadersCorner /> : <Navigate to={user != null && user.role !== 'teacher' ? '/admin' : '/'} replace />}
               />
               <Route
                 path="admin/*"
                 element={
                   user != null && user.role !== 'teacher' ? (
                     <AdminDashboard onOwnAccountChanged={refreshMe} />
-                  ) : user?.leaderLevel ? (
+                  ) : isLeader(user) ? (
                     // A leader without an admin role has one page on this side.
                     <Navigate to="/admin/leaders-corner" replace />
                   ) : (
