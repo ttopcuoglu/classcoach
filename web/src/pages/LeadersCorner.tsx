@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AnswerSection from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
 import PastList from '../components/PastList'
+import { SpeakInBox, speakingBoxClass } from '../components/SpeakInBox'
+import { useSpeechToText } from '../hooks/useSpeechToText'
 import { WorkingRing } from '../components/ProgressRing'
 import { LockIcon, StarIcon } from '../components/icons'
 import {
@@ -47,6 +49,43 @@ export default function LeadersCorner() {
   const [chatSending, setChatSending] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
 
+  // One microphone, pointed at whichever box asked for it — the same as
+  // Practice. Speaking adds to what is already typed; starting in one box
+  // stops the other.
+  const [speechTarget, setSpeechTarget] = useState<'situation' | 'response'>('response')
+  const speechTargetRef = useRef<'situation' | 'response'>('response')
+  const { supported: speechSupported, listening, start: startSpeech, stop: stopSpeech } = useSpeechToText((text) => {
+    const add = (prev: string) => (prev ? `${prev} ${text}` : text)
+    if (speechTargetRef.current === 'situation') setSituation(add)
+    else setResponse(add)
+  })
+  function speakInto(target: 'situation' | 'response') {
+    if (listening && speechTargetRef.current === target) {
+      stopSpeech()
+      return
+    }
+    const pointAt = () => {
+      speechTargetRef.current = target
+      setSpeechTarget(target)
+      startSpeech()
+    }
+    if (listening) {
+      // Stop the other box first, so its last words still land in it.
+      stopSpeech()
+      window.setTimeout(pointAt, 350)
+    } else {
+      pointAt()
+    }
+  }
+  const boxClass = (target: 'situation' | 'response') =>
+    `w-full rounded-2xl border bg-cream px-4 pb-12 pt-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60 ${
+      listening && speechTarget === target ? speakingBoxClass : 'border-hairline'
+    }`
+  const speakButton = (target: 'situation' | 'response') =>
+    speechSupported && (
+      <SpeakInBox listening={listening && speechTarget === target} onClick={() => speakInto(target)} disabled={submitting} />
+    )
+
   useEffect(() => {
     getLeaderScenarios()
       .then(setData)
@@ -58,6 +97,7 @@ export default function LeadersCorner() {
   }, [])
 
   function startOver(next: Mode = mode) {
+    if (listening) stopSpeech()
     setMode(next)
     setScenario(null)
     setAttempt(null)
@@ -69,6 +109,7 @@ export default function LeadersCorner() {
   }
 
   async function handleSubmit() {
+    if (listening) stopSpeech()
     setSubmitting(true)
     setError(null)
     try {
@@ -223,14 +264,17 @@ export default function LeadersCorner() {
                 </div>
                 <label className="flex flex-col gap-1.5">
                   <span className="font-heading text-xl font-bold text-forest">How would you handle this?</span>
-                  <textarea
-                    value={response}
-                    onChange={(e) => setResponse(e.target.value)}
-                    disabled={submitting}
-                    rows={5}
-                    placeholder="What do you say first — and where do you take the conversation from there?"
-                    className="w-full rounded-2xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={response}
+                      onChange={(e) => setResponse(e.target.value)}
+                      disabled={submitting}
+                      rows={5}
+                      placeholder="What do you say first — and where do you take the conversation from there?"
+                      className={boxClass('response')}
+                    />
+                    {speakButton('response')}
+                  </div>
                 </label>
                 <WorkingRing active={submitting} estimatedMs={9000} label="Reading your response" hint="Usually under ten seconds." className="text-forest" />
                 <div className="flex items-center justify-between gap-3">
@@ -257,28 +301,34 @@ export default function LeadersCorner() {
                     Who it&rsquo;s with and what&rsquo;s happening. Describe people by role — &ldquo;a parent,&rdquo; &ldquo;a
                     veteran teacher&rdquo; — never by name.
                   </span>
-                  <textarea
-                    value={situation}
-                    onChange={(e) => setSituation(e.target.value)}
-                    disabled={submitting}
-                    rows={4}
-                    maxLength={3000}
-                    placeholder="A parent asked to meet about…"
-                    className="w-full rounded-2xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={situation}
+                      onChange={(e) => setSituation(e.target.value)}
+                      disabled={submitting}
+                      rows={4}
+                      maxLength={3000}
+                      placeholder="A parent asked to meet about…"
+                      className={boxClass('situation')}
+                    />
+                    {speakButton('situation')}
+                  </div>
                 </label>
                 <label className="flex flex-col gap-1.5">
                   <span className="text-sm font-medium text-ink">
                     What you plan to say <span className="font-normal text-ink-soft">(optional)</span>
                   </span>
-                  <textarea
-                    value={response}
-                    onChange={(e) => setResponse(e.target.value)}
-                    disabled={submitting}
-                    rows={4}
-                    placeholder="Leave this empty and your coach will walk you through it."
-                    className="w-full rounded-2xl border border-hairline bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft focus:border-terracotta focus:outline-none disabled:opacity-60"
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={response}
+                      onChange={(e) => setResponse(e.target.value)}
+                      disabled={submitting}
+                      rows={4}
+                      placeholder="Leave this empty and your coach will walk you through it."
+                      className={boxClass('response')}
+                    />
+                    {speakButton('response')}
+                  </div>
                 </label>
                 <WorkingRing active={submitting} estimatedMs={9000} label="Reading your situation" hint="Usually under ten seconds." className="text-forest" />
                 <div className="flex justify-end">
