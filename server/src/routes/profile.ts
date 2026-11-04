@@ -75,6 +75,7 @@ profileRouter.put('/', async (req, res) => {
     coachMemoryEnabled,
     coachDigestEnabled,
     clearCoachMemory,
+    acknowledgeRecordingNotice,
   } = req.body ?? {}
   if (name !== undefined && typeof name !== 'string') {
     res.status(400).json({ error: 'name must be a string' })
@@ -132,6 +133,10 @@ profileRouter.put('/', async (req, res) => {
     res.status(400).json({ error: 'coachDigestEnabled must be a boolean' })
     return
   }
+  if (acknowledgeRecordingNotice !== undefined && acknowledgeRecordingNotice !== true) {
+    res.status(400).json({ error: 'acknowledgeRecordingNotice must be true if present' })
+    return
+  }
   if (clearCoachMemory !== undefined && clearCoachMemory !== true) {
     res.status(400).json({ error: 'clearCoachMemory must be true if present' })
     return
@@ -177,6 +182,7 @@ profileRouter.put('/', async (req, res) => {
       ...orgFields,
       // Never trust a client-supplied date — the server owns this signal.
       ...(completeOnboarding === true ? { onboardingCompletedAt: new Date() } : {}),
+      ...(acknowledgeRecordingNotice === true ? { recordingNoticeAt: new Date() } : {}),
       ...(clearCoachMemory === true ? { coachMemory: null } : {}),
     },
     omit: SAFE_USER_OMIT,

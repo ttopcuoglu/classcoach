@@ -28,6 +28,9 @@ struct User: Codable, Identifiable {
     /// measured, separate from `coachMemoryEnabled` and off by default.
     /// Optional for the same reason as the field above.
     let coachDigestEnabled: Bool?
+    /// When the teacher went through the before-your-first-recording notice
+    /// (see `RecordingNotice`). Nil until then, and on an older server.
+    let recordingNoticeAt: String?
 
     struct Organization: Codable {
         let name: String

@@ -301,7 +301,7 @@ export default function Terms() {
               chat messages, practice responses, and lesson materials — is sent to Anthropic to generate AI coaching
               feedback, reflections, suggested language, and lesson-planning content. Under Anthropic's commercial API
               terms, this content is never used to train its models, and is automatically deleted from Anthropic's
-              systems within 30 days.
+              systems within 30 days, except where it is flagged for a usage-policy violation.
             </p>
             <p className="mt-2">
               <strong>Deepgram:</strong> audio you record or upload is sent to Deepgram to generate a text transcript,
@@ -353,8 +353,10 @@ export default function Terms() {
           <section>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">5. Retention and deletion</h2>
             <p className="mt-1">
-              Original audio recordings are never stored — audio is processed in memory only long enough to generate
-              a transcript, then discarded. The same is true of files you upload, such as presentations, documents,
+              Original audio recordings are not kept. A Lesson Debrief recording is held on our server as a
+              temporary file only while it is transcribed and is deleted as soon as transcription finishes or fails;
+              the iPhone app keeps its own copy only until the transcript is ready, and deletes any copy it cannot
+              deliver after at most 7 days. Talk It Through audio is transcribed as you speak and is not stored. The same is true of files you upload, such as presentations, documents,
               and photos of worksheets: they are read in memory to extract their text and are not stored. If you
               attach an original file so your own pictures can be carried into a new deck or document, those
               pictures are used only for that request and are not kept. Transcripts and coaching history are kept indefinitely by default; you

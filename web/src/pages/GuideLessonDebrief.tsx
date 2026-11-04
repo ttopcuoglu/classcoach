@@ -306,7 +306,7 @@ export default function GuideLessonDebrief() {
           <div className="mt-8 flex flex-col items-start gap-3">
             <GuidePrimaryButton to="/audio-coaching">Record a Lesson</GuidePrimaryButton>
             <p className="text-xs text-ink-soft">
-              Your audio is never saved — it’s transcribed and then discarded. Three recordings a month on the
+              Your audio is deleted once it’s transcribed — only the text is kept. Three recordings a month on the
               free plan.
             </p>
           </div>

@@ -22,6 +22,12 @@ struct RecordingPanelView: View {
     /// made their decision, and repeating it every tap would only train them
     /// to dismiss it.
     @State private var batteryWarningAcknowledged = false
+    /// The before-your-first-recording notice, mirroring web's
+    /// `RecordingNotice`. `noticeAcknowledged` only caches a yes the server
+    /// already holds — it starts false and is asked for, never assumed.
+    @State private var showNotice = false
+    @State private var noticeAcknowledged = false
+    @State private var acknowledging = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -43,6 +49,13 @@ struct RecordingPanelView: View {
                 .foregroundStyle(AppTheme.gold)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+            if showNotice {
+                RecordingNotice(
+                    busy: acknowledging,
+                    onAcknowledge: { Task { await handleAcknowledgeNotice() } },
+                    onCancel: { showNotice = false }
+                )
+            } else {
             VStack(spacing: 10) {
                 if recorder.phase == .recording {
                     HStack(spacing: 6) {
@@ -67,12 +80,13 @@ struct RecordingPanelView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
+            }
 
             if let error {
                 Text(error).font(.footnote).foregroundStyle(AppTheme.peachTint)
             }
 
-            Text("Audio is never saved — it's sent once for transcription and discarded immediately. Only the text transcript is kept.")
+            Text("Audio is deleted once it's transcribed. Only the text transcript is kept, in your private account.")
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.6))
         }
@@ -243,8 +257,33 @@ struct RecordingPanelView: View {
         }
     }
 
+    private func handleAcknowledgeNotice() async {
+        acknowledging = true
+        defer { acknowledging = false }
+        do {
+            _ = try await ProfileService.updateSettings(ProfileService.SettingsBody(acknowledgeRecordingNotice: true))
+        } catch {
+            self.error = "Could not save that. Please try again."
+            return
+        }
+        noticeAcknowledged = true
+        showNotice = false
+        await handleRecord()
+    }
+
     private func handleRecord() async {
         error = nil
+        // The notice comes before the first recording, once per teacher. A
+        // profile that cannot be read shows it again rather than guessing
+        // "seen" — guessing was the hard-coded consent this replaced.
+        if !noticeAcknowledged {
+            let seen = (try? await ProfileService.getProfile())?.recordingNoticeAt != nil
+            guard seen else {
+                showNotice = true
+                return
+            }
+            noticeAcknowledged = true
+        }
         // A class period is fifty minutes with the screen awake. Chunking means
         // a dead phone now costs the last few minutes rather than the lesson,
         // but not starting on 12% is better than recovering from it.
@@ -309,5 +348,50 @@ struct RecordingPanelView: View {
             self.error = error.localizedDescription
             recorder.reset()
         }
+    }
+}
+
+private let classroomRecordingURL = URL(string: "https://www.wivoza.com/classroom-recording")!
+
+/// Shown once, before a teacher's first recording — the native twin of web's
+/// `RecordingNotice` in AudioCoaching.tsx, same words. One ask and nothing to
+/// send: telling the class is what matters, and a teacher handed a to-do list
+/// may never press Record. The page for a principal or families is one quiet
+/// link, for whoever wants it.
+private struct RecordingNotice: View {
+    let busy: Bool
+    let onAcknowledge: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Before your first recording")
+                .font(.heading(.title3)).foregroundStyle(AppTheme.cream)
+            Text("Tell your students once that you record your own teaching, just for you. That’s it — not every lesson.")
+                .font(.subheadline).foregroundStyle(AppTheme.cream)
+            Text("The audio is deleted after it’s transcribed, and the transcript stays private to you. If your school has a recording policy, follow it.")
+                .font(.footnote).foregroundStyle(.white.opacity(0.7))
+            Link("What to share if asked", destination: classroomRecordingURL)
+                .font(.footnote.weight(.medium)).foregroundStyle(AppTheme.gold)
+
+            HStack(spacing: 16) {
+                Button(action: onAcknowledge) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "mic.fill")
+                        Text("Got it, start recording")
+                    }
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.cream)
+                    .padding(.horizontal, 20).padding(.vertical, 12)
+                    .background(AppTheme.terracotta, in: Capsule())
+                }
+                .disabled(busy)
+                .opacity(busy ? 0.6 : 1)
+                Button("Not now", action: onCancel)
+                    .font(.footnote.weight(.medium)).foregroundStyle(.white.opacity(0.7))
+            }
+            .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 8)
     }
 }

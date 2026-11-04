@@ -18,7 +18,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Wivoza uses the camera so you can photograph a worksheet or what's on the board instead of typing it out. The photo is read for its text and is never saved.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Wivoza records your class period to generate a transcript-based coaching report. Audio itself is never saved — only the text transcript.</string>
+	<string>Wivoza records your class period to generate a transcript-based coaching report. The audio is deleted once it is transcribed — only the text transcript is kept.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

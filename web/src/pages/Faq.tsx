@@ -26,7 +26,22 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'Does Wivoza keep my voice or video?',
-        a: 'No audio is ever kept. Talk It Through and Lesson Debrief both transcribe a recording and then immediately discard it — only the resulting text and metrics remain. Wivoza never records video. A camera is used only if you choose to photograph a worksheet or lesson materials, and that photo is read for its text and not stored.',
+        a: 'No audio is kept. Talk It Through transcribes your voice as you speak and never stores it. Lesson Debrief deletes a recording once it has been transcribed: on our server it is a temporary file removed as soon as transcription finishes, and an iPhone keeps its own copy only until the transcript is ready (never more than 7 days), so a dropped connection does not lose the lesson. Only the resulting text and metrics remain. Wivoza never records video. A camera is used only if you choose to photograph a worksheet or lesson materials, and that photo is read for its text and not stored.',
+      },
+      {
+        q: 'Do I need permission to record my class?',
+        a: (
+          <>
+            Tell your students, once — at the start is enough, not every lesson: “This year I’ll sometimes record my
+            own teaching so I can get better at it. It’s just for me.” If your school has a recording policy, follow
+            it. Wivoza shows this before your first recording, and{' '}
+            <Link to="/classroom-recording" className="font-semibold text-terracotta-600 hover:underline">
+              this page
+            </Link>{' '}
+            answers what a principal usually asks, with a ready-made note for families and a line a school can add to
+            its start-of-year form.
+          </>
+        ),
       },
       {
         q: 'What happens to a presentation or document I upload?',
@@ -38,7 +53,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'Are student names or identifying details stored?',
-        a: 'Coach is built to avoid it — it refers to people by role ("a student," "the class") even if you type a real name yourself, and it\'s instructed to avoid quoting anything that could indirectly identify a specific student.',
+        a: 'Coach is built to keep them out of its feedback — it refers to people by role ("a student," "the class") even if you type a real name yourself, and it avoids quoting anything that could indirectly identify a specific student. A lesson transcript is different: it is a record of what was said, so if a student\'s name is said aloud, it appears in the text. It stays in your private account, and you can delete any lesson at any time or have transcripts delete themselves after 7, 30 or 90 days.',
       },
       {
         q: 'What is "Coach\'s memory," and can I turn it off?',
@@ -293,6 +308,9 @@ export default function Faq() {
             </Link>
             <Link to="/faq" className="hover:text-ink">
               FAQ
+            </Link>
+            <Link to="/classroom-recording" className="hover:text-ink">
+              Recording in class
             </Link>
             <Link to="/research" className="hover:text-ink">
               Research

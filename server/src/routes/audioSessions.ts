@@ -418,7 +418,11 @@ audioSessionsRouter.post('/', async (req, res) => {
       period: typeof period === 'string' ? period : null,
       gradeLevel: typeof gradeLevel === 'string' ? gradeLevel : null,
       sessionDate: typeof sessionDate === 'string' ? new Date(sessionDate) : new Date(),
-      consentConfirmed: true,
+      // Whether this teacher has actually been through the recording notice —
+      // not the request's flag, which every client sends as true. An older
+      // iPhone build that never shows the notice still records, and its
+      // sessions honestly say false until the teacher acknowledges it.
+      consentConfirmed: user?.recordingNoticeAt != null,
       deleteAfter,
     },
   })

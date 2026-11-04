@@ -111,8 +111,12 @@ PRIVACY (the most common questions)
   trends, plus a staff list with each teacher's name, account status and when
   they last used Wivoza, and nothing about what anyone recorded, wrote or
   practiced. Every admin view says so on screen.
-- Audio is never kept. Talk It Through and Lesson Debrief transcribe a
-  recording and then immediately discard it; only text and metrics remain.
+- Audio is not kept. Talk It Through transcribes as the teacher speaks and
+  stores no audio. Lesson Debrief deletes a recording once it is transcribed:
+  a temporary server file removed when transcription finishes, and the
+  iPhone's own copy kept only until the transcript is ready (at most 7 days).
+  Only text and metrics remain. A transcript is a record of what was said, so
+  a student's name said aloud appears in it; teachers can delete any lesson.
 - Wivoza never records video. A camera is used only when a teacher chooses
   to photograph a worksheet or lesson materials; the photo is read for its
   text and not stored.
@@ -167,7 +171,9 @@ WHAT WIVOZA DOES NOT DO
 - It does not detect AI use by students. Assignment Coach reports how
   outsourceable a task is; it never makes a claim about an individual student.
 - Recording consent for Lesson Debrief is the teacher's responsibility and
-  their building's policy.
+  their building's policy. Before a teacher's first recording, Wivoza asks
+  them to tell their students they are recording their own teaching, and
+  offers a page for their principal: www.wivoza.com/classroom-recording
 `.trim()
 
 export const SUPPORT_SYSTEM_PROMPT = `You are the website assistant for Wivoza, answering questions from visitors who are deciding whether to use it. Most are K-12 teachers; some are principals or district leaders.

@@ -42,8 +42,8 @@ const PRIVACY_POINTS = [
   'Admins only ever see aggregate trends — never one teacher’s recordings, transcripts, answers, or ratings.',
   'Group comparisons stay hidden until enough teachers contribute that no one can be singled out.',
   'A coaching priority is each teacher’s own choice. Admins never see who turned it on, paused it, or said no.',
-  'Audio is discarded right after transcription. Only text and metrics are kept.',
-  'Coach refers to people by role — “a student,” “the class” — not by name.',
+  'Audio is deleted once it’s transcribed. Only text and metrics are kept, in the teacher’s private account.',
+  'Coach’s feedback refers to people by role — “a student,” “the class” — not by name.',
 ]
 
 // What the pilot report (and the admin panel behind it) shows a school
@@ -404,6 +404,46 @@ export default function ForSchools() {
         </div>
       </section>
 
+      {/* Recording in classrooms */}
+      <section className="mx-auto w-full max-w-6xl px-6 py-8">
+        <div className="rounded-3xl border border-hairline bg-cream-card p-7 sm:p-9">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Recording in classrooms</p>
+          <h2 className="mt-2 font-heading text-2xl font-extrabold text-forest">
+            Cover your families once, for the whole school<span className="text-gold">.</span>
+          </h2>
+          <div className="mt-5 grid gap-5 md:grid-cols-3">
+            <div>
+              <p className="font-heading text-base font-bold text-forest">Teachers tell their class</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-ink-soft">
+                Before a teacher’s first recording, Wivoza asks them to tell students they record their own teaching,
+                and that it is only for them. Once, not every lesson.
+              </p>
+            </div>
+            <div>
+              <p className="font-heading text-base font-bold text-forest">One line in your start-of-year form</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-ink-soft">
+                Ready to paste, with a note for families of students who did not sign, on{' '}
+                <Link to="/classroom-recording" className="font-semibold text-terracotta-600 hover:underline">
+                  our recording page
+                </Link>
+                .
+              </p>
+            </div>
+            <div>
+              <p className="font-heading text-base font-bold text-forest">A data privacy agreement</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-ink-soft">
+                School and district licenses can be covered by a signed agreement on access, retention and education
+                records. Write to{' '}
+                <a href="mailto:hello@wivoza.com" className="font-semibold text-terracotta-600 hover:underline">
+                  hello@wivoza.com
+                </a>
+                .
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* What school leaders see */}
       <section className="mx-auto w-full max-w-6xl px-6 py-8">
         <div className="grid gap-8 lg:grid-cols-[1.1fr_1fr] lg:items-center">
@@ -570,6 +610,9 @@ export default function ForSchools() {
             </Link>
             <Link to="/faq" className="hover:text-ink">
               FAQ
+            </Link>
+            <Link to="/classroom-recording" className="hover:text-ink">
+              Recording in class
             </Link>
             <Link to="/research" className="hover:text-ink">
               Research

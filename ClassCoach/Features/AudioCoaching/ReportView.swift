@@ -235,7 +235,7 @@ struct ReportView: View {
                         onUpdate: onUpdate,
                         onNavigateInsights: { target in section = target; tab = .insights }
                     )
-                    Text("\u{1F512} Audio was used for transcription only and is not stored.")
+                    Text("\u{1F512} Audio was used for transcription only and has been deleted.")
                         .font(.caption).foregroundStyle(AppTheme.textSecondary)
                     // Reading the summary and wanting to talk about it is the
                     // same impulse, so the way to do that ends the page.

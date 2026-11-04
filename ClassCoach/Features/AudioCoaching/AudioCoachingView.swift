@@ -50,7 +50,7 @@ struct AudioCoachingView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     if active == nil {
-                        Text("Record a class period, get a transcript, and see a coaching report. Audio is never saved — only the text.")
+                        Text("Record a class period, get a transcript, and see a coaching report. Audio is deleted once it’s transcribed — only the text is kept.")
                             .font(.subheadline)
                             .foregroundStyle(AppTheme.textSecondary)
                     }

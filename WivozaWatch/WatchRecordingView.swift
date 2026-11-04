@@ -7,12 +7,52 @@ struct WatchRecordingView: View {
     @ObservedObject private var recorder = WatchRecorder.shared
     @ObservedObject private var sender = WatchSender.shared
     @State private var couldNotStart = false
+    /// The watch has no sign-in, so it cannot read the account's
+    /// `recordingNoticeAt` — it shows its own short version once per watch.
+    /// The server still stores a watch lesson's consent as false until the
+    /// teacher has been through the full notice on the phone or the web.
+    @AppStorage("recordingNoticeSeen") private var noticeSeen = false
+    @State private var showNotice = false
 
     /// Wivoza's terracotta and cream, from `AppTheme`.
     private let accent = Color(red: 0xC9 / 255, green: 0x6A / 255, blue: 0x45 / 255)
     private let cream = Color(red: 0xF7 / 255, green: 0xF3 / 255, blue: 0xEA / 255)
 
     var body: some View {
+        if showNotice {
+            notice
+        } else {
+            recordingScreen
+        }
+    }
+
+    /// The phone's "Before your first recording", cut to what fits a wrist.
+    private var notice: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Before your first recording")
+                    .font(.headline).foregroundStyle(cream)
+                Text("Tell your students once that you record your own teaching, just for you.")
+                    .font(.footnote)
+                Text("If your school has a recording policy, follow it.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                Button("Got it") {
+                    noticeSeen = true
+                    showNotice = false
+                    startRecording()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(accent)
+                .padding(.top, 4)
+            }
+        }
+    }
+
+    private func startRecording() {
+        Task { couldNotStart = !(await recorder.start()) && !recorder.permissionDenied }
+    }
+
+    private var recordingScreen: some View {
         VStack(spacing: 8) {
             Text(formatTimerDisplay(recorder.elapsedSec))
                 .font(.system(size: 34, weight: .semibold, design: .rounded))
@@ -21,7 +61,7 @@ struct WatchRecordingView: View {
 
             if recorder.phase == .idle {
                 Button {
-                    Task { couldNotStart = !(await recorder.start()) && !recorder.permissionDenied }
+                    if noticeSeen { startRecording() } else { showNotice = true }
                 } label: {
                     Image(systemName: "mic.fill").font(.title2)
                 }

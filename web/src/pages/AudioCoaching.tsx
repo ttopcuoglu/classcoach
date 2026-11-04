@@ -114,6 +114,9 @@ export default function AudioCoaching() {
   const [focusMetric, setFocusMetric] = useState<FocusMetric | null>(null)
   const [teacherName, setTeacherName] = useState<string | null>(null)
   const [talkVoice, setTalkVoice] = useState<TalkVoice | null>(null)
+  // Whether this teacher has been through the recording notice. Null until
+  // the profile loads; the panel asks again itself if Record beats it.
+  const [noticeAcknowledged, setNoticeAcknowledged] = useState<boolean | null>(null)
   // Only used to decide whether to show the free-tier "X of 3 used this
   // month" line below — an org member could have district/pilot access
   // this client can't verify without a new API call, so the line is only
@@ -153,6 +156,7 @@ export default function AudioCoaching() {
         setFocusMetric(p.focusMetric)
         setTeacherName(p.name)
         setTalkVoice(p.talkVoice)
+        setNoticeAcknowledged(p.recordingNoticeAt != null)
         setShowFreeCapLine(!p.plusAccess && p.organizationId == null)
       })
       .catch(() => {})
@@ -263,8 +267,8 @@ export default function AudioCoaching() {
             Lesson Debrief<span className="text-gold">.</span>
           </h1>
           <p className="text-ink-soft">
-            Record a class period, get a transcript, and see a coaching report. Audio is never saved — only
-            the text.
+            Record a class period, get a transcript, and see a coaching report. Audio is deleted once it’s
+            transcribed — only the text is kept.
           </p>
           <Link
             to="/guide/lesson-debrief"
@@ -286,6 +290,8 @@ export default function AudioCoaching() {
       <RecordingPanel
         session={active}
         teacherName={teacherName}
+        noticeAcknowledged={noticeAcknowledged}
+        onNoticeAcknowledged={() => setNoticeAcknowledged(true)}
         onUpdate={setActive}
         onExit={handleExit}
       />
@@ -405,17 +411,23 @@ function sessionHasRecording(session: { durationSec: number | null; transcribeSt
 function RecordingPanel({
   session,
   teacherName = null,
+  noticeAcknowledged,
+  onNoticeAcknowledged,
   onUpdate,
   onExit,
 }: {
   session: AudioSessionWithSegments | null
   teacherName?: string | null
+  noticeAcknowledged: boolean | null
+  onNoticeAcknowledged: () => void
   onUpdate: (s: AudioSessionWithSegments) => void
   onExit: () => void
 }) {
   const [phase, setPhase] = useState<'idle' | 'recording' | 'paused' | 'uploading'>('idle')
   const [elapsedSec, setElapsedSec] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [showNotice, setShowNotice] = useState(false)
+  const [acknowledging, setAcknowledging] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
 
   const recorderRef = useRef<MediaRecorder | null>(null)
@@ -545,7 +557,40 @@ function RecordingPanel({
     setElapsedSec(accumulatedSecRef.current + (Date.now() - runStartRef.current) / 1000)
   }
 
+  async function handleAcknowledgeNotice() {
+    setAcknowledging(true)
+    try {
+      await updateProfile({ acknowledgeRecordingNotice: true })
+    } catch {
+      setAcknowledging(false)
+      setError('Could not save that. Please try again.')
+      return
+    }
+    setAcknowledging(false)
+    setShowNotice(false)
+    onNoticeAcknowledged()
+    await handleRecordAcknowledged()
+  }
+
   async function handleRecord() {
+    setError(null)
+    // The notice comes before the first recording, once per teacher. A
+    // profile that has not loaded yet is asked directly rather than guessed —
+    // guessing "seen" is the hard-coded consent this replaced.
+    let acknowledged = noticeAcknowledged
+    if (acknowledged === null) {
+      acknowledged = await getProfile()
+        .then((p) => p.recordingNoticeAt != null)
+        .catch(() => false)
+    }
+    if (!acknowledged) {
+      setShowNotice(true)
+      return
+    }
+    await handleRecordAcknowledged()
+  }
+
+  async function handleRecordAcknowledged() {
     setError(null)
     justCreatedSessionIdRef.current = null
     // Only a session with no recording of its own is safe to reuse. The panel
@@ -557,6 +602,8 @@ function RecordingPanel({
         const created = await createAudioSession({
           teacherName: teacherName || undefined,
           sessionDate: new Date().toISOString(),
+          // Required by the route; what the session stores comes from the
+          // server's own record of the notice, not from this.
           consentConfirmed: true,
         })
         justCreatedSessionIdRef.current = created.id
@@ -690,6 +737,13 @@ function RecordingPanel({
           </div>
         )}
 
+        {showNotice ? (
+          <RecordingNotice
+            busy={acknowledging}
+            onAcknowledge={handleAcknowledgeNotice}
+            onCancel={() => setShowNotice(false)}
+          />
+        ) : (
         <div className="mt-8 flex flex-col items-center gap-4">
           <div className="flex items-center gap-2.5">
             {phase === 'recording' && (
@@ -798,6 +852,7 @@ function RecordingPanel({
             )}
           </div>
         </div>
+        )}
 
         {error && (
           <p className="mt-4 text-center text-sm text-peach-tint">
@@ -807,9 +862,53 @@ function RecordingPanel({
       </div>
 
       <p className="text-xs text-ink-soft">
-        Audio is never saved — it's sent once for transcription and discarded immediately. Only the text
-        transcript is kept.
+        Audio is deleted once it's transcribed. Only the text transcript is kept, in your private account.
       </p>
+    </div>
+  )
+}
+
+/// Shown once, before a teacher's first recording — one ask and nothing to
+/// send. Telling the class is what matters (an announced recording is not a
+/// secret one); a teacher handed a to-do list of emails and principals may
+/// never press Record. The page for a principal or families is one quiet
+/// link, for whoever wants it.
+function RecordingNotice({
+  busy,
+  onAcknowledge,
+  onCancel,
+}: {
+  busy: boolean
+  onAcknowledge: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="mt-4 flex flex-col gap-4">
+      <p className="font-heading text-2xl font-bold text-cream">Before your first recording</p>
+      <p className="text-base text-cream">
+        Tell your students once that you record your own teaching, just for you. That’s it — not every lesson.
+      </p>
+      <p className="text-sm text-cream/70">
+        The audio is deleted after it’s transcribed, and the transcript stays private to you. If your school has a
+        recording policy, follow it.{' '}
+        <a href="/classroom-recording" target="_blank" rel="noopener" className="font-medium text-gold hover:underline">
+          What to share if asked
+        </a>
+      </p>
+      <div className="flex flex-wrap items-center gap-4 pt-1">
+        <button
+          type="button"
+          onClick={onAcknowledge}
+          disabled={busy}
+          className="flex items-center gap-3 rounded-full bg-terracotta px-8 py-4 text-base font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90 disabled:opacity-60"
+        >
+          <MicIcon className="h-5 w-5" />
+          Got it, start recording
+        </button>
+        <button type="button" onClick={onCancel} className="text-sm font-medium text-cream/70 hover:text-cream">
+          Not now
+        </button>
+      </div>
     </div>
   )
 }
@@ -2541,8 +2640,7 @@ function ReportPanel({
         This report reflects what could be heard in your recording — talk patterns, questioning, and classroom
         routines. It doesn't capture lesson planning, materials, physical space, visual engagement, or anything
         outside class time. Automated counts above are suggestions to confirm or edit, not final judgments. Audio is
-        never saved: it's sent once for transcription and discarded, and only the transcript and these insights are
-        kept.
+        deleted once it's transcribed; only the transcript and these insights are kept.
       </div>
 
       <Link
@@ -3312,7 +3410,7 @@ function SummaryTab({
       </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-1 print:hidden">
-        <span className="text-sm text-ink-soft">🔒 Audio was used for transcription only and is not stored.</span>
+        <span className="text-sm text-ink-soft">🔒 Audio was used for transcription only and has been deleted.</span>
         <DiscussFooter
           compact
           label="Discuss with Wivoza Coach"

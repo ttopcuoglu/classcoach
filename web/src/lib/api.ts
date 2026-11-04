@@ -133,6 +133,9 @@ export type UserProfile = {
   onboardingCompletedAt: string | null
   termsAcceptedAt: string | null
   ageConfirmedAt: string | null
+  // When the teacher went through the before-your-first-recording notice;
+  // null until then, and the record panel shows it first.
+  recordingNoticeAt?: string | null
   audioRetentionDays: number | null
   talkVoice: TalkVoice | null
   focusMetric: FocusMetric | null
@@ -1751,6 +1754,7 @@ export function updateProfile(data: {
   coachMemoryEnabled?: boolean
   coachDigestEnabled?: boolean
   clearCoachMemory?: true
+  acknowledgeRecordingNotice?: true
 }): Promise<UserProfile> {
   return request('/api/profile', { method: 'PUT', body: JSON.stringify(data) })
 }

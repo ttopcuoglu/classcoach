@@ -28,6 +28,11 @@ export const PUBLIC_PAGE_META: Record<string, Meta> = {
     description:
       'Answers to what teachers and school leaders ask before trying Wivoza: who sees your data, whether it is used to evaluate you, what it costs, and how to start.',
   },
+  '/classroom-recording': {
+    title: 'A teacher would like to record their own lessons | Wivoza',
+    description:
+      'For school leaders: what happens when a teacher records a lesson with Wivoza — the audio is deleted, the transcript stays private to the teacher, students are not identified, and nothing is an evaluation.',
+  },
   '/for-schools': {
     title: 'Wivoza for schools and districts',
     description:

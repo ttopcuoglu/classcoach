@@ -44,6 +44,8 @@ enum ProfileService {
         var coachDigestEnabled: Bool?
         var clearCoachMemory: Bool?
         var joinCode: String?
+        /// Only ever sent as true; the server stamps the time itself.
+        var acknowledgeRecordingNotice: Bool?
     }
 
     static func updateSettings(_ body: SettingsBody) async throws -> User {

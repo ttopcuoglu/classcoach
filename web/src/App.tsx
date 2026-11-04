@@ -41,6 +41,7 @@ const GuideLessonPlanning = lazy(() => import('./pages/GuideLessonPlanning'))
 const GuideAssignmentCoach = lazy(() => import('./pages/GuideAssignmentCoach'))
 const GuideCommunicationCoach = lazy(() => import('./pages/GuideCommunicationCoach'))
 const Faq = lazy(() => import('./pages/Faq'))
+const ClassroomRecording = lazy(() => import('./pages/ClassroomRecording'))
 // The home page as a slideshow, on trial; not linked from anywhere.
 const Tour = lazy(() => import('./pages/Tour'))
 const Research = lazy(() => import('./pages/Research'))
@@ -170,6 +171,7 @@ export default function App() {
             <Route path="guide/assignment-coach" element={<GuideAssignmentCoach />} />
             <Route path="guide/communication-coach" element={<GuideCommunicationCoach />} />
             <Route path="faq" element={<Faq />} />
+            <Route path="classroom-recording" element={<ClassroomRecording />} />
             <Route path="tour" element={<Tour />} />
             <Route path="research" element={<Research />} />
             <Route path="for-schools" element={<ForSchools />} />

@@ -223,7 +223,7 @@ const LESSON_DEBRIEF: Feature = {
   nav: 'Grow → Lesson Debrief',
   title: 'Lesson Debrief',
   guideTo: '/guide/lesson-debrief',
-  intro: 'Record a real class period; Wivoza transcribes it, asks you which voice is the teacher, and turns it into a six-tab report on how you taught the content and how the class ran — no audio is ever kept, only the text and what it shows.',
+  intro: 'Record a real class period; Wivoza transcribes it, asks you which voice is the teacher, and turns it into a six-tab report on how you taught the content and how the class ran — the audio is deleted once it’s transcribed, and only the text and what it shows are kept.',
   specs: [
     { label: 'Before recording', body: 'nothing to fill in — press Record. The report names the lesson from what was taught.' },
     { label: 'While recording', body: 'a running timer with record, pause, resume, and stop controls, in your browser or the iPhone app.' },
@@ -643,7 +643,7 @@ export default function Guide() {
               <SpecList
                 items={[
                   { label: 'Your voice is never kept', body: 'audio is discarded right after transcription — only text and metrics remain.' },
-                  { label: 'Names stay out of it', body: 'Coach refers to people by role — "a student," "the class" — even if you use a name yourself.' },
+                  { label: 'Names stay out of feedback', body: 'Coach refers to people by role — "a student," "the class" — even if you use a name yourself. A lesson transcript is a record of what was said, so a name said aloud appears in it.' },
                   { label: "You're never scored", body: 'no grade, rank, or evaluation is ever shown to you. A few private internal ratings power your own growth trends and are never shown to anyone as a number.' },
                 ]}
               />
@@ -721,6 +721,9 @@ export default function Guide() {
             </Link>
             <Link to="/faq" className="hover:text-ink">
               FAQ
+            </Link>
+            <Link to="/classroom-recording" className="hover:text-ink">
+              Recording in class
             </Link>
             <Link to="/research" className="hover:text-ink">
               Research

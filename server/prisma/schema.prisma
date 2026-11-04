@@ -61,6 +61,11 @@ model User {
   // server/src/lib/coachDigest.ts). Deliberately separate from
   // coachMemoryEnabled, and off until the teacher says otherwise.
   coachDigestEnabled    Boolean   @default(false)
+  // When the teacher read the before-your-first-recording notice (tell your
+  // students, follow your school's policy if it has one) and pressed through.
+  // Null until then. AudioSession.consentConfirmed is copied from whether this
+  // is set, rather than from a flag every client always sent as true.
+  recordingNoticeAt     DateTime?
   organizationId        String? // null = independent teacher, not part of any district
   organization          Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   // "free" | "plus" — individual self-serve billing. Independent of

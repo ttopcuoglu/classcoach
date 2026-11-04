@@ -1773,6 +1773,11 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
   // shows its Microsoft button, as when the Microsoft app is registered.
   if (path.startsWith('/api/auth/providers')) return { microsoft: new URLSearchParams(window.location.search).has('microsoft') }
   if (path.startsWith('/api/auth/me') && new URLSearchParams(window.location.search).has('signedout')) return null
+  // The recording notice: unseen until acknowledged in this tab, so it can be
+  // clicked through on every reload.
+  if (path === '/api/profile' && method === 'PUT' && body.acknowledgeRecordingNotice === true) {
+    PROFILE.recordingNoticeAt = new Date().toISOString()
+  }
   if (path.startsWith('/api/auth/me') || path.startsWith('/api/profile')) return PROFILE
   if (path.startsWith('/api/lti/')) return previewLti(path, method, body)
   if (path.startsWith('/api/canvas/')) return previewCanvasSend(path, body)

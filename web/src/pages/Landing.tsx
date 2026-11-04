@@ -1114,6 +1114,9 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <Link to="/faq" className="hover:text-ink">
               FAQ
             </Link>
+            <Link to="/classroom-recording" className="hover:text-ink">
+              Recording in class
+            </Link>
             <Link to="/research" className="hover:text-ink">
               Research
             </Link>

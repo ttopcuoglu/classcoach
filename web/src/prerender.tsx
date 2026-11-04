@@ -9,6 +9,7 @@
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import { renderToString } from 'react-dom/server'
 import { StaticRouter } from 'react-router-dom'
+import ClassroomRecording from './pages/ClassroomRecording'
 import Faq from './pages/Faq'
 import ForSchools from './pages/ForSchools'
 import Guide from './pages/Guide'
@@ -28,6 +29,7 @@ export { PUBLIC_PAGE_META } from './lib/pageMeta'
 const PAGES: Record<string, () => React.ReactElement> = {
   '/': () => <Landing onSignedIn={() => {}} />,
   '/faq': () => <Faq />,
+  '/classroom-recording': () => <ClassroomRecording />,
   '/for-schools': () => <ForSchools />,
   '/terms': () => <Terms />,
   '/research': () => <Research />,
