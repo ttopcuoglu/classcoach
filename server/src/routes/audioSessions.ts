@@ -77,6 +77,7 @@ import { asksForPauseAfterQuestion, focusLineKey, lineIgnoresPause, MAX_STORED_L
 const NEXT_STEP_KEYS = ['talk', 'questions', 'climate']
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 import { splitMetricLogs } from '../lib/metricsForClient.ts'
+import { maskStudentNames } from '../lib/studentNames.ts'
 
 export const audioSessionsRouter = Router()
 
@@ -557,8 +558,11 @@ async function runTranscription(sessionId: string, audioPath: string, mimetype: 
     throw error
   }
 
+  // Students' names are replaced before anything is saved — see
+  // lib/studentNames.ts. Nothing downstream ever sees the originals.
+  const masked = maskStudentNames(utterances.map((u) => u.transcript)).texts
   const segments = await prisma.$transaction(
-    utterances.map((u) =>
+    utterances.map((u, i) =>
       prisma.transcriptSegment.create({
         data: {
           sessionId,
@@ -566,7 +570,7 @@ async function runTranscription(sessionId: string, audioPath: string, mimetype: 
           speakerLabel: `Speaker ${u.speaker}`,
           startSec: u.start,
           endSec: u.end,
-          text: u.transcript,
+          text: masked[i],
           speakerConfidence: u.speakerConfidence ?? Prisma.DbNull,
         },
       }),
@@ -758,8 +762,9 @@ audioSessionsRouter.post('/:id/transcribe', upload.single('audio'), async (req, 
       return
     }
 
+    const masked = maskStudentNames(utterances.map((u) => u.transcript)).texts
     const segments = await prisma.$transaction(
-      utterances.map((u) =>
+      utterances.map((u, i) =>
         prisma.transcriptSegment.create({
           data: {
             sessionId: session.id,
@@ -767,7 +772,7 @@ audioSessionsRouter.post('/:id/transcribe', upload.single('audio'), async (req, 
             speakerLabel: `Speaker ${u.speaker}`,
             startSec: u.start,
             endSec: u.end,
-            text: u.transcript,
+            text: masked[i],
             speakerConfidence: u.speakerConfidence ?? Prisma.DbNull,
           },
         }),

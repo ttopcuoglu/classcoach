@@ -557,7 +557,7 @@ const NAME_SHAPE = /^\p{Lu}(?=.*\p{Ll})\p{L}*(?:['’-]\p{L}+)*$/u
 // Contractions of pronouns/verbs ("I'm", "They're") — not names.
 const CONTRACTION_SUFFIX = /['’](?:m|re|ll|ve|d|t)$/i
 
-function extractCapitalizedWords(text: string): { addressed: string[]; content: string[] } {
+export function extractCapitalizedWords(text: string): { addressed: string[]; content: string[] } {
   const addressed: string[] = []
   const content: string[] = []
   for (const { sentence, endedWithQuestion } of splitSentences(text)) {
