@@ -26,6 +26,7 @@ import {
 import { introVideo, MEET_PLAYLIST_ID, VideoFacade } from '../components/TrainingVideos'
 import FooterContact from '../components/FooterContact'
 import RecordYourWay from '../components/RecordYourWay'
+import { useReveal } from '../lib/useReveal'
 import { LessonScene, SAMPLE_SCENES, type SampleScene } from '../components/SampleScenes'
 import { ROOM_COLOR, ROOM_LABEL } from '../components/TalkFlowStrip'
 import { PLUS_DEBRIEF_PER_MONTH, PLUS_MONTHLY_PRICE, PLUS_YEARLY_PER_MONTH, PLUS_YEARLY_PRICE } from '../lib/pricing'
@@ -212,6 +213,7 @@ function SampleCard({ feature, eyebrow, title, before, after, pdf, scene }: (typ
       href={pdf}
       target="_blank"
       rel="noreferrer"
+      data-reveal
       className="group flex w-[85%] shrink-0 snap-center flex-col rounded-2xl border border-hairline bg-cream-card p-6 shadow-sm transition-shadow hover:shadow-md md:w-auto"
     >
       {/* A drawing of the moment the sample comes from, so the band is not all
@@ -401,6 +403,8 @@ function ReportMockup() {
 
 export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  // Sections and cards marked data-reveal slide up into place as they scroll in.
+  useReveal()
   // ?v=veteran and friends swap the intro film for the cut that matches the ad
   // someone just clicked; everyone else gets the default.
   const intro = introVideo(useLocation().search)
@@ -672,7 +676,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
 
       {/* Intro video */}
       <section id="see-it" className="mx-auto w-full max-w-4xl scroll-mt-20 px-6 pt-16">
-        <div className="mx-auto mb-8 max-w-2xl text-center">
+        <div data-reveal className="mx-auto mb-8 max-w-2xl text-center">
           <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">See it in action</span>
           <h2 className="mt-3 font-heading text-3xl font-extrabold text-forest sm:text-4xl">
             Meet your coach.
@@ -681,12 +685,14 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             A quick look at how Wivoza helps you prepare, reflect, and try one next step.
           </p>
         </div>
-        <VideoFacade {...intro} list={MEET_PLAYLIST_ID} />
+        <div data-reveal>
+          <VideoFacade {...intro} list={MEET_PLAYLIST_ID} />
+        </div>
       </section>
 
       {/* Process */}
       <section id="how-it-works" className="mx-auto w-full max-w-6xl px-6 py-16">
-        <div className="mx-auto mb-11 max-w-2xl text-center">
+        <div data-reveal className="mx-auto mb-11 max-w-2xl text-center">
           <h2 className="font-heading text-3xl font-extrabold text-forest sm:text-4xl">
             Teach it. See how it landed. Plan the next one.
           </h2>
@@ -697,7 +703,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
         </div>
         <div className="grid gap-3 sm:grid-cols-3 sm:gap-6">
           {PROCESS.map(({ icon: Icon, tint, title, description }, index) => (
-            <div key={title} className="relative flex items-start gap-6 sm:block">
+            <div key={title} data-reveal className="relative flex items-start gap-6 sm:block">
               {/* On a phone a compact row: icon beside the words, no big number. */}
               <div className={`flex flex-1 items-start gap-4 rounded-3xl p-5 sm:block sm:p-7 ${TINT_STYLES[tint].card}`}>
                 <div className="flex shrink-0 items-start justify-between">
@@ -726,7 +732,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       {/* Features, as three teacher moments */}
       <section id="what-you-can-do" className="bg-mint-tint/50 py-16">
         <div className="mx-auto w-full max-w-6xl px-6">
-          <div className="mx-auto mb-11 max-w-2xl text-center">
+          <div data-reveal className="mx-auto mb-11 max-w-2xl text-center">
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
               One coach. The whole practice.
             </span>
@@ -741,7 +747,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
 
           <div className="grid gap-6 lg:grid-cols-3">
             {MOMENTS.map(({ moment, when, features }, columnIndex) => (
-              <div key={moment} className="flex min-w-0 flex-col">
+              <div key={moment} data-reveal className="flex min-w-0 flex-col">
                 <div className="flex items-center gap-3">
                   <span
                     className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl font-heading text-base font-bold ${
@@ -811,7 +817,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
 
       {/* Sample reports */}
       <section id="samples" className="mx-auto w-full max-w-6xl px-6 pt-16">
-        <div className="mx-auto mb-10 max-w-2xl text-center">
+        <div data-reveal className="mx-auto mb-10 max-w-2xl text-center">
           <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Example results</span>
           <h2 className="mt-3 font-heading text-3xl font-extrabold text-forest sm:text-4xl">
             See what you walk away with.
@@ -825,6 +831,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           href="/samples/lesson-debrief.pdf"
           target="_blank"
           rel="noreferrer"
+          data-reveal
           className="group mb-6 grid gap-6 rounded-3xl bg-forest p-6 text-cream shadow-sm transition-shadow hover:shadow-md sm:p-8 lg:grid-cols-[1fr_1.1fr] lg:items-center"
         >
           <div>
@@ -875,7 +882,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       {/* Quote / growth stat */}
       <section id="why-wivoza" className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-20">
         <div className="grid gap-10 lg:grid-cols-2 lg:items-center lg:gap-14">
-          <div>
+          <div data-reveal>
             <QuoteIcon className="h-10 w-10 text-gold" />
             <blockquote className="mt-4 font-heading text-3xl font-extrabold leading-tight text-forest sm:text-4xl">
               Coaching should build confidence—not create another thing to manage.
@@ -897,7 +904,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             </div>
           </div>
 
-          <div className="relative">
+          <div data-reveal className="relative">
             <div aria-hidden="true" className="absolute inset-0 translate-x-3 translate-y-3 rounded-3xl bg-gold" />
             <div className="relative rounded-3xl bg-forest p-6 text-cream sm:p-8">
               {/* One of the seven measures My Growth really charts — questions
@@ -931,7 +938,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       {/* Pricing */}
       <section id="pricing" className="bg-mint-tint/50 py-12 sm:py-16">
         <div className="mx-auto w-full max-w-6xl px-6">
-          <div className="mx-auto mb-8 max-w-2xl text-center sm:mb-11">
+          <div data-reveal className="mx-auto mb-8 max-w-2xl text-center sm:mb-11">
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
               Simple, honest pricing
             </span>
@@ -942,7 +949,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
           </div>
 
           <div className="mx-auto grid max-w-3xl gap-6 sm:grid-cols-2">
-            <div className="rounded-2xl border border-hairline bg-cream-card p-6 shadow-sm sm:p-8">
+            <div data-reveal className="rounded-2xl border border-hairline bg-cream-card p-6 shadow-sm sm:p-8">
               <h3 className="font-heading text-xl font-bold text-forest">Free</h3>
               <p className="mt-1 text-sm text-ink-soft">For getting started</p>
               <p className="mt-4 font-heading text-4xl font-extrabold text-forest sm:mt-6">$0</p>
@@ -968,7 +975,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               </a>
             </div>
 
-            <div className="relative rounded-2xl border-2 border-terracotta bg-cream-card p-6 shadow-md sm:p-8">
+            <div data-reveal className="relative rounded-2xl border-2 border-terracotta bg-cream-card p-6 shadow-md sm:p-8">
               <span className="absolute -top-3 left-8 rounded-full bg-terracotta px-3 py-1 text-xs font-semibold text-white">
                 Most popular
               </span>
@@ -1037,6 +1044,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               as "my principal will be watching my lessons". */}
           <div
             id="for-schools"
+            data-reveal
             className="mx-auto mt-8 grid max-w-4xl scroll-mt-24 gap-6 rounded-2xl bg-forest p-6 text-center sm:p-8 sm:grid-cols-[1fr_auto] sm:items-center sm:text-left"
           >
             <div>

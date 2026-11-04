@@ -99,7 +99,7 @@ const WAYS: {
 export default function RecordYourWay() {
   return (
     <section id="record-your-way" className="mx-auto w-full max-w-6xl px-6 pb-16">
-      <div className="mx-auto mb-10 max-w-2xl text-center">
+      <div data-reveal className="mx-auto mb-10 max-w-2xl text-center">
         <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">Record your way</span>
         <h2 className="mt-3 font-heading text-3xl font-extrabold text-forest sm:text-4xl">
           On your wrist, on your phone, or on your laptop.
@@ -121,7 +121,7 @@ export default function RecordYourWay() {
       {/* Three across from sm up; a swipe row on a phone. */}
       <div className="-mx-6 flex snap-x snap-mandatory gap-4 overflow-x-auto px-6 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-6 sm:overflow-visible sm:px-0 sm:pb-0">
         {WAYS.map(({ Scene, icon: Icon, card, title, description, pill }) => (
-          <div key={title} className={`flex w-[80%] shrink-0 snap-center flex-col rounded-3xl p-6 sm:w-auto ${card}`}>
+          <div key={title} data-reveal className={`flex w-[80%] shrink-0 snap-center flex-col rounded-3xl p-6 sm:w-auto ${card}`}>
             <Scene />
             <div className="mt-4 flex items-center gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-forest text-gold">
