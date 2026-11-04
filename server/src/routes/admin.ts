@@ -433,7 +433,15 @@ async function computeOverview(req: Request, res: Response) {
   const gradeBandFilter = typeof req.query.gradeBand === 'string' ? req.query.gradeBand : null
   const subjectFilter = typeof req.query.subject === 'string' ? req.query.subject : null
 
-  const totalTeachers = await prisma.user.count({ where: { role: 'teacher', ...userScope } })
+  // Every count below that ends up as "X of totalTeachers" has to come from
+  // the same people as totalTeachers itself. UsageLog and the feature tables
+  // also hold the school's admins (and a superadmin who tried a tool), and
+  // counting them as active teachers is how a school with one teacher read
+  // "2 of 1 teachers (200%)".
+  const teacherIds = await prisma.user.findMany({ where: { role: 'teacher', ...userScope }, select: { id: true } })
+  const teacherIdSet = new Set(teacherIds.map((t) => t.id))
+  const totalTeachers = teacherIds.length
+  const teacherUsageScope = { user: { role: 'teacher', ...userScope } }
   const activatedAccounts = await prisma.user.count({
     where: { role: 'teacher', onboardingCompletedAt: { not: null }, ...userScope },
   })
@@ -446,7 +454,7 @@ async function computeOverview(req: Request, res: Response) {
   })
 
   const activeUserIds = await prisma.usageLog.findMany({
-    where: { createdAt: { gte: periodStart, lt: periodEnd }, ...NOT_LEADER_PRACTICE, ...relatedUserScope },
+    where: { createdAt: { gte: periodStart, lt: periodEnd }, ...NOT_LEADER_PRACTICE, ...teacherUsageScope },
     select: { userId: true },
     distinct: ['userId'],
   })
@@ -455,7 +463,7 @@ async function computeOverview(req: Request, res: Response) {
   // preceding period of equal length, i.e. showing up more than once, not
   // just a one-time spike in participation.
   const priorPeriodUserIds = await prisma.usageLog.findMany({
-    where: { createdAt: { gte: priorPeriodStart, lt: periodStart }, ...NOT_LEADER_PRACTICE, ...relatedUserScope },
+    where: { createdAt: { gte: priorPeriodStart, lt: periodStart }, ...NOT_LEADER_PRACTICE, ...teacherUsageScope },
     select: { userId: true },
     distinct: ['userId'],
   })
@@ -631,7 +639,10 @@ async function computeOverview(req: Request, res: Response) {
     practiceReflect: attempts.length + askDebriefs.length + rehearsalPreps.length,
   }
 
-  const distinctTeacherCount = (rows: { userId: string }[]): number => new Set(rows.map((r) => r.userId)).size
+  // Shown as "N of totalTeachers", so only teachers count — an admin who
+  // tried a tool still adds to the activity totals above, never to these.
+  const distinctTeacherCount = (rows: { userId: string }[]): number =>
+    new Set(rows.map((r) => r.userId).filter((id) => teacherIdSet.has(id))).size
   const featureAdoption = {
     lessonDebrief: distinctTeacherCount(audioSessions),
     talkItThrough: distinctTeacherCount(talkDebriefs),
@@ -873,7 +884,7 @@ async function computeOverview(req: Request, res: Response) {
     const end = new Date(Date.now() - i * 7 * DAY_MS)
     const start = new Date(end.getTime() - 7 * DAY_MS)
     const ids = await prisma.usageLog.findMany({
-      where: { createdAt: { gte: start, lt: end }, ...NOT_LEADER_PRACTICE, ...relatedUserScope },
+      where: { createdAt: { gte: start, lt: end }, ...NOT_LEADER_PRACTICE, ...teacherUsageScope },
       select: { userId: true },
       distinct: ['userId'],
     })
