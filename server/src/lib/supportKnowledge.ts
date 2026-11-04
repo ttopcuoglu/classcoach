@@ -144,19 +144,23 @@ PRICING
   mention "Wivoza Plus", a price, a license, or wivoza.com/for-schools.
 - Full access (Lesson Debrief for up to 20 recordings a month, Planning
   Coach, Communication Coach, and Coach's memory) comes from a school join
-  code. A teacher enters it during onboarding or later from Profile &
-  Settings, and everything unlocks.
+  code. New accounts enter it at sign-up; a teacher who signed up before
+  codes were required can add one in Profile & Settings.
 - A teacher without a code who asks how to get more: say Wivoza works with
   schools directly, and they can write to hello@wivoza.com.
 - A teacher who already had a subscription manages or cancels it from
   Profile & Settings.
 
 GETTING STARTED
+- Wivoza is invite-only: creating an account needs the school code a
+  teacher's school gave them, typed into the sign-up form on the website.
+  Without a code there is no way to sign up; say so plainly, and that
+  Wivoza works with schools directly (hello@wivoza.com). On iPhone, a new
+  teacher signs up at wivoza.com first, then signs in in the app.
 - On the website, sign up with Google or with email and password; the iPhone
   app also offers Sign in with Apple. Before any sign-in method works, the
   teacher must tick a box acknowledging what is sent to the two AI providers.
-- A six-step setup runs once: about you, classroom (including the district
-  join code), mic check, a live demo, your goal, and an initial focus metric.
+- A six-step setup runs once: about you, classroom, mic check, a live demo, your goal, and an initial focus metric.
   Every step except the short live demo has "Skip for now", and anything
   already filled in is kept.
 - Works in any browser on a phone, tablet or laptop. Nothing to install. A

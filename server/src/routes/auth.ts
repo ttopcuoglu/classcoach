@@ -15,7 +15,7 @@ import {
   verifyIdToken as verifyMicrosoftIdToken,
 } from '../lib/microsoftAuth.ts'
 import { withPlusAccess } from '../lib/billing.ts'
-import { resolveSignInRole } from '../lib/organization.ts'
+import { admitNewAccount, resolveSignInRole } from '../lib/organization.ts'
 import { sendNoPasswordEmail, sendPasswordResetEmail } from '../lib/authEmail.ts'
 import { prisma } from '../lib/prisma.ts'
 import { verifyWebAppInitData } from '../lib/telegramWebApp.ts'
@@ -77,7 +77,7 @@ export const COOKIE_OPTIONS = {
 }
 
 authRouter.post('/google', async (req, res) => {
-  const { credential } = req.body ?? {}
+  const { credential, joinCode } = req.body ?? {}
   if (typeof credential !== 'string') {
     res.status(400).json({ error: 'credential is required' })
     return
@@ -118,7 +118,12 @@ authRouter.post('/google', async (req, res) => {
           include: USER_INCLUDE_ORG,
         })
       } else {
-        const { role, organizationId } = await resolveSignInRole(payload.email, isSuperadmin, null)
+        const admitted = await admitNewAccount(payload.email, isSuperadmin, joinCode)
+        if ('error' in admitted) {
+          res.status(403).json({ error: admitted.error, codeRequired: true })
+          return
+        }
+        const { role, organizationId } = admitted
         user = await prisma.user.create({
           data: {
             googleId: payload.sub,
@@ -243,7 +248,11 @@ authRouter.get('/microsoft/callback', async (req, res) => {
           include: USER_INCLUDE_ORG,
         })
       } else {
-        const { role, organizationId } = await resolveSignInRole(identity.email, isSuperadmin, null)
+        // A redirect carries no school code, so only someone already
+        // invited (a listed school admin) can start an account this way.
+        const admitted = await admitNewAccount(identity.email, isSuperadmin, null)
+        if ('error' in admitted) return fail('code-required')
+        const { role, organizationId } = admitted
         user = await prisma.user.create({
           data: { microsoftId: identity.microsoftId, email: identity.email, name: identity.name, role, organizationId, termsAcceptedAt: new Date() },
           omit: SAFE_USER_OMIT,
@@ -267,7 +276,7 @@ authRouter.get('/microsoft/callback', async (req, res) => {
 })
 
 authRouter.post('/apple', async (req, res) => {
-  const { credential } = req.body ?? {}
+  const { credential, joinCode } = req.body ?? {}
   if (typeof credential !== 'string') {
     res.status(400).json({ error: 'credential is required' })
     return
@@ -292,7 +301,12 @@ authRouter.post('/apple', async (req, res) => {
       include: USER_INCLUDE_ORG,
     })
     if (!user) {
-      const { role, organizationId } = await resolveSignInRole(email, isSuperadmin, null)
+      const admitted = await admitNewAccount(email, isSuperadmin, joinCode)
+      if ('error' in admitted) {
+        res.status(403).json({ error: admitted.error, codeRequired: true })
+        return
+      }
+      const { role, organizationId } = admitted
       user = await prisma.user.create({
         data: {
           email,
@@ -391,7 +405,7 @@ authRouter.post('/telegram-webapp', async (req, res) => {
 })
 
 authRouter.post('/signup', async (req, res) => {
-  const { email, password, name, termsAccepted, ageConfirmed } = req.body ?? {}
+  const { email, password, name, termsAccepted, ageConfirmed, joinCode } = req.body ?? {}
 
   if (typeof email !== 'string' || !EMAIL_PATTERN.test(email)) {
     res.status(400).json({ error: 'Please enter a valid email address.' })
@@ -431,8 +445,13 @@ authRouter.post('/signup', async (req, res) => {
     return
   }
 
+  const admitted = await admitNewAccount(normalizedEmail, ADMIN_EMAILS.has(normalizedEmail), joinCode)
+  if ('error' in admitted) {
+    res.status(403).json({ error: admitted.error, codeRequired: true })
+    return
+  }
+  const { role, organizationId } = admitted
   const passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS)
-  const { role, organizationId } = await resolveSignInRole(normalizedEmail, ADMIN_EMAILS.has(normalizedEmail), null)
 
   const user = await prisma.user.create({
     data: {

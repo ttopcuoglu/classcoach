@@ -12,6 +12,8 @@ const MICROSOFT_ERRORS: Record<string, string> = {
   'microsoft-expired': 'That took too long. Try signing in with Microsoft again.',
   'microsoft-unavailable': "Microsoft sign-in isn't available right now.",
   'microsoft-failed': "Microsoft couldn't sign you in. Please try again.",
+  'code-required':
+    "Wivoza is invite-only right now. To create an account, choose Sign up and enter the school code your school gave you.",
   suspended: 'This account has been suspended. Contact your administrator.',
 }
 
@@ -46,6 +48,8 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  // Invite-only: a new account needs its school's code (server/src/lib/organization.ts).
+  const [joinCode, setJoinCode] = useState('')
   const [agreed, setAgreed] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -82,7 +86,7 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
     setSubmitting(true)
     try {
       if (mode === 'signup') {
-        await signUp({ email, password, name, termsAccepted: agreed, ageConfirmed: agreed })
+        await signUp({ email, password, name, termsAccepted: agreed, ageConfirmed: agreed, joinCode: joinCode.trim() })
       } else {
         await logIn({ email, password })
       }
@@ -102,10 +106,12 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
     setError(null)
     setSubmitting(true)
     try {
-      await signInWithGoogle(response.credential)
+      await signInWithGoogle(response.credential, mode === 'signup' ? joinCode.trim() : undefined)
       onSignedIn()
-    } catch {
-      setError('Could not sign you in. Please try again.')
+    } catch (err) {
+      // The server's own words when it has them: a missing or wrong school
+      // code has to say so, not "please try again".
+      setError((err as Error).message || 'Could not sign you in. Please try again.')
       setSubmitting(false)
     }
   }
@@ -137,7 +143,23 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
       </div>
 
         {mode === 'signup' && (
-          <label className="mt-4 flex items-start gap-2 text-xs text-ink-soft">
+          <label className="mt-4 flex flex-col gap-1.5 text-xs font-semibold text-forest">
+            School code
+            <input
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value)}
+              placeholder="From your school"
+              autoCapitalize="characters"
+              autoComplete="off"
+              spellCheck={false}
+              className={`${inputClass} font-normal uppercase tracking-wider placeholder:normal-case placeholder:tracking-normal`}
+            />
+            <span className="font-normal text-ink-soft">Wivoza is invite-only right now.</span>
+          </label>
+        )}
+
+        {mode === 'signup' && (
+          <label className="mt-3 flex items-start gap-2 text-xs text-ink-soft">
             <input
               type="checkbox"
               checked={agreed}
@@ -157,9 +179,9 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
         )}
 
         <div className={`flex justify-center ${mode === 'signup' ? 'mt-3' : 'mt-4'}`}>
-          {mode === 'signup' && !agreed ? (
+          {mode === 'signup' && (!joinCode.trim() || !agreed) ? (
             <div className="flex h-10 w-[336px] max-w-full items-center justify-center rounded-full border border-hairline bg-cream text-xs text-ink-soft">
-              Check the box above to continue
+              {!joinCode.trim() ? 'Enter your school code to continue' : 'Check the box above to continue'}
             </div>
           ) : (
             <GoogleLogin
@@ -172,7 +194,7 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
           )}
         </div>
 
-        {microsoft && !(mode === 'signup' && !agreed) && (
+        {microsoft && !(mode === 'signup' && (!joinCode.trim() || !agreed)) && (
           <div className="mt-2 flex justify-center">
             <button
               type="button"
@@ -226,7 +248,7 @@ export default function AuthCard({ onSignedIn }: { onSignedIn: () => void }) {
         {error && <p className="text-sm text-terracotta-600">{error}</p>}
         <button
           type="submit"
-          disabled={submitting || (mode === 'signup' && !agreed)}
+          disabled={submitting || (mode === 'signup' && (!agreed || !joinCode.trim()))}
           className="rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {submitting ? 'Please wait...' : mode === 'signup' ? 'Create account' : 'Log in'}

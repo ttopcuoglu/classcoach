@@ -1380,8 +1380,9 @@ export function microsoftSignInUrl(next: string): string {
   return `${API_BASE_URL}/api/auth/microsoft/start?next=${encodeURIComponent(next)}`
 }
 
-export function signInWithGoogle(credential: string): Promise<UserProfile> {
-  return request('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential }) })
+/// `joinCode` is sent when signing up: a new account needs one (invite-only).
+export function signInWithGoogle(credential: string, joinCode?: string): Promise<UserProfile> {
+  return request('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential, joinCode }) })
 }
 
 export function signUp(data: {
@@ -1390,6 +1391,7 @@ export function signUp(data: {
   name: string
   termsAccepted: boolean
   ageConfirmed: boolean
+  joinCode: string
 }): Promise<UserProfile> {
   return request('/api/auth/signup', { method: 'POST', body: JSON.stringify(data) })
 }

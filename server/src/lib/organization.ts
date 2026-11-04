@@ -121,6 +121,30 @@ export async function resolveSignInRole(
   return org ? { role: 'org_admin', organizationId: org.id } : { role: 'teacher' }
 }
 
+// Since 2026-11-04 Wivoza is invite-only: a new account needs a school's join
+// code. The founder gives schools access one by one, and nothing on the site
+// is for sale. Existing accounts sign in as before. Set to false to reopen
+// sign-up to anyone.
+export const SIGNUP_REQUIRES_CODE = true
+
+export const CODE_REQUIRED_MESSAGE =
+  "Wivoza is invite-only right now. To create an account, enter the school code your school gave you. On iPhone, sign up first at wivoza.com with your code, then sign in here."
+
+/// Who a brand-new account is, or why it can't be made. Every sign-up path
+/// (email, Google, Apple, Microsoft) calls this before creating a user, so
+/// none of them can skip the code. A platform admin and an email already on
+/// a school's admin list get in without one: they are already invited.
+export async function admitNewAccount(
+  email: string,
+  isSuperadmin: boolean,
+  rawCode: unknown,
+): Promise<{ role: 'superadmin' | 'org_admin' | 'teacher'; organizationId?: string } | { error: string }> {
+  const invited = await resolveSignInRole(email, isSuperadmin, null)
+  if (invited.role !== 'teacher') return invited
+  if (typeof rawCode === 'string' && rawCode.trim()) return resolveJoinCode(email, rawCode)
+  return SIGNUP_REQUIRES_CODE ? { error: CODE_REQUIRED_MESSAGE } : invited
+}
+
 export async function generateUniqueJoinCode(): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = Math.random().toString(36).slice(2, 8).toUpperCase()
