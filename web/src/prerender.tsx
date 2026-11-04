@@ -11,7 +11,6 @@ import { renderToString } from 'react-dom/server'
 import { StaticRouter } from 'react-router-dom'
 import ClassroomRecording from './pages/ClassroomRecording'
 import Faq from './pages/Faq'
-import ForSchools from './pages/ForSchools'
 import Guide from './pages/Guide'
 import GuideAskPractice from './pages/GuideAskPractice'
 import GuideAssignmentCoach from './pages/GuideAssignmentCoach'
@@ -30,7 +29,6 @@ const PAGES: Record<string, () => React.ReactElement> = {
   '/': () => <Landing onSignedIn={() => {}} />,
   '/faq': () => <Faq />,
   '/classroom-recording': () => <ClassroomRecording />,
-  '/for-schools': () => <ForSchools />,
   '/terms': () => <Terms />,
   '/research': () => <Research />,
   '/guide': () => <Guide />,

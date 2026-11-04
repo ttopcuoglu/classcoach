@@ -33,11 +33,6 @@ export const PUBLIC_PAGE_META: Record<string, Meta> = {
     description:
       'For school leaders: what happens when a teacher records a lesson with Wivoza — the audio is deleted, the transcript stays private to the teacher, students are not identified, and nothing is an evaluation.',
   },
-  '/for-schools': {
-    title: 'Wivoza for schools and districts',
-    description:
-      'Give every teacher private, Plus-level AI coaching. Leaders see aggregate trends — never an individual teacher’s work. Tell us about your school.',
-  },
   '/research': {
     title: 'The research behind Wivoza',
     description:

@@ -34,7 +34,6 @@ const Onboarding = lazy(() => import('./pages/Onboarding'))
 const LtiConnect = lazy(() => import('./pages/LtiConnect'))
 const Terms = lazy(() => import('./pages/Terms'))
 const Guide = lazy(() => import('./pages/Guide'))
-const ForSchools = lazy(() => import('./pages/ForSchools'))
 const GuideTalkItThrough = lazy(() => import('./pages/GuideTalkItThrough'))
 const GuideLessonDebrief = lazy(() => import('./pages/GuideLessonDebrief'))
 const GuideAskPractice = lazy(() => import('./pages/GuideAskPractice'))
@@ -184,7 +183,9 @@ export default function App() {
             <Route path="classroom-recording" element={<ClassroomRecording />} />
             <Route path="tour" element={<Tour />} />
             <Route path="research" element={<Research />} />
-            <Route path="for-schools" element={<ForSchools />} />
+            {/* No public schools pitch since 2026-11-04: access is given to
+                schools one by one. The page is kept in pages/ForSchools.tsx. */}
+            <Route path="for-schools" element={<Navigate to="/" replace />} />
             <Route
               path="onboarding"
               element={

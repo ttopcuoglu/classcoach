@@ -28,12 +28,12 @@ const PAID_MONTHLY_LIMITS: Record<FeatureArea, number> = {
 }
 
 const UPGRADE_MESSAGES: Record<FeatureArea, string> = {
-  // Wivoza is sold to schools and districts only (web/src/lib/pricing.ts
-  // INDIVIDUAL_PLAN), so a free teacher is pointed at their school, never at
-  // a checkout. A join code goes in Profile & Settings.
-  lesson_debrief: "You've used your 3 free Lesson Debrief recordings this month. With a school or district license you get up to 20 a month — add your school's join code in Profile & Settings, or see wivoza.com/for-schools.",
-  lesson_planning: "Planning Coach comes with a school or district license. Add your school's join code in Profile & Settings, or see wivoza.com/for-schools.",
-  communications: "Communication Coach comes with a school or district license. Add your school's join code in Profile & Settings, or see wivoza.com/for-schools.",
+  // Nothing is sold on the site (web/src/lib/pricing.ts INDIVIDUAL_PLAN):
+  // access is given to schools one by one, so a free teacher's only way in
+  // is their school's join code, in Profile & Settings.
+  lesson_debrief: "You've used your 3 free Lesson Debrief recordings this month. If your school gave you a join code, add it in Profile & Settings for up to 20 a month.",
+  lesson_planning: "Planning Coach isn't on your account yet. If your school gave you a join code, add it in Profile & Settings.",
+  communications: "Communication Coach isn't on your account yet. If your school gave you a join code, add it in Profile & Settings.",
 }
 
 // A paid teacher who reaches the soft ceiling must never be told to upgrade —

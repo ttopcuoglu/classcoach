@@ -428,9 +428,6 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <a href="#what-you-can-do" className="hover:text-ink">
               Features
             </a>
-            <Link to="/for-schools" className="hover:text-ink">
-              For Schools
-            </Link>
             <div className="group relative">
               <button
                 type="button"
@@ -511,13 +508,6 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             >
               Why Wivoza
             </a>
-            <Link
-              to="/for-schools"
-              onClick={() => setMobileNavOpen(false)}
-              className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
-            >
-              For Schools
-            </Link>
             <Link
               to="/research"
               onClick={() => setMobileNavOpen(false)}
@@ -920,52 +910,6 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 </p>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* School leaders. Prices are off the public page for now: the
-          founder works in a school whose staff use Wivoza, and a price tag
-          on the front page reads as a sales pitch to colleagues. Prices
-          still live in lib/pricing.ts and in Profile & Settings. */}
-      <section className="bg-mint-tint/50 py-12 sm:py-16">
-        <div className="mx-auto w-full max-w-6xl px-6">
-          {/* Teachers read this page too, so the leader pitch stays small and
-              leads with what leaders can't see: a big dashboard here would read
-              as "my principal will be watching my lessons". */}
-          <div
-            id="for-schools"
-            data-reveal
-            className="mx-auto grid max-w-4xl scroll-mt-24 gap-6 rounded-2xl bg-forest p-6 text-center sm:p-8 sm:grid-cols-[1fr_auto] sm:items-center sm:text-left"
-          >
-            <div>
-              <h3 className="font-heading text-lg font-bold text-cream">
-                Bringing Wivoza to your school or district?
-              </h3>
-              <p className="mt-1.5 text-sm text-cream/80">
-                School leaders see school-wide trends and whether their PD is working, never a
-                teacher&rsquo;s recordings or coaching.
-              </p>
-              <p className="mt-1.5 hidden text-sm text-cream/60 sm:block">
-                A school or district license gives every teacher full access, with support built for
-                your rollout.
-              </p>
-              <Link
-                to="/for-schools"
-                className="mt-5 inline-flex items-center gap-2 whitespace-nowrap rounded-full bg-gold px-5 py-3 text-sm font-semibold text-forest transition-opacity hover:opacity-90"
-              >
-                See how it works for schools
-                <ArrowRightIcon className="h-4 w-4" />
-              </Link>
-            </div>
-            <Link to="/for-schools" className="hidden w-72 overflow-hidden rounded-xl bg-cream p-1.5 sm:block">
-              <img
-                src="/samples/admin-pd-progress.png"
-                alt="A school-wide focus area for an invented school, shown in fewer lessons since tracking began."
-                className="w-full rounded-lg"
-                loading="lazy"
-              />
-            </Link>
           </div>
         </div>
       </section>

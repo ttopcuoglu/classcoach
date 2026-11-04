@@ -3,12 +3,9 @@ import SupportChat from '../components/SupportChat'
 import FooterContact from '../components/FooterContact'
 import {
   ArrowRightIcon,
-  ChartBarIcon,
   ChatBubbleIcon,
   CheckIcon,
-  GraduationCapIcon,
   LessonPlanIcon,
-  LockIcon,
   ScenarioIcon,
   WaveformIcon,
 } from '../components/icons'
@@ -203,33 +200,6 @@ const CYCLE = [
   { step: 'Adjust', where: 'Into the next plan' },
 ]
 
-const SCHOOL_POINTS = [
-  {
-    icon: GraduationCapIcon,
-    badge: 'bg-terracotta text-cream',
-    title: 'A coach for every teacher',
-    body: 'Every teacher gets their own coach, available between PD sessions and outside the school day, not only when a coach’s calendar allows.',
-  },
-  {
-    icon: LockIcon,
-    badge: 'bg-forest text-gold',
-    title: 'Coaching, not evaluation',
-    body: 'Teachers’ recordings, conversations, and practice stay private to them. Leaders never see an individual teacher’s work, so teachers can be honest with their coach.',
-  },
-  {
-    icon: ChartBarIcon,
-    badge: 'bg-gold text-forest',
-    title: 'PD aimed at real needs',
-    body: 'Leaders see school-wide patterns from recorded lessons, such as questions beyond recall and checks for understanding, explained in plain words, so professional learning can target what teachers actually need.',
-  },
-  {
-    icon: CheckIcon,
-    badge: 'bg-mint-tint text-forest',
-    title: 'Follow-through you can see',
-    body: 'Choose a focus area as a school and watch whether it shows up in fewer lessons over time, in aggregate, with groups under five combined.',
-  },
-]
-
 const REFERENCES = [
   {
     text: (
@@ -381,9 +351,6 @@ export default function Research() {
             <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-10 w-auto" />
           </Link>
           <div className="flex items-center gap-5">
-            <Link to="/for-schools" className="hidden text-sm font-medium text-ink-soft hover:text-ink sm:inline">
-              For Schools
-            </Link>
             <Link to="/guide" className="hidden text-sm font-medium text-ink-soft hover:text-ink sm:inline">
               Guide
             </Link>
@@ -417,13 +384,6 @@ export default function Research() {
               className="inline-flex items-center gap-2 rounded-full bg-forest px-6 py-3.5 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-forest-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terracotta"
             >
               How it helps teachers
-              <ArrowRightIcon className="h-4 w-4 rotate-90" />
-            </a>
-            <a
-              href="#schools"
-              className="inline-flex items-center gap-2 rounded-full border border-forest/25 bg-cream-card px-6 py-3.5 text-sm font-semibold text-forest transition-colors hover:border-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terracotta"
-            >
-              How it helps schools
               <ArrowRightIcon className="h-4 w-4 rotate-90" />
             </a>
           </div>
@@ -521,40 +481,6 @@ export default function Research() {
           </div>
         </section>
 
-        {/* For schools */}
-        <section id="schools" aria-labelledby="schools-heading" className="mx-auto w-full max-w-6xl scroll-mt-6 px-6 py-10">
-          <div className="mb-8 max-w-2xl">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#9a4b2c]">For schools</p>
-            <h2 id="schools-heading" className="mt-2 font-heading text-3xl font-extrabold text-forest">
-              How Wivoza helps schools<span className="text-gold">.</span>
-            </h2>
-            <p className="mt-3 text-ink-soft">
-              Effective professional development combines coaching, feedback, and reflection over time (Darling-Hammond,
-              Hyler &amp; Gardner, 2017). Wivoza gives a school’s PD that follow-through between sessions.
-            </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {SCHOOL_POINTS.map(({ icon: Icon, badge, title, body }) => (
-              <div key={title} className="flex items-start gap-4 rounded-3xl border border-hairline bg-cream-card p-6 shadow-sm">
-                <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${badge}`}>
-                  <Icon className="h-5 w-5" />
-                </span>
-                <div>
-                  <h3 className="font-heading text-lg font-bold text-forest">{title}</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-ink-soft">{body}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <Link
-            to="/for-schools"
-            className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-[#9a4b2c] hover:underline"
-          >
-            See what a school license includes
-            <ArrowRightIcon className="h-4 w-4" />
-          </Link>
-        </section>
-
         {/* Closing */}
         <section className="mx-auto w-full max-w-6xl px-6 py-10">
           <div className="rounded-3xl bg-forest px-6 py-12 text-center text-cream sm:px-12">
@@ -571,12 +497,6 @@ export default function Research() {
               >
                 Start free
                 <ArrowRightIcon className="h-4 w-4" />
-              </Link>
-              <Link
-                to="/for-schools"
-                className="inline-flex items-center gap-2 rounded-full border border-cream/30 px-6 py-3.5 text-sm font-semibold text-cream transition-colors hover:border-cream hover:bg-cream/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream"
-              >
-                Bring Wivoza to your school
               </Link>
             </div>
           </div>

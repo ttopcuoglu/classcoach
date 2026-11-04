@@ -159,7 +159,7 @@ const CATEGORIES: Category[] = [
     items: [
       {
         q: 'Is Wivoza free?',
-        a: 'Yes — Talk It Through and Practice are free for everyone, always, plus 3 Lesson Debrief recordings a month. Lesson Debrief on up to 20 lessons a month, Planning Coach, Communication Coach, and Coach’s memory come with a school or district license, for every teacher — tell us about your school at wivoza.com/for-schools and we’ll be in touch.',
+        a: 'Yes — Talk It Through and Practice are free for everyone, always, plus 3 Lesson Debrief recordings a month. If your school has given you a join code, add it in Profile & Settings for Lesson Debrief on up to 20 lessons a month, Planning Coach, Communication Coach, and Coach’s memory.',
       },
       {
         q: 'How long does it take to get started?',
