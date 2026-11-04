@@ -99,6 +99,10 @@ export type UsageAction =
   // already have, so it is not a second week on their allowance.
   | 'lesson_plan_week'
   | 'lesson_plan_week_fill'
+  // Leader's Corner (routes/leaders.ts). Never counted by any admin
+  // dashboard: see LEADER_ACTIONS below.
+  | 'leader_feedback'
+  | 'leader_chat'
 
 // Every turn-based call in the two free-forever features. Kept as one list so
 // a future action in either area doesn't silently fall back into the flat cap.
@@ -117,7 +121,15 @@ export const CONVERSATIONAL_ACTIONS: readonly UsageAction[] = [
   'conversation_practice_generate',
   'conversation_practice_feedback',
   'conversation_practice_chat',
+  // Leader's Corner is the same shape: a rehearsal and its follow-up turns.
+  'leader_feedback',
+  'leader_chat',
 ]
+
+// A leader's own practice is private, including the fact of it: these rows
+// are left out of every school activity count, active-user tally and "last
+// active" date an admin can see (routes/admin.ts).
+export const LEADER_ACTIONS: readonly UsageAction[] = ['leader_feedback', 'leader_chat']
 
 // A user already loaded by the caller. The live coaching turns select this
 // once and hand it to both the usage check and the plan check, rather than

@@ -4,6 +4,7 @@ import type { UserProfile } from '../lib/api'
 import { ADMIN_GROUP_LABEL, ADMIN_NAV, adminPageFor, adminPath, type AdminGroup, type AdminPage } from '../lib/adminNav'
 import {
   ChartBarIcon,
+  ChatBubbleIcon,
   GearIcon,
   GraduationCapIcon,
   GridIcon,
@@ -33,6 +34,7 @@ const ICON: Record<AdminPage, IconComponent> = {
   organizations: ShieldIcon,
   platformUsers: ShieldIcon,
   schoolInquiries: ShieldIcon,
+  leadersCorner: ChatBubbleIcon,
 }
 
 const MAIN_GROUPS: AdminGroup[] = ['overview', 'insights', 'coaching', 'manage']
@@ -46,6 +48,12 @@ export function adminNavLinkClasses(isActive: boolean) {
 
 export function isAdminRole(user: UserProfile | null): boolean {
   return user != null && user.role !== 'teacher'
+}
+
+/// Leader's Corner is on for this person: a superadmin gave them a level.
+/// A level alone opens the School Admin side, showing only Leader's Corner.
+export function isLeader(user: UserProfile | null): boolean {
+  return user?.leaderLevel != null
 }
 
 /// My Coaching | School Admin. Only for someone who can open School Admin;
@@ -126,9 +134,27 @@ export function AdminNav({ user, onPick }: { user: UserProfile | null; onPick?: 
   const [settingsOpen, setSettingsOpen] = useState(settingsActive)
   const open = settingsOpen || settingsActive
 
+  const leader = isLeader(user)
+  const leaderGroup = leader && (
+    <div>
+      <GroupHeading group="leader" />
+      <div className="mt-1.5 flex flex-col gap-1">
+        {ADMIN_NAV.filter((i) => i.group === 'leader').map((i) => (
+          <AdminLink key={i.page} page={i.page} label={i.label} onPick={onPick} />
+        ))}
+      </div>
+    </div>
+  )
+  // A leader without an admin role (a department head, a coach) gets their
+  // own corner and none of the school's pages, which would refuse them.
+  if (!isAdminRole(user)) {
+    return <div className="flex flex-1 flex-col gap-5">{leaderGroup}</div>
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-5">
       <SchoolBlock user={user} />
+      {leaderGroup}
       {MAIN_GROUPS.map((group) => (
         <div key={group}>
           <GroupHeading group={group} />

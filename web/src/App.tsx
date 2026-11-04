@@ -28,6 +28,7 @@ const TalkItThroughExport = lazy(() => import('./pages/TalkItThroughExport'))
 const AskPracticeExport = lazy(() => import('./pages/AskPracticeExport'))
 const CommunicationExport = lazy(() => import('./pages/CommunicationExport'))
 const AdminPilotReport = lazy(() => import('./pages/AdminPilotReport'))
+const LeadersCorner = lazy(() => import('./pages/LeadersCorner'))
 const TalkToMe = lazy(() => import('./pages/TalkToMe'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
 const LtiConnect = lazy(() => import('./pages/LtiConnect'))
@@ -270,9 +271,24 @@ export default function App() {
               <Route path="profile" element={<Profile />} />
               {/* Always registered, so /admin never falls through to a blank page
                   (e.g. right after logging out on it) — a teacher is sent home. */}
+              {/* Leader's Corner: anyone a superadmin gave a level, admin role or
+                  not. The server checks the level on every call. */}
+              <Route
+                path="admin/leaders-corner"
+                element={user?.leaderLevel ? <LeadersCorner /> : <Navigate to={user != null && user.role !== 'teacher' ? '/admin' : '/'} replace />}
+              />
               <Route
                 path="admin/*"
-                element={user != null && user.role !== 'teacher' ? <AdminDashboard /> : <Navigate to="/" replace />}
+                element={
+                  user != null && user.role !== 'teacher' ? (
+                    <AdminDashboard />
+                  ) : user?.leaderLevel ? (
+                    // A leader without an admin role has one page on this side.
+                    <Navigate to="/admin/leaders-corner" replace />
+                  ) : (
+                    <Navigate to="/" replace />
+                  )
+                }
               />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

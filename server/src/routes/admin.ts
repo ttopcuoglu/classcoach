@@ -20,6 +20,12 @@ import { checkGuidance, GUIDANCE_FIELDS, MAX_ACTIVE_PRIORITIES, type Guidance } 
 import { staffQuestionMix } from '../lib/questionMix.ts'
 import { OWN_SITUATION, SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
 import { stripe } from '../lib/stripe.ts'
+import { LEADER_ACTIONS } from '../lib/usageLimit.ts'
+import { isLeaderLevel } from '../lib/leaderLevels.ts'
+
+// Leader's Corner is a leader's own: its usage rows never count toward a
+// school's activity, active users or anyone's "last active" here.
+const NOT_LEADER_PRACTICE = { action: { notIn: [...LEADER_ACTIONS] } }
 
 export const adminRouter = Router()
 
@@ -433,14 +439,14 @@ async function computeOverview(req: Request, res: Response) {
   })
 
   const activitiesThisWeek = await prisma.usageLog.count({
-    where: { createdAt: { gte: periodStart, lt: periodEnd }, ...relatedUserScope },
+    where: { createdAt: { gte: periodStart, lt: periodEnd }, ...NOT_LEADER_PRACTICE, ...relatedUserScope },
   })
   const activitiesPriorWeek = await prisma.usageLog.count({
-    where: { createdAt: { gte: priorPeriodStart, lt: periodStart }, ...relatedUserScope },
+    where: { createdAt: { gte: priorPeriodStart, lt: periodStart }, ...NOT_LEADER_PRACTICE, ...relatedUserScope },
   })
 
   const activeUserIds = await prisma.usageLog.findMany({
-    where: { createdAt: { gte: periodStart, lt: periodEnd }, ...relatedUserScope },
+    where: { createdAt: { gte: periodStart, lt: periodEnd }, ...NOT_LEADER_PRACTICE, ...relatedUserScope },
     select: { userId: true },
     distinct: ['userId'],
   })
@@ -449,7 +455,7 @@ async function computeOverview(req: Request, res: Response) {
   // preceding period of equal length, i.e. showing up more than once, not
   // just a one-time spike in participation.
   const priorPeriodUserIds = await prisma.usageLog.findMany({
-    where: { createdAt: { gte: priorPeriodStart, lt: periodStart }, ...relatedUserScope },
+    where: { createdAt: { gte: priorPeriodStart, lt: periodStart }, ...NOT_LEADER_PRACTICE, ...relatedUserScope },
     select: { userId: true },
     distinct: ['userId'],
   })
@@ -867,7 +873,7 @@ async function computeOverview(req: Request, res: Response) {
     const end = new Date(Date.now() - i * 7 * DAY_MS)
     const start = new Date(end.getTime() - 7 * DAY_MS)
     const ids = await prisma.usageLog.findMany({
-      where: { createdAt: { gte: start, lt: end }, ...relatedUserScope },
+      where: { createdAt: { gte: start, lt: end }, ...NOT_LEADER_PRACTICE, ...relatedUserScope },
       select: { userId: true },
       distinct: ['userId'],
     })
@@ -1070,7 +1076,7 @@ adminRouter.get('/members', async (req, res) => {
   // this list already shows (join date, role, suspended status).
   const lastActive = await prisma.usageLog.groupBy({
     by: ['userId'],
-    where: { userId: { in: members.map((m) => m.id) } },
+    where: { userId: { in: members.map((m) => m.id) }, ...NOT_LEADER_PRACTICE },
     _max: { createdAt: true },
   })
   const lastActiveByUser = new Map(lastActive.map((row) => [row.userId, row._max.createdAt?.toISOString() ?? null]))
@@ -1788,6 +1794,7 @@ adminRouter.get('/users', requireSuperadmin, async (_req, res) => {
       email: true,
       role: true,
       jobTitle: true,
+      leaderLevel: true,
       organizationId: true,
       suspendedAt: true,
       createdAt: true,
@@ -1802,6 +1809,7 @@ adminRouter.get('/users', requireSuperadmin, async (_req, res) => {
       email: u.email,
       role: u.role,
       jobTitle: u.jobTitle,
+      leaderLevel: u.leaderLevel,
       organizationId: u.organizationId,
       organizationName: u.organization?.name ?? null,
       suspendedAt: u.suspendedAt,
@@ -1868,8 +1876,17 @@ adminRouter.patch('/users/:id', requireSuperadmin, async (req, res) => {
     return
   }
 
-  const data: UserEdits & { organizationId?: string | null } = { ...parsed.edits }
-  const { organizationId } = (req.body ?? {}) as { organizationId?: unknown }
+  const data: UserEdits & { organizationId?: string | null; leaderLevel?: string | null } = { ...parsed.edits }
+  const { organizationId, leaderLevel } = (req.body ?? {}) as { organizationId?: unknown; leaderLevel?: unknown }
+  // Leader's Corner level: here only, never in parseUserEdits, which a school
+  // admin's member edit shares — a superadmin assigns every level.
+  if (leaderLevel !== undefined) {
+    if (leaderLevel !== null && !isLeaderLevel(leaderLevel)) {
+      res.status(400).json({ error: 'leaderLevel must be district, building, assistant, teacher_leader, or null' })
+      return
+    }
+    data.leaderLevel = leaderLevel
+  }
   if (organizationId !== undefined) {
     if (organizationId !== null && typeof organizationId !== 'string') {
       res.status(400).json({ error: 'organizationId must be a string or null' })
@@ -1911,6 +1928,7 @@ adminRouter.patch('/users/:id', requireSuperadmin, async (req, res) => {
       email: true,
       role: true,
       jobTitle: true,
+      leaderLevel: true,
       organizationId: true,
       suspendedAt: true,
       createdAt: true,
@@ -1923,6 +1941,7 @@ adminRouter.patch('/users/:id', requireSuperadmin, async (req, res) => {
     email: updated.email,
     role: updated.role,
     jobTitle: updated.jobTitle,
+    leaderLevel: updated.leaderLevel,
     organizationId: updated.organizationId,
     organizationName: updated.organization?.name ?? null,
     suspendedAt: updated.suspendedAt,

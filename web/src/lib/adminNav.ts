@@ -15,12 +15,17 @@ export type AdminPage =
   | 'organizations'
   | 'platformUsers'
   | 'schoolInquiries'
+  | 'leadersCorner'
 
-export type AdminGroup = 'overview' | 'insights' | 'coaching' | 'manage' | 'settings' | 'internal'
+export type AdminGroup = 'leader' | 'overview' | 'insights' | 'coaching' | 'manage' | 'settings' | 'internal'
 
 export type AdminNavItem = { page: AdminPage; slug: string; label: string; group: AdminGroup; superadminOnly?: boolean }
 
 export const ADMIN_NAV: AdminNavItem[] = [
+  // Only for someone a superadmin has given a level (AdminNav). Its own route
+  // in App, not an AdminDashboard tab: a department head with no admin role
+  // can open it, and the dashboard's school data would refuse them.
+  { page: 'leadersCorner', slug: 'leaders-corner', label: 'Leader’s Corner', group: 'leader' },
   { page: 'dashboard', slug: '', label: 'Dashboard', group: 'overview' },
   { page: 'engagement', slug: 'usage', label: 'Usage & Engagement', group: 'insights' },
   { page: 'insights', slug: 'insights', label: 'Coaching Insights', group: 'insights' },
@@ -35,6 +40,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
 ]
 
 export const ADMIN_GROUP_LABEL: Record<AdminGroup, string> = {
+  leader: 'For you',
   overview: 'Overview',
   insights: 'Insights',
   coaching: 'Coaching',

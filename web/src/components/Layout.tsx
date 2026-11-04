@@ -17,7 +17,7 @@ import {
 } from './icons'
 import { PLUS_MONTHLY_PRICE, PLUS_SUMMARY } from '../lib/pricing'
 import { isAdminPath } from '../lib/adminNav'
-import { AdminNav, isAdminRole, WorkspaceSwitch } from './AdminSidebar'
+import { AdminNav, isAdminRole, isLeader, WorkspaceSwitch } from './AdminSidebar'
 
 type IconComponent = (props: { className?: string }) => React.ReactElement
 type NavItem = { to: string; label: string; icon: IconComponent; subtitle?: string }
@@ -100,7 +100,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
   // Two workspaces in one sidebar: My Coaching (the teacher's own tools, as
   // they always were) and School Admin. Which one is showing follows the
   // address, so back, forward and a shared /admin link all keep it right.
-  const canAdmin = isAdminRole(user)
+  const canAdmin = isAdminRole(user) || isLeader(user)
   const admin = canAdmin && isAdminPath(location.pathname)
 
   async function handleLogout() {

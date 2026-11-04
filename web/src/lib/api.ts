@@ -152,6 +152,9 @@ export type UserProfile = {
   plusAccess?: 'subscription' | 'school' | 'admin' | 'demo' | null
   organizationId: string | null
   organization: { name: string } | null
+  // Leader's Corner level, set only by a superadmin; null = no Leader's Corner.
+  // Optional because an older server never sends it.
+  leaderLevel?: LeaderLevel | null
   createdAt: string
   updatedAt: string
 }
@@ -394,6 +397,7 @@ export type AdminUser = {
   email: string
   role: 'teacher' | 'org_admin' | 'superadmin'
   jobTitle: JobTitle | null
+  leaderLevel?: LeaderLevel | null
   organizationId: string | null
   organizationName: string | null
   suspendedAt: string | null
@@ -1497,7 +1501,10 @@ export function suspendUser(id: string, suspended: boolean): Promise<AdminUser> 
   return request(`/api/admin/users/${id}/suspend`, { method: 'POST', body: JSON.stringify({ suspended }) })
 }
 
-export function updateUser(id: string, edits: MemberEdits & { organizationId?: string | null }): Promise<AdminUser> {
+export function updateUser(
+  id: string,
+  edits: MemberEdits & { organizationId?: string | null; leaderLevel?: LeaderLevel | null },
+): Promise<AdminUser> {
   return request(`/api/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(edits) })
 }
 
@@ -3085,4 +3092,58 @@ export function getSchoolInquiries(): Promise<SchoolInquiry[]> {
 
 export function updateSchoolInquiryStatus(id: string, status: SchoolInquiry['status']): Promise<SchoolInquiry> {
   return request(`/api/school-inquiries/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
+}
+
+// ---- Leader's Corner ----
+//
+// A superadmin-assigned level decides which scenarios a leader can open; the
+// server sends only their own level's (routes/leaders.ts).
+
+export type LeaderLevel = 'district' | 'building' | 'assistant' | 'teacher_leader'
+
+export type LeaderAudience = 'families' | 'students' | 'staff' | 'community' | 'up_the_chain'
+
+export type LeaderScenario = { id: string; audience: LeaderAudience; title: string; text: string }
+
+export type LeaderScenarios = {
+  level: { value: LeaderLevel; label: string; titles: string }
+  audiences: { value: LeaderAudience; label: string }[]
+  scenarios: LeaderScenario[]
+}
+
+export type LeaderAttempt = {
+  id: string
+  level: LeaderLevel
+  source: 'curated' | 'own'
+  curatedId: string | null
+  audience: LeaderAudience | null
+  scenarioText: string
+  responseText: string
+  feedback: string | null
+  modelResponse: string | null
+  conversation: ChatMessage[] | null
+  saved: boolean
+  createdAt: string
+}
+
+export function getLeaderScenarios(): Promise<LeaderScenarios> {
+  return request('/api/leaders/scenarios')
+}
+
+export function getLeaderAttempts(): Promise<LeaderAttempt[]> {
+  return request('/api/leaders/attempts')
+}
+
+export function createLeaderAttempt(
+  body: { scenarioId: string; responseText: string } | { situationText: string; responseText: string },
+): Promise<LeaderAttempt> {
+  return request('/api/leaders/attempts', { method: 'POST', body: JSON.stringify(body) })
+}
+
+export function sendLeaderChat(id: string, message: string): Promise<LeaderAttempt> {
+  return request(`/api/leaders/attempts/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
+}
+
+export function setLeaderAttemptSaved(id: string, saved: boolean): Promise<LeaderAttempt> {
+  return request(`/api/leaders/attempts/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) })
 }

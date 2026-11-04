@@ -28,6 +28,7 @@ import {
   type AdminOverview,
   type AdminUser,
   type JobTitle,
+  type LeaderLevel,
   type MemberEdits,
   type ClimateAverages,
   type DataConfidence,
@@ -56,6 +57,7 @@ import {
   STRENGTH_MEANING,
 } from '../lib/adminLabels'
 import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
+import { LEADER_LEVEL_OPTIONS, leaderLevelLabel } from '../lib/leaderLevels'
 import { CHALLENGE_TYPES, MESSAGE_PURPOSES, challengeLabel, purposeLabel } from '../lib/communicationOptions'
 import { ChatBubbleIcon, LockIcon } from '../components/icons'
 import { CoachingPrioritiesPanel } from '../components/CoachingPrioritiesPanel'
@@ -640,7 +642,15 @@ const ACTIONS_TH_CLASS =
   'sticky right-0 bg-cream px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-soft shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]'
 const ACTIONS_TD_CLASS = 'sticky right-0 bg-cream-card px-3.5 py-3 shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]'
 
-type EditValues = { name: string; jobTitle: JobTitle | ''; role: 'teacher' | 'org_admin'; organizationId: string }
+type EditValues = {
+  name: string
+  jobTitle: JobTitle | ''
+  role: 'teacher' | 'org_admin'
+  organizationId: string
+  // Leader's Corner. Offered only on the platform-wide list: a superadmin
+  // assigns every level, so a school admin's edit never shows it.
+  leaderLevel?: LeaderLevel | ''
+}
 
 // Opens under the row being edited. School is offered only on the
 // platform-wide list (a school admin can't move people between schools),
@@ -717,6 +727,23 @@ function EditUserRow({
                 {orgs.map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {values.leaderLevel !== undefined && (
+            <label className="flex flex-col gap-1 text-xs font-semibold text-ink-soft">
+              Leader&rsquo;s Corner
+              <select
+                value={values.leaderLevel}
+                onChange={(e) => setValues({ ...values, leaderLevel: e.target.value as LeaderLevel | '' })}
+                className={`${inputClass} w-56`}
+              >
+                <option value="">Off</option>
+                {LEADER_LEVEL_OPTIONS.map((l) => (
+                  <option key={l.value} value={l.value}>
+                    {l.label} — {l.titles}
                   </option>
                 ))}
               </select>
@@ -3765,6 +3792,11 @@ function UserRow({
           <span className="rounded-full border border-hairline px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-soft">
             {platformUserRoleLabel(user.role)}
           </span>
+          {user.leaderLevel && (
+            <span className="ml-1.5 rounded-full bg-gold-tint px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-forest">
+              Leader · {leaderLevelLabel(user.leaderLevel)}
+            </span>
+          )}
         </td>
         <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">{user.organizationName ?? 'Independent'}</td>
         <td className="whitespace-nowrap px-3.5 py-3">
@@ -3817,6 +3849,7 @@ function UserRow({
             jobTitle: user.jobTitle ?? '',
             role: user.role === 'org_admin' ? 'org_admin' : 'teacher',
             organizationId: user.organizationId ?? '',
+            leaderLevel: user.leaderLevel ?? '',
           }}
           roleLocked={user.role === 'superadmin'}
           orgs={orgs}
@@ -3825,8 +3858,8 @@ function UserRow({
             await updateUser(
               user.id,
               user.role === 'superadmin'
-                ? { name: edits.name, jobTitle: edits.jobTitle }
-                : { ...edits, organizationId: values.organizationId || null },
+                ? { name: edits.name, jobTitle: edits.jobTitle, leaderLevel: values.leaderLevel || null }
+                : { ...edits, organizationId: values.organizationId || null, leaderLevel: values.leaderLevel || null },
             )
             setEditing(false)
             onChanged()

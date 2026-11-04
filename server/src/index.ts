@@ -6,6 +6,7 @@ import express from 'express'
 import { adminRouter } from './routes/admin.ts'
 import { assignmentCoachRouter } from './routes/assignmentCoach.ts'
 import { attemptsRouter } from './routes/attempts.ts'
+import { leadersRouter } from './routes/leaders.ts'
 import { audioSessionsRouter, failOrphanedAnalyses, failOrphanedTranscriptions } from './routes/audioSessions.ts'
 import { authRouter } from './routes/auth.ts'
 import { billingRouter } from './routes/billing.ts'
@@ -126,6 +127,7 @@ app.use('/api/canvas', canvasRouter)
 // Everything else requires a signed-in user.
 app.use('/api/scenarios', requireAuth, scenariosRouter)
 app.use('/api/attempts', requireAuth, attemptsRouter)
+app.use('/api/leaders', requireAuth, leadersRouter)
 app.use('/api/profile', requireAuth, profileRouter)
 app.use('/api/school-focus', requireAuth, schoolFocusRouter)
 app.use('/api/coach-handoff', requireAuth, coachHandoffRouter)

@@ -22,7 +22,15 @@ const PROFILE: Json = {
   name: 'Preview Teacher',
   // `?admin=1` makes the preview an org admin, which is what the /admin route
   // guard checks — without it the page redirects home and cannot be looked at.
-  role: new URLSearchParams(window.location.search).has('admin') ? 'org_admin' : 'teacher',
+  // `?superadmin=1` opens Wivoza's own pages (Platform users).
+  role: new URLSearchParams(window.location.search).has('superadmin')
+    ? 'superadmin'
+    : new URLSearchParams(window.location.search).has('admin')
+      ? 'org_admin'
+      : 'teacher',
+  // `?leader=assistant` (or district, building, teacher_leader) turns on
+  // Leader's Corner at that level, as a superadmin would.
+  leaderLevel: new URLSearchParams(window.location.search).get('leader'),
   jobTitle: 'Teacher',
   schoolName: 'Preview Middle School',
   teachingGoal: null,
@@ -1719,6 +1727,91 @@ const previewQuoteFlags: Json[] = []
 // when the preview follows Discuss with Wivoza Coach.
 let lastRealAttempt: Json | null = null
 
+// ---- Leader's Corner ----
+// A few of each level's scenarios, enough to click through the page; the
+// real bank is server/src/lib/leaderScenarios.ts.
+const PREVIEW_LEADER_SCENARIOS: Json[] = [
+  { id: 'assistant-suspension-meeting', audience: 'families', title: 'A suspension meeting with a parent who feels their child is targeted', text: 'You are meeting with a parent about a two-day suspension for a fight. The parent says: “Every time something happens, it’s my daughter who gets punished.” You cannot discuss the other student’s consequence.' },
+  { id: 'assistant-restorative', audience: 'students', title: 'A restorative conversation after a conflict', text: 'You are leading a restorative conversation between two 9th graders after a fight. Five minutes in, one says: “This is stupid. She knows what she did,” and pushes back from the table.' },
+  { id: 'assistant-referrals', audience: 'staff', title: 'A teacher who sends too many referrals', text: 'One teacher has written more office referrals this quarter than the rest of the grade level combined. They say: “If you backed me up instead of sending them right back, I wouldn’t have to keep writing them.”' },
+]
+const LEADER_LEVEL_LABELS: Record<string, [string, string]> = {
+  district: ['District', 'Superintendent, District Leader'],
+  building: ['Building', 'Principal'],
+  assistant: ['Assistant', 'Assistant Principal, Vice Principal'],
+  teacher_leader: ['Teacher-leader', 'Supervisor, Department Head, Instructional Coach'],
+}
+const previewLeaderAttempts: Json[] = []
+const PREVIEW_USERS: Json[] = [
+  { id: 'u1', name: 'Preview Principal', email: 'principal@maple.example', role: 'org_admin', jobTitle: 'Principal', leaderLevel: 'building', organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', suspendedAt: null, createdAt: '2026-09-01T00:00:00.000Z' },
+  { id: 'u2', name: 'Preview Dept Head', email: 'dept@maple.example', role: 'teacher', jobTitle: 'Instructional Coach', leaderLevel: null, organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', suspendedAt: null, createdAt: '2026-09-02T00:00:00.000Z' },
+]
+
+function previewLeaders(path: string, method: string, body: Json): Json | Json[] | null {
+  const level = String(PROFILE.leaderLevel ?? '')
+  if (!LEADER_LEVEL_LABELS[level]) return null
+  if (path === '/api/leaders/scenarios') {
+    const [label, titles] = LEADER_LEVEL_LABELS[level]
+    return {
+      level: { value: level, label, titles },
+      audiences: [
+        { value: 'families', label: 'Families' },
+        { value: 'students', label: 'Students' },
+        { value: 'staff', label: 'Staff' },
+        { value: 'community', label: 'Board & community' },
+        { value: 'up_the_chain', label: 'Your supervisor' },
+      ],
+      scenarios: PREVIEW_LEADER_SCENARIOS,
+    }
+  }
+  if (path === '/api/leaders/attempts' && method === 'POST') {
+    const curated = PREVIEW_LEADER_SCENARIOS.find((s) => s.id === body.scenarioId)
+    const response = String(body.responseText ?? '')
+    const scenarioText = String(curated?.text ?? body.situationText ?? '')
+    const attempt: Json = {
+      id: `preview-leader-${previewLeaderAttempts.length + 1}`,
+      level,
+      source: curated ? 'curated' : 'own',
+      curatedId: curated?.id ?? null,
+      audience: curated?.audience ?? null,
+      scenarioText,
+      responseText: response,
+      feedback: response
+        ? 'Opening with what you know and what you can’t share was the right first move — it keeps the parent from hearing silence as a cover-up.\n\n- Name the feeling before the facts: “It sounds like this feels unfair to you.”\n- Say plainly what you will look into, and when you will call back.'
+        : 'What matters most here is that the parent leaves feeling heard, even if the outcome stands.\n\n- Start by listening, not explaining.\n- Say what you can and can’t share, once.\n- End with a specific follow-up.\n\nTry saying it in your own words below.',
+      modelResponse: '“Thank you for coming in. I can hear how frustrating this is. I can’t talk about another student’s consequence, but I can walk you through exactly what happened with your daughter and why — and I want to hear what you think we missed.”',
+      conversation: [
+        { role: 'user', text: scenarioText, createdAt: new Date().toISOString() },
+        { role: 'assistant', text: 'seed', createdAt: new Date().toISOString() },
+      ],
+      saved: false,
+      createdAt: new Date().toISOString(),
+    }
+    previewLeaderAttempts.unshift(attempt)
+    return attempt
+  }
+  const chat = path.match(/^\/api\/leaders\/attempts\/([^/]+)\/chat$/)
+  if (chat) {
+    const attempt = previewLeaderAttempts.find((a) => a.id === chat[1])
+    if (!attempt) return null
+    const now = new Date().toISOString()
+    attempt.conversation = [
+      ...(attempt.conversation as Json[]),
+      { role: 'user', text: String(body.message ?? ''), createdAt: now },
+      { role: 'assistant', text: 'That version holds the line and still sounds like you. One thing to sharpen: give a day for the follow-up call, not “soon”.', createdAt: now },
+    ]
+    return attempt
+  }
+  const one = path.match(/^\/api\/leaders\/attempts\/([^/]+)$/)
+  if (one && method === 'PATCH') {
+    const attempt = previewLeaderAttempts.find((a) => a.id === one[1])
+    if (attempt) attempt.saved = body.saved === true
+    return attempt ?? null
+  }
+  if (path === '/api/leaders/attempts') return previewLeaderAttempts
+  return null
+}
+
 function previewRealAttempt(body: Json): Json {
   const situation = 'A student keeps calling out answers before anyone else can think, and the quieter kids have stopped trying.'
   const response = String(body.responseText ?? '')
@@ -1758,6 +1851,7 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
     lastRealAttempt = previewRealAttempt(body)
     return lastRealAttempt
   }
+  if (path.startsWith('/api/leaders/')) return previewLeaders(path, method, body)
   if (path.startsWith('/api/school-focus')) return previewSchoolFocus(method, body)
   if (path.endsWith('/school-focus-idea/dismiss')) return lesson({ schoolFocusIdea: null })
   if (path.endsWith('/school-focus-idea/suggest')) {
@@ -1927,6 +2021,16 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
   if (path.startsWith('/api/admin/pd-focus-areas')) return { items: [], themeCounts: {} }
   if (path.startsWith('/api/admin/coaching-priorities')) return previewAdminPriorities(path, method, body)
   if (path.startsWith('/api/admin/members')) return []
+  if (path === '/api/admin/users') return PREVIEW_USERS
+  {
+    const user = path.match(/^\/api\/admin\/users\/([^/]+)$/)
+    if (user && method === 'PATCH') {
+      const row = PREVIEW_USERS.find((u) => u.id === user[1])
+      if (row) Object.assign(row, body)
+      return row ?? null
+    }
+  }
+  if (path === '/api/admin/organizations') return [{ id: 'preview-org', name: 'Maple Ridge Academy', joinCode: 'MAPLE', adminEmails: null, teacherCount: 2 }]
   if (path.startsWith('/api/admin/overview')) return adminOverview()
   if (path.startsWith('/api/admin/')) return []
 

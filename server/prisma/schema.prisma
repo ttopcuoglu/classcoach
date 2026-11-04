@@ -66,6 +66,11 @@ model User {
   // Null until then. AudioSession.consentConfirmed is copied from whether this
   // is set, rather than from a flag every client always sent as true.
   recordingNoticeAt     DateTime?
+  // Leader's Corner: "district" | "building" | "assistant" | "teacher_leader"
+  // (see server/src/lib/leaderLevels.ts). Set only by a superadmin from the
+  // platform roster — never by the person, and never read from jobTitle,
+  // which is self-described. Null = no Leader's Corner.
+  leaderLevel           String?
   organizationId        String? // null = independent teacher, not part of any district
   organization          Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   // "free" | "plus" — individual self-serve billing. Independent of
@@ -112,6 +117,7 @@ model User {
   // Their own private answers to their school's Coaching Priorities. Never
   // read by an admin route (see lib/schoolPriorities.ts).
   priorityChoices   TeacherPriorityChoice[]
+  leaderAttempts    LeaderAttempt[]
 
   @@index([passwordResetTokenHash])
 }
@@ -296,6 +302,42 @@ model ScenarioAttempt {
   // Talk It Through conversations opened from this attempt's "Discuss with
   // Wivoza Coach" — the spoken rehearsal of it.
   talkThroughs Debrief[] @relation("PracticeRehearsal")
+}
+
+// Leader's Corner practice: a leader's response to a scenario at their level
+// and the coaching on it. Its own table, not ScenarioAttempt, on purpose:
+// every school dashboard tally, adaptive practice and the pilot report read
+// ScenarioAttempt, so a leader's rehearsal of a non-renewal conversation
+// can't reach any of them by construction rather than by a filter someone has
+// to remember. Never read by an admin route.
+//
+// The scenario is copied onto the row rather than referenced: the curated
+// bank lives in code (lib/leaderScenarios.ts), and a leader's own situation
+// is theirs alone, so there is no shared Scenario row to point at.
+model LeaderAttempt {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // The level the person held when they practiced — what the coaching was
+  // written for, even if a superadmin changes their level later.
+  level         String
+  // "curated" (from the bank, curatedId set) | "own" (Something I'm facing).
+  source        String
+  curatedId     String?
+  // Who the conversation is with: families | students | staff | community |
+  // up_the_chain (lib/leaderScenarios.ts). Null on an own situation.
+  audience      String?
+  scenarioText  String
+  responseText  String
+  feedback      String?
+  modelResponse String?
+  // [{ role: 'user' | 'assistant', text, createdAt }], the same convention
+  // as ScenarioAttempt.conversation.
+  conversation  Json?
+  saved         Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 // Backs the "Ask" tab — a teacher either reflecting on something that
