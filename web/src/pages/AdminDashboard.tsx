@@ -126,7 +126,7 @@ function presetRange(preset: DatePreset): { startDate: string; endDate: string }
   return { startDate: daysAgo(6), endDate }
 }
 
-export default function AdminDashboard() {
+export default function AdminDashboard({ onOwnAccountChanged }: { onOwnAccountChanged?: () => void } = {}) {
   const [me, setMe] = useState<UserProfile | null>(null)
   const location = useLocation()
   const navigate = useNavigate()
@@ -310,7 +310,7 @@ export default function AdminDashboard() {
         )}
         {tab === 'platformUsers' && (
           <CardBoundary key="platformUsers" title="Platform users">
-            <UsersPanel currentUserId={me?.id ?? null} />
+            <UsersPanel currentUserId={me?.id ?? null} onOwnAccountChanged={onOwnAccountChanged} />
           </CardBoundary>
         )}
         {tab === 'schoolInquiries' && (
@@ -3468,7 +3468,15 @@ type UserSortKey = 'name' | 'role' | 'organization' | 'status' | 'joined'
 
 // Same searchable/sortable table pattern as Members above — this list spans
 // every organization on the platform, so it needs search even more.
-function UsersPanel({ currentUserId }: { currentUserId: string | null }) {
+function UsersPanel({
+  currentUserId,
+  onOwnAccountChanged,
+}: {
+  currentUserId: string | null
+  // Editing your own row (say, giving yourself a Leader's Corner level) has to
+  // reach the sidebar too, which reads the signed-in user once at load.
+  onOwnAccountChanged?: () => void
+}) {
   const [users, setUsers] = useState<AdminUser[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -3717,7 +3725,10 @@ function UsersPanel({ currentUserId }: { currentUserId: string | null }) {
                   selected={selected.has(u.id)}
                   selectable={isSelectable(u) && bulkBusy === null}
                   onToggle={() => toggle(u.id)}
-                  onChanged={refresh}
+                  onChanged={() => {
+                    refresh()
+                    if (u.id === currentUserId) onOwnAccountChanged?.()
+                  }}
                 />
               ))}
             </tbody>

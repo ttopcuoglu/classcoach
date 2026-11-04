@@ -148,6 +148,15 @@ export default function App() {
     setUser(null)
   }
 
+  // A quiet re-read of the signed-in user, for when someone changes their own
+  // account from inside the app — no loading state, so the page they are on
+  // stays put while the sidebar catches up.
+  function refreshMe() {
+    getMe()
+      .then(setUser)
+      .catch(() => {})
+  }
+
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <BrowserRouter>
@@ -281,7 +290,7 @@ export default function App() {
                 path="admin/*"
                 element={
                   user != null && user.role !== 'teacher' ? (
-                    <AdminDashboard />
+                    <AdminDashboard onOwnAccountChanged={refreshMe} />
                   ) : user?.leaderLevel ? (
                     // A leader without an admin role has one page on this side.
                     <Navigate to="/admin/leaders-corner" replace />

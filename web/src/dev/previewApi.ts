@@ -1743,6 +1743,8 @@ const LEADER_LEVEL_LABELS: Record<string, [string, string]> = {
 }
 const previewLeaderAttempts: Json[] = []
 const PREVIEW_USERS: Json[] = [
+  // The preview account itself, so editing your own row can be tried.
+  { id: 'preview', name: 'Preview Teacher', email: 'preview.teacher@wivoza.com', role: 'superadmin', jobTitle: 'Teacher', leaderLevel: null, organizationId: null, organizationName: null, suspendedAt: null, createdAt: '2026-01-01T00:00:00.000Z' },
   { id: 'u1', name: 'Preview Principal', email: 'principal@maple.example', role: 'org_admin', jobTitle: 'Principal', leaderLevel: 'building', organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', suspendedAt: null, createdAt: '2026-09-01T00:00:00.000Z' },
   { id: 'u2', name: 'Preview Dept Head', email: 'dept@maple.example', role: 'teacher', jobTitle: 'Instructional Coach', leaderLevel: null, organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', suspendedAt: null, createdAt: '2026-09-02T00:00:00.000Z' },
 ]
@@ -2027,6 +2029,7 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
     if (user && method === 'PATCH') {
       const row = PREVIEW_USERS.find((u) => u.id === user[1])
       if (row) Object.assign(row, body)
+      if (row?.id === 'preview' && 'leaderLevel' in body) PROFILE.leaderLevel = body.leaderLevel
       return row ?? null
     }
   }
