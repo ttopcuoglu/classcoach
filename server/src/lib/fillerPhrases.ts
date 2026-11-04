@@ -80,6 +80,10 @@ export const GLAD_TURN_PHRASES = [
 //
 // The trailing ellipsis stays, because that one is doing real work: it is
 // what makes the phrase trail off instead of stopping.
+// No longer played: web and iOS emptied their copies on 2026-11-04 when the
+// "Um..." clips were asked to be removed. The list stays here only so iPhone
+// builds already installed, which still request these, keep getting them
+// through the filler path in routes/tts.ts.
 export const THINKING_PHRASES = [
   "Um, let me see...",
   "Um, let me think...",

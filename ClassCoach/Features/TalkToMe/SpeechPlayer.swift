@@ -172,22 +172,11 @@ final class SpeechPlayer: NSObject, ObservableObject {
     /// An acknowledgement only fits when the teacher has TOLD Coach
     /// something. Answering "What do you recommend?" with "Yeah." agrees
     /// with a question, which is the wrong noise.
-    private static let thinkingPhrases = [
-        "Um, let me see...",
-        "Um, let me think...",
-        "Um, okay, let me see...",
-        "Um, okay, let me think...",
-        "Um, alright, let me think...",
-        "Um, let me think it through...",
-        "Um, let me work through that...",
-        "Um, let's think about this...",
-        "Um, let me think about that one...",
-        "Um, give me a second...",
-        "Um, just a second...",
-        "Um, give me a second here...",
-        "Um, let me take a moment...",
-        "Um, let me sit with that a second...",
-    ]
+    ///
+    /// Empty on purpose: the fourteen "Um, let me see..." clips were asked
+    /// to be removed on 2026-11-04. Neutral turns and questions now get
+    /// silence until the reply; the hard and glad pools below stay.
+    private static let thinkingPhrases: [String] = []
 
     /// Two more pools, for turns where neither an acknowledgement nor a
     /// thinking sound is right. "Got it." after "I cried in my car at lunch"

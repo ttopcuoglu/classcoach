@@ -426,22 +426,12 @@ export const SENTENCE_GAP_MS = 220
 // Answering "What do you recommend?" with "Yeah." agrees with a question,
 // which is the wrong noise — reported as "the filler sometimes doesn't make
 // sense with what I asked", and that is exactly when it doesn't.
-export const THINKING_PHRASES = [
-  "Um, let me see...",
-  "Um, let me think...",
-  "Um, okay, let me see...",
-  "Um, okay, let me think...",
-  "Um, alright, let me think...",
-  "Um, let me think it through...",
-  "Um, let me work through that...",
-  "Um, let's think about this...",
-  "Um, let me think about that one...",
-  "Um, give me a second...",
-  "Um, just a second...",
-  "Um, give me a second here...",
-  "Um, let me take a moment...",
-  "Um, let me sit with that a second...",
-]
+// Empty on purpose. The fourteen "Um, let me see..." clips played on every
+// turn that was neither hard nor glad, and were asked to be removed on
+// 2026-11-04. Those turns now get silence until Coach's first word; the
+// hard and glad reactions below stay, since a plainly hard or plainly good
+// turn is where a sound still earns its place.
+export const THINKING_PHRASES: string[] = []
 
 // Two more pools, for the turns where neither an acknowledgement nor a
 // thinking sound is right. "Got it." after "I cried in my car at lunch" is
