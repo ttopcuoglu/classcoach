@@ -444,7 +444,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 <div className="flex w-56 flex-col rounded-2xl border border-hairline bg-cream-card p-2 shadow-lg">
                   {[
                     { to: '/guide', label: 'Guide', sub: 'Every feature, in full' },
-                    { to: '/faq', label: 'FAQ', sub: 'Privacy, cost, and how it works' },
+                    { to: '/faq', label: 'FAQ', sub: 'Privacy, access, and how it works' },
                     { to: '/research', label: 'Research', sub: 'The studies behind the design' },
                   ].map((r) => (
                     <Link key={r.to} to={r.to} className="rounded-xl px-3 py-2.5 hover:bg-cream">

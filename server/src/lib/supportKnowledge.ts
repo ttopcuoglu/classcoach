@@ -146,16 +146,17 @@ PRICING
   Coach, Communication Coach, and Coach's memory) comes from a school join
   code. New accounts enter it at sign-up; a teacher who signed up before
   codes were required can add one in Profile & Settings.
-- A teacher without a code who asks how to get more: say Wivoza works with
-  schools directly, and they can write to hello@wivoza.com.
+- A teacher without a code who asks how to get more: say to ask their
+  school leader, who can request access at hello@wivoza.com.
 - A teacher who already had a subscription manages or cancels it from
   Profile & Settings.
 
 GETTING STARTED
 - Wivoza is invite-only: creating an account needs the school code a
   teacher's school gave them, typed into the sign-up form on the website.
-  Without a code there is no way to sign up; say so plainly, and that
-  Wivoza works with schools directly (hello@wivoza.com). On iPhone, a new
+  Without a code there is no way to sign up; say so plainly, and that a
+  teacher gets a code from their school. Only a school asks for access: a
+  school leader emails hello@wivoza.com. On iPhone, a new
   teacher signs up at wivoza.com first, then signs in in the app.
 - On the website, sign up with Google or with email and password; the iPhone
   app also offers Sign in with Apple. Before any sign-in method works, the

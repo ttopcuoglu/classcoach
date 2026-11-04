@@ -135,35 +135,37 @@ const CATEGORIES: Category[] = [
   },
   {
     id: 'schools-districts',
-    label: 'For schools & districts',
+    label: 'Schools & access',
     tint: 'bg-peach-tint text-terracotta',
     items: [
+      // Invite-only since 2026-11-04: no prices, and only a school asks for
+      // access. A teacher's way in is their school's code.
       {
-        q: 'Do I need my school\'s permission to sign up?',
-        a: 'No — any teacher can create an individual account on their own, with nothing tied to a school. If your school later joins Wivoza, you can add yourself to it with a code without losing anything you\'ve already done.',
+        q: 'How do I get access?',
+        a: 'Wivoza is invite-only right now. Your school gives you a school code, and you enter it when you sign up. If you don\'t have one, ask your school leader.',
       },
       {
-        q: 'If my school joins, does my admin see what I\'ve been doing?',
+        q: 'How can my school get access?',
+        a: 'A school leader can request access by emailing hello@wivoza.com.',
+      },
+      {
+        q: 'Can my school leaders see what I\'ve been doing?',
         a: 'Only in aggregate — activity levels and patterns across the whole staff\'s recorded lessons, never your individual recordings, reports, answers, or ratings. That boundary doesn\'t change based on how you were brought on.',
       },
       {
         q: 'What if I switch schools?',
-        a: 'Your account and everything in it belongs to you — it isn\'t tied to a specific school. You can join a different district\'s code anytime from Profile & Settings.',
+        a: 'Your account and everything in it belongs to you — it isn\'t tied to a specific school. If you move to another school that uses Wivoza, enter its code in Profile & Settings.',
       },
     ],
   },
   {
     id: 'cost-getting-started',
-    label: 'Cost & getting started',
+    label: 'Getting started',
     tint: 'bg-lavender-tint text-[#6B5FA0]',
     items: [
       {
-        q: 'Is Wivoza free?',
-        a: 'Yes — Talk It Through and Practice are free for everyone, always, plus 3 Lesson Debrief recordings a month. If your school has given you a join code, add it in Profile & Settings for Lesson Debrief on up to 20 lessons a month, Planning Coach, Communication Coach, and Coach’s memory.',
-      },
-      {
         q: 'How long does it take to get started?',
-        a: 'A few minutes — sign up, walk through a short six-step welcome (skippable at any point), and you\'re on your dashboard.',
+        a: 'A few minutes — sign up with your school code, walk through a short six-step welcome (skippable at any point), and you\'re on your dashboard.',
       },
       {
         q: 'Where can I see everything Wivoza can do?',
@@ -210,7 +212,7 @@ export default function Faq() {
               to="/#get-started"
               className="flex items-center gap-1.5 rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
             >
-              Start free
+              Sign up
               <ArrowRightIcon className="h-3.5 w-3.5" />
             </Link>
           </div>
@@ -285,12 +287,12 @@ export default function Faq() {
           <h2 className="font-heading text-3xl font-extrabold leading-tight text-cream sm:text-4xl">
             Ready to try it yourself?
           </h2>
-          <p className="max-w-md text-cream/70">Free to start, private by design.</p>
+          <p className="max-w-md text-cream/70">Have a school code? Private by design.</p>
           <Link
             to="/#get-started"
             className="flex items-center gap-2 rounded-full bg-terracotta px-6 py-3.5 text-sm font-semibold text-cream transition-opacity hover:opacity-90"
           >
-            Start free
+            Sign up
             <ArrowRightIcon className="h-4 w-4" />
           </Link>
         </div>

@@ -26,7 +26,7 @@ export const PUBLIC_PAGE_META: Record<string, Meta> = {
   '/faq': {
     title: 'Wivoza FAQ — privacy, evaluation, and how it works',
     description:
-      'Answers to what teachers and school leaders ask before trying Wivoza: who sees your data, whether it is used to evaluate you, what it costs, and how to start.',
+      'Answers to what teachers and school leaders ask before trying Wivoza: who sees your data, whether it is used to evaluate you, how to get access, and how to start.',
   },
   '/classroom-recording': {
     title: 'A teacher would like to record their own lessons | Wivoza',
