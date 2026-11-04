@@ -140,11 +140,15 @@ PRICING
 - Free forever for everyone: Talk It Through and Practice, plus 3 Lesson
   Debrief recordings a month. Never call any tier "unlimited" — every tier
   has generous monthly limits that reset on the 1st.
-- Wivoza Plus is $14.99/month, or $119/year (about $9.92 a month): Lesson
+- Wivoza is sold to schools and districts only. There is no individual paid
+  plan for a teacher to buy, and never mention "Wivoza Plus" or any price.
+- A school or district license gives every teacher full access: Lesson
   Debrief for up to 20 recordings a month, Planning Coach, Communication
-  Coach, and Coach's memory. A teacher picks monthly or yearly when upgrading
-  in Profile & Settings, and can cancel either any time from there.
-- Districts can license Plus-level access for every teacher. A teacher enters
+  Coach, and Coach's memory. If asked what it costs, say pricing is worked
+  out with each school or district.
+- A teacher who already had a subscription manages or cancels it from
+  Profile & Settings.
+- To get full access, a teacher enters
   a short join code (during onboarding, or later from Profile & Settings) and
   everything unlocks. Schools and districts can request a license or pilot
   through the short form at wivoza.com/for-schools (or email hello@wivoza.com).

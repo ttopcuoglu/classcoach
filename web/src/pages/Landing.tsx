@@ -29,7 +29,6 @@ import RecordYourWay from '../components/RecordYourWay'
 import { useReveal } from '../lib/useReveal'
 import { LessonScene, SAMPLE_SCENES, type SampleScene } from '../components/SampleScenes'
 import { ROOM_COLOR, ROOM_LABEL } from '../components/TalkFlowStrip'
-import { PLUS_DEBRIEF_PER_MONTH, PLUS_MONTHLY_PRICE, PLUS_YEARLY_PER_MONTH, PLUS_YEARLY_PRICE } from '../lib/pricing'
 
 const PROCESS = [
   {
@@ -429,9 +428,6 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <a href="#what-you-can-do" className="hover:text-ink">
               Features
             </a>
-            <a href="#pricing" className="hover:text-ink">
-              Pricing
-            </a>
             <Link to="/for-schools" className="hover:text-ink">
               For Schools
             </Link>
@@ -514,13 +510,6 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
             >
               Why Wivoza
-            </a>
-            <a
-              href="#pricing"
-              onClick={() => setMobileNavOpen(false)}
-              className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
-            >
-              Pricing
             </a>
             <Link
               to="/for-schools"
@@ -935,117 +924,19 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
         </div>
       </section>
 
-      {/* Pricing */}
-      <section id="pricing" className="bg-mint-tint/50 py-12 sm:py-16">
+      {/* School leaders. Prices are off the public page for now: the
+          founder works in a school whose staff use Wivoza, and a price tag
+          on the front page reads as a sales pitch to colleagues. Prices
+          still live in lib/pricing.ts and in Profile & Settings. */}
+      <section className="bg-mint-tint/50 py-12 sm:py-16">
         <div className="mx-auto w-full max-w-6xl px-6">
-          <div data-reveal className="mx-auto mb-8 max-w-2xl text-center sm:mb-11">
-            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
-              Simple, honest pricing
-            </span>
-            <h2 className="mt-3 font-heading text-3xl font-extrabold text-forest sm:text-4xl">
-              Start free. Upgrade when you&rsquo;re ready.
-            </h2>
-            <p className="mt-4 text-ink-soft">No credit card to sign up, no surprise fees.</p>
-          </div>
-
-          <div className="mx-auto grid max-w-3xl gap-6 sm:grid-cols-2">
-            <div data-reveal className="rounded-2xl border border-hairline bg-cream-card p-6 shadow-sm sm:p-8">
-              <h3 className="font-heading text-xl font-bold text-forest">Free</h3>
-              <p className="mt-1 text-sm text-ink-soft">For getting started</p>
-              <p className="mt-4 font-heading text-4xl font-extrabold text-forest sm:mt-6">$0</p>
-              <ul className="mt-4 space-y-3 text-sm text-ink-soft sm:mt-6">
-                <li className="flex items-start gap-2.5">
-                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
-                  Talk It Through, free for everyone
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
-                  Practice, free for everyone
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-forest" />
-                  3 Lesson Debrief recordings/month
-                </li>
-              </ul>
-              <a
-                href="#get-started"
-                className="mt-6 block rounded-full border border-forest px-5 py-3 text-center text-sm font-semibold text-forest transition-opacity hover:opacity-80 sm:mt-8"
-              >
-                Start free
-              </a>
-            </div>
-
-            <div data-reveal className="relative rounded-2xl border-2 border-terracotta bg-cream-card p-6 shadow-md sm:p-8">
-              <span className="absolute -top-3 left-8 rounded-full bg-terracotta px-3 py-1 text-xs font-semibold text-white">
-                Most popular
-              </span>
-              <h3 className="font-heading text-xl font-bold text-forest">Wivoza Plus</h3>
-              <p className="mt-1 text-sm text-ink-soft">For teachers who want it all</p>
-              <p className="mt-4 flex items-baseline gap-1 sm:mt-6">
-                <span className="font-heading text-4xl font-extrabold text-forest">{PLUS_MONTHLY_PRICE}</span>
-                <span className="text-sm text-ink-soft">/month</span>
-              </p>
-              <p className="mt-1 text-sm text-ink-soft">
-                or {PLUS_YEARLY_PRICE} a year — about {PLUS_YEARLY_PER_MONTH} a month
-              </p>
-              <ul className="mt-4 space-y-3 text-sm text-ink-soft sm:mt-6">
-                <li className="flex items-start gap-2.5">
-                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
-                  Everything in Free
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
-                  Lesson Debrief for up to {PLUS_DEBRIEF_PER_MONTH} lessons a month
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
-                  Planning Coach: lessons, slides, and assignments
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
-                  Full Communication Coach suite
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-terracotta-600" />
-                  Optional coaching memory you control
-                </li>
-              </ul>
-              {/* Lesson Debrief is what Plus unlocks, so its report is the proof.
-                  A staged recording — no real class or student. Hidden on a
-                  phone, where the samples band just above already links it. */}
-              <a
-                href="/samples/lesson-debrief.pdf"
-                target="_blank"
-                rel="noreferrer"
-                className="group mt-6 hidden items-center sm:flex gap-3 rounded-xl border border-hairline bg-cream p-3 transition-colors hover:border-terracotta/40"
-              >
-                <img
-                  src="/samples/lesson-debrief.png"
-                  alt=""
-                  className="h-14 w-12 shrink-0 rounded-md border border-hairline object-cover object-top"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-forest">See a sample Lesson Debrief</p>
-                  <p className="text-xs text-ink-soft">What you get after every recorded lesson</p>
-                </div>
-                <ArrowRightIcon className="h-4 w-4 shrink-0 text-ink-soft transition-transform group-hover:translate-x-0.5" />
-              </a>
-              <a
-                href="#get-started"
-                className="mt-6 block rounded-full bg-terracotta px-5 py-3 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90 sm:mt-8"
-              >
-                Start free
-              </a>
-            </div>
-          </div>
-
           {/* Teachers read this page too, so the leader pitch stays small and
               leads with what leaders can't see: a big dashboard here would read
               as "my principal will be watching my lessons". */}
           <div
             id="for-schools"
             data-reveal
-            className="mx-auto mt-8 grid max-w-4xl scroll-mt-24 gap-6 rounded-2xl bg-forest p-6 text-center sm:p-8 sm:grid-cols-[1fr_auto] sm:items-center sm:text-left"
+            className="mx-auto grid max-w-4xl scroll-mt-24 gap-6 rounded-2xl bg-forest p-6 text-center sm:p-8 sm:grid-cols-[1fr_auto] sm:items-center sm:text-left"
           >
             <div>
               <h3 className="font-heading text-lg font-bold text-cream">
@@ -1056,7 +947,7 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
                 teacher&rsquo;s recordings or coaching.
               </p>
               <p className="mt-1.5 hidden text-sm text-cream/60 sm:block">
-                District licensing gives every teacher Plus-level access, with support built for
+                A school or district license gives every teacher full access, with support built for
                 your rollout.
               </p>
               <Link

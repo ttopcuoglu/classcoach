@@ -15,7 +15,7 @@ import {
   TargetIcon,
   WaveformIcon,
 } from './icons'
-import { PLUS_MONTHLY_PRICE, PLUS_SUMMARY } from '../lib/pricing'
+import { PLUS_MONTHLY_PRICE, PLUS_SUMMARY, INDIVIDUAL_PLAN } from '../lib/pricing'
 import { isAdminPath } from '../lib/adminNav'
 import { AdminNav, isAdminRole, isLeader, WorkspaceSwitch } from './AdminSidebar'
 
@@ -188,7 +188,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
         </div>
         )}
 
-        {user != null && !hasPlus && !admin && (
+        {INDIVIDUAL_PLAN && user != null && !hasPlus && !admin && (
           <div className="mx-3 mb-3 rounded-2xl bg-gold-tint p-4">
             <p className="text-sm font-semibold text-terracotta-600">Wivoza Plus</p>
             <p className="mt-1 text-xs text-forest/70">
@@ -283,7 +283,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           </div>
         )}
 
-        {user != null && !hasPlus && (
+        {INDIVIDUAL_PLAN && user != null && !hasPlus && (
           <Link
             to="/profile"
             className="block bg-gold-tint px-4 py-2 text-center text-xs font-semibold text-terracotta-600 md:hidden print:!hidden"

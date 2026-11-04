@@ -19,7 +19,7 @@ const OFFER = [
     icon: GraduationCapIcon,
     badge: 'bg-terracotta text-cream',
     card: 'bg-peach-tint/50',
-    title: 'Every teacher gets Plus',
+    title: 'Every teacher gets full access',
     body: 'Lesson Debrief with coaching on content and teaching after every recorded lesson, Planning Coach, Communication Coach, and Coach’s memory — on top of Talk It Through and Practice. Each teacher’s account stays their own, even if they change schools.',
   },
   {

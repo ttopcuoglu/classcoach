@@ -22,7 +22,7 @@ import {
 import TelegramConnect from '../components/TelegramConnect'
 import CanvasConnection from '../components/CanvasConnection'
 import { EXPERIENCE_OPTIONS } from '../lib/experience'
-import { FREE_SUMMARY, PLUS_MONTHLY_PRICE, PLUS_SUMMARY, PLUS_YEARLY_PER_MONTH, PLUS_YEARLY_PRICE } from '../lib/pricing'
+import { FREE_SUMMARY, PLUS_MONTHLY_PRICE, PLUS_SUMMARY, PLUS_YEARLY_PER_MONTH, PLUS_YEARLY_PRICE, INDIVIDUAL_PLAN, SCHOOL_PITCH } from '../lib/pricing'
 import { SchoolFocusSettings } from '../components/SchoolFocusSettings'
 
 const SECTION_BADGES = ['bg-gold text-forest', 'bg-terracotta text-cream', 'bg-forest text-gold']
@@ -312,7 +312,7 @@ export default function Profile() {
                 hasPlus ? 'bg-gold text-forest' : 'bg-cream/15 text-cream'
               }`}
             >
-              {plusAccess === 'admin' ? 'Full access' : hasPlus ? 'Wivoza Plus' : 'Free'}
+              {plusAccess === 'admin' ? 'Full access' : plusAccess === 'school' ? 'School license' : hasPlus ? (INDIVIDUAL_PLAN ? 'Wivoza Plus' : 'Full access') : 'Free'}
             </span>
           </div>
           <p className="text-sm text-cream/75">
@@ -333,6 +333,18 @@ export default function Profile() {
             >
               {billingLoading ? 'Opening...' : 'Manage subscription'}
             </button>
+          ) : !INDIVIDUAL_PLAN ? (
+            // Sold to schools only: point a free teacher at their school, not
+            // at a checkout.
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-cream/75">{SCHOOL_PITCH} Have a join code? Add it under School below.</p>
+              <Link
+                to="/for-schools"
+                className="self-start rounded-full border border-cream/30 px-4 py-2 text-sm font-semibold text-cream transition-colors hover:border-cream hover:bg-cream/10"
+              >
+                Bring Wivoza to your school
+              </Link>
+            </div>
           ) : (
             // Yearly first: it is the better deal for a teacher and the plan
             // that survives the summer. The limit is stated here because the
@@ -346,7 +358,7 @@ export default function Profile() {
                   disabled={billingLoading}
                   className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream shadow-lg transition-colors hover:bg-terracotta/90 disabled:opacity-60"
                 >
-                  {billingLoading ? 'Please wait...' : `Yearly — ${PLUS_YEARLY_PRICE} (about ${PLUS_YEARLY_PER_MONTH}/month)`}
+                  {billingLoading ? 'Please wait...' : INDIVIDUAL_PLAN ? `Yearly — ${PLUS_YEARLY_PRICE} (about ${PLUS_YEARLY_PER_MONTH}/month)` : 'Upgrade — yearly'}
                 </button>
                 <button
                   type="button"
@@ -354,7 +366,7 @@ export default function Profile() {
                   disabled={billingLoading}
                   className="rounded-full border border-cream/30 px-4 py-2 text-sm font-semibold text-cream transition-colors hover:border-cream hover:bg-cream/10 disabled:opacity-60"
                 >
-                  {billingLoading ? 'Please wait...' : `Monthly — ${PLUS_MONTHLY_PRICE}/month`}
+                  {billingLoading ? 'Please wait...' : INDIVIDUAL_PLAN ? `Monthly — ${PLUS_MONTHLY_PRICE}/month` : 'Upgrade — monthly'}
                 </button>
               </div>
             </div>

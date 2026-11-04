@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRightIcon, CheckIcon, LaptopIcon, LockIcon, PhoneIcon, WatchIcon } from '../components/icons'
 import { LessonScene, SAMPLE_SCENES } from '../components/SampleScenes'
 import { ROOM_COLOR, ROOM_LABEL } from '../components/TalkFlowStrip'
-import { PLUS_DEBRIEF_PER_MONTH, PLUS_MONTHLY_PRICE, PLUS_YEARLY_PRICE } from '../lib/pricing'
+import { PLUS_DEBRIEF_PER_MONTH, PLUS_MONTHLY_PRICE, PLUS_YEARLY_PRICE, INDIVIDUAL_PLAN } from '../lib/pricing'
 
 // A test of the home page as a slideshow: one screen per slide, swiped one at
 // a time. Not linked from anywhere and kept out of search (noindex below); the
@@ -58,7 +58,7 @@ function Title({ children, light }: { children: ReactNode; light?: boolean }) {
 export default function Tour() {
   const scroller = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState(0)
-  const count = 9
+  const count = INDIVIDUAL_PLAN ? 9 : 8
 
   useEffect(() => {
     const meta = document.createElement('meta')
@@ -298,7 +298,8 @@ export default function Tour() {
           </ul>
         </Slide>
 
-        {/* 8. Price. */}
+        {/* 8. Price. Hidden while INDIVIDUAL_PLAN is off. */}
+        {INDIVIDUAL_PLAN && (
         <Slide tone="mint" label="Pricing">
           <Eyebrow>Simple, honest pricing</Eyebrow>
           <Title>Start free.</Title>
@@ -325,6 +326,7 @@ export default function Tour() {
           </div>
           <p className="mt-4 text-sm text-ink-soft">No credit card to sign up.</p>
         </Slide>
+        )}
 
         {/* 9. Start. */}
         <section aria-label="Start free" className="relative flex h-[100svh] snap-start snap-always flex-col items-center justify-center overflow-hidden px-6 text-center text-cream">
