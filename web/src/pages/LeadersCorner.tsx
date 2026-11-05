@@ -9,6 +9,7 @@ import { LockIcon, StarIcon } from '../components/icons'
 import {
   createLeaderAttempt,
   generateLeaderScenario,
+  getLeaderCoaching,
   getLeaderAttempts,
   getLeaderHint,
   getLeaderScenarios,
@@ -63,6 +64,7 @@ export default function LeadersCorner() {
   const [chatDraft, setChatDraft] = useState('')
   const [chatSending, setChatSending] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
+  const [coaching, setCoaching] = useState(false)
   // "Get a hint" on a picked scenario, closed until asked. Every hint asked for is kept so the newest shows and the next one is told
   // what not to repeat.
   const [hints, setHints] = useState<string[]>([])
@@ -212,6 +214,23 @@ export default function LeadersCorner() {
     }
   }
 
+  // Ends a walk-through: the coaching and what they could say, from the
+  // conversation they just had.
+  async function handleGetCoaching() {
+    if (!attempt || coaching) return
+    setCoaching(true)
+    setChatError(null)
+    try {
+      const updated = await getLeaderCoaching(attempt.id)
+      setAttempt(updated)
+      setHistory((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
+    } catch (err) {
+      setChatError((err as Error).message)
+    } finally {
+      setCoaching(false)
+    }
+  }
+
   async function handleToggleSaved() {
     if (!attempt) return
     const updated = await setLeaderAttemptSaved(attempt.id, !attempt.saved).catch(() => null)
@@ -279,6 +298,15 @@ export default function LeadersCorner() {
     </li>
   )
   const walkedThrough = !!attempt && !attempt.responseText.trim()
+  // A walk-through before Get coaching: just the conversation.
+  const walking = walkedThrough && !attempt?.feedback
+  const conversation = attempt?.conversation ?? []
+  // A reviewed response (and a walk-through from before it was a
+  // conversation) is seeded with its coaching, which already shows above;
+  // a walk-through now starts with the coach's opening question.
+  const seededWithCoaching =
+    !!attempt?.feedback && !!conversation[1]?.text.startsWith(attempt.feedback.slice(0, 60))
+  const chatMessages = conversation.slice(seededWithCoaching ? 2 : 1)
 
   return (
     <div className="flex flex-col gap-6">
@@ -493,36 +521,66 @@ export default function LeadersCorner() {
               <span className="rounded-full bg-cream/10 px-3 py-1 text-xs font-semibold text-cream">{scenarioTitle(attempt)}</span>
               <p className="mt-4 whitespace-pre-line text-base leading-relaxed text-cream">{attempt.scenarioText}</p>
             </div>
-            {[
-              walkedThrough ? null : { title: 'Your response', subtitle: 'What you said you would do.', body: attempt.responseText },
-              attempt.feedback && {
-                title: 'Coaching',
-                subtitle: walkedThrough ? 'How to approach it.' : 'What worked, and what to strengthen.',
-                body: attempt.feedback,
-              },
-              attempt.modelResponse && {
-                title: walkedThrough ? 'What you could say' : 'A model response',
-                subtitle: walkedThrough ? 'One way to put it — try your own below.' : 'One way to handle it, to compare with yours.',
-                body: attempt.modelResponse,
-              },
-            ]
-              .filter((part): part is { title: string; subtitle: string; body: string } => !!part)
-              .map((part, i) => (
-                <AnswerSection key={part.title} n={i + 1} title={part.title} subtitle={part.subtitle}>
-                  {part.body}
-                </AnswerSection>
-              ))}
+            {!walking && (
+              <>
+              {[
+                walkedThrough ? null : { title: 'Your response', subtitle: 'What you said you would do.', body: attempt.responseText },
+                attempt.feedback && {
+                  title: 'Coaching',
+                  subtitle: walkedThrough ? 'How to approach it.' : 'What worked, and what to strengthen.',
+                  body: attempt.feedback,
+                },
+                attempt.modelResponse && {
+                  title: walkedThrough ? 'What you could say' : 'A model response',
+                  subtitle: walkedThrough ? 'One way to put it — try your own below.' : 'One way to handle it, to compare with yours.',
+                  body: attempt.modelResponse,
+                },
+              ]
+                .filter((part): part is { title: string; subtitle: string; body: string } => !!part)
+                .map((part, i) => (
+                  <AnswerSection key={part.title} n={i + 1} title={part.title} subtitle={part.subtitle}>
+                    {part.body}
+                  </AnswerSection>
+                ))}
+              </>
+            )}
 
+            {walking ? (
+              <div className="flex flex-col gap-1">
+                <h2 className="font-heading text-xl font-bold text-forest">Let&rsquo;s talk it through</h2>
+                <p className="text-xs text-ink-soft">
+                  Answer your coach, or try a line you might say. When you&rsquo;re ready, get your coaching and what you could say.
+                </p>
+              </div>
+            ) : (
+              walkedThrough && <h2 className="font-heading text-lg font-bold text-forest">Your conversation</h2>
+            )}
             <CoachingChat
-              messages={(attempt.conversation ?? []).slice(2)}
+              messages={chatMessages}
               sending={chatSending}
               error={chatError}
               draft={chatDraft}
               onDraftChange={setChatDraft}
               onSend={handleSendChat}
+              disabled={coaching}
               speakable
-              placeholder={walkedThrough ? 'Try saying it in your own words...' : 'Try another version, or ask a follow-up...'}
+              placeholder={
+                walking ? 'Answer, or try a line you might say...' : walkedThrough ? 'Try saying it in your own words...' : 'Try another version, or ask a follow-up...'
+              }
             />
+            {walking && (
+              <div className="flex flex-col items-end gap-2">
+                <WorkingRing active={coaching} estimatedMs={10000} label="Putting your coaching together" hint="Usually under ten seconds." className="text-forest" />
+                <button
+                  type="button"
+                  onClick={handleGetCoaching}
+                  disabled={coaching || chatSending}
+                  className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+                >
+                  {coaching ? 'Getting coaching...' : 'Get coaching'}
+                </button>
+              </div>
+            )}
 
             <div className="flex items-center justify-between gap-3">
               <button

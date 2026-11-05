@@ -3193,6 +3193,12 @@ export function getLeaderHint(scenarioId: string, previous: string[]): Promise<{
   return request(`/api/leaders/scenarios/${encodeURIComponent(scenarioId)}/hint`, { method: 'POST', body: JSON.stringify({ previous }) })
 }
 
+// Get coaching: ends a Walk me through it conversation with the coaching and
+// what they could say.
+export function getLeaderCoaching(id: string): Promise<LeaderAttempt> {
+  return request(`/api/leaders/attempts/${id}/coaching`, { method: 'POST' })
+}
+
 export function sendLeaderChat(id: string, message: string): Promise<LeaderAttempt> {
   return request(`/api/leaders/attempts/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
 }

@@ -2,7 +2,15 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { extractTag, stripStructuralTags } from '../lib/extractTag.ts'
-import { leaderChatPrompt, leaderFeedbackPrompt, leaderHintPrompt, leaderScenarioPrompt } from '../lib/leaderCoaching.ts'
+import {
+  leaderChatPrompt,
+  leaderFeedbackPrompt,
+  leaderHintPrompt,
+  leaderScenarioPrompt,
+  leaderWalkChatPrompt,
+  leaderWalkOpenPrompt,
+  walkCoachingNote,
+} from '../lib/leaderCoaching.ts'
 import { chooseAudience, generateContext, isGeneratedId, readGenerated, signGenerated } from '../lib/leaderGenerated.ts'
 import { findLeaderLevel, leaderProfile, LEADER_AREAS, type LeaderProfile } from '../lib/leaderLevels.ts'
 import { LEADER_AUDIENCES, findScenarioFor, scenariosFor } from '../lib/leaderScenarios.ts'
@@ -171,9 +179,10 @@ leadersRouter.get('/attempts/:id', async (req, res) => {
 })
 
 // One call for both ways in: a curated scenario of their level (scenarioId),
-// or their own situation (situationText). With no response the coach walks
-// them through it: their own situation left empty, or a curated one where
-// they tapped "Walk me through it" (walkThrough: true).
+// or their own situation (situationText). With no response it starts Walk me
+// through it instead — their own situation left empty, or a scenario where
+// they tapped it (walkThrough: true): the coach opens a conversation, and
+// the coaching waits for Get coaching (POST /attempts/:id/coaching).
 leadersRouter.post('/attempts', async (req, res) => {
   const who = req.leader!
   const { scenarioId, situationText, responseText, walkThrough: askedToWalk } = req.body ?? {}
@@ -230,13 +239,47 @@ leadersRouter.post('/attempts', async (req, res) => {
     walkThrough ? "The leader hasn't decided what to say yet — walk them through it." : `Leader's response: ${response}`
   }`
   try {
+    if (walkThrough) {
+      const opening = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 250,
+        thinking: { type: 'disabled' },
+        system: leaderWalkOpenPrompt(who, own),
+        messages: [{ role: 'user', content: context }],
+      })
+      const opener = opening.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('\n')
+        .trim()
+      if (!opener) {
+        console.error('[leaders] empty walk opener; stop_reason:', opening.stop_reason)
+        res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+        return
+      }
+      const attempt = await prisma.leaderAttempt.create({
+        data: {
+          userId: req.user!.userId,
+          level: who.level.value,
+          source,
+          curatedId,
+          audience,
+          scenarioText,
+          responseText: '',
+          conversation: appendTurn([], context, opener),
+        },
+      })
+      res.status(201).json(attempt)
+      return
+    }
+
     const reply = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 1400,
       // Thinking draws from max_tokens on this model; left on, a dense
       // scenario can come back with no text at all (see attempts.ts).
       thinking: { type: 'disabled' },
-      system: leaderFeedbackPrompt(who, own, walkThrough),
+      system: leaderFeedbackPrompt(who, own, false),
       messages: [{ role: 'user', content: context }],
     })
     const text = reply.content
@@ -287,7 +330,10 @@ leadersRouter.post('/attempts/:id/chat', async (req, res) => {
     return
   }
   const existing = (attempt.conversation as unknown as ChatMessage[] | null) ?? []
-  if (countUserTurns(existing) >= CHAT_TURN_CAP) {
+  // A walk-through is a conversation before the coaching as well as after it,
+  // so it gets room for both.
+  const walk = !attempt.responseText.trim()
+  if (countUserTurns(existing) >= (walk ? CHAT_TURN_CAP * 2 : CHAT_TURN_CAP)) {
     res.status(409).json({ error: CONVERSATION_FULL_MESSAGE })
     return
   }
@@ -306,7 +352,10 @@ leadersRouter.post('/attempts/:id/chat', async (req, res) => {
       model: CLAUDE_MODEL,
       max_tokens: 300,
       thinking: { type: 'disabled' },
-      system: leaderChatPrompt(who, attempt.source === 'own'),
+      system:
+        walk && !attempt.feedback
+          ? leaderWalkChatPrompt(who, attempt.source === 'own')
+          : leaderChatPrompt(who, attempt.source === 'own') + (walk ? walkCoachingNote(attempt.feedback, attempt.modelResponse) : ''),
       messages: toClaudeMessages(existing, trimmed),
     })
     const text = reply.content
@@ -322,6 +371,54 @@ leadersRouter.post('/attempts/:id/chat', async (req, res) => {
   } catch (error) {
     const failure = classifyModelError(error, 'Could not reach your coach')
     logModelFailure('[leaders] chat failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
+  }
+})
+
+// Get coaching: ends a Walk me through it conversation with the full
+// coaching and what they could say, built on what they worked out. Once only.
+leadersRouter.post('/attempts/:id/coaching', async (req, res) => {
+  const attempt = await prisma.leaderAttempt.findFirst({ where: { id: req.params.id, userId: req.user!.userId } })
+  if (!attempt) {
+    res.status(404).json({ error: 'Not found' })
+    return
+  }
+  if (attempt.responseText.trim() || attempt.feedback) {
+    res.status(409).json({ error: 'This one already has its coaching.' })
+    return
+  }
+  const denied = await checkAndLogUsage(req.user!.userId, 'leader_feedback')
+  if (denied) {
+    res.status(429).json({ error: denied })
+    return
+  }
+  const who: LeaderProfile = { ...req.leader!, level: findLeaderLevel(attempt.level) ?? req.leader!.level }
+  const existing = (attempt.conversation as unknown as ChatMessage[] | null) ?? []
+  try {
+    const reply = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 1400,
+      thinking: { type: 'disabled' },
+      system: leaderFeedbackPrompt(who, attempt.source === 'own', true),
+      messages: toClaudeMessages(existing, 'I am ready. Give me the full coaching and what I could say.'),
+    })
+    const text = reply.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+    if (!text.trim()) {
+      console.error('[leaders] empty coaching; stop_reason:', reply.stop_reason)
+      res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+      return
+    }
+    const updated = await prisma.leaderAttempt.update({
+      where: { id: attempt.id },
+      data: { feedback: extractTag(text, 'feedback') ?? stripStructuralTags(text), modelResponse: extractTag(text, 'model_response') },
+    })
+    res.json(updated)
+  } catch (error) {
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[leaders] coaching failed:', failure, error)
     res.status(failure.status).json({ error: failure.message })
   }
 })

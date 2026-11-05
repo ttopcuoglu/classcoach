@@ -56,17 +56,19 @@ export function leaderFeedbackPrompt(who: LeaderProfile, own: boolean, walkThrou
       ? 'A leader is rehearsing a practice scenario.'
       : 'A leader is rehearsing a practice scenario and has said how they would handle it.'
   if (walkThrough) {
-    return `${IDENTITY} ${frame} They do not know yet what to say and asked you to walk them through it.
+    // Get coaching, at the end of a Walk me through it conversation: built on
+    // what the leader worked out, not written as if the talk never happened.
+    return `${IDENTITY} ${frame} They did not know what to say, so you talked it through with them; that conversation is above. Now they have asked for the full coaching.
 
 ${FORMAT}
 
 Respond with exactly these two sections and nothing outside them:
 
 <feedback>
-Start with one or two sentences on what is most likely going on and what matters most. Then 2-4 concrete moves, in the order they would make them. End with one short line inviting them to try saying it in their own words below, so you can coach the words. Keep it skimmable and practical.
+Start with what they worked out in your conversation, in a sentence or two. Then 2-4 concrete moves, in the order they would make them — including anything important the conversation did not get to. Keep it skimmable and practical.
 </feedback>
 <model_response>
-What the leader could actually say, word for word. ${MODEL_RESPONSE_CHANNEL}
+What the leader could actually say, word for word, built from their own ideas and words where those were good. ${MODEL_RESPONSE_CHANNEL}
 </model_response>
 ${levelBlock(who)}
 ${LEADER_RULES}`
@@ -91,6 +93,39 @@ export function leaderChatPrompt(who: LeaderProfile, own: boolean): string {
   return `${IDENTITY} You are continuing a conversation about ${own ? 'a real situation the leader is facing' : 'a practice scenario'} you already gave feedback on. When they try their own words — a first try or another one — respond to that version directly: what works, and what to sharpen. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. If they push back, ask a follow-up, or want a different angle, engage with that directly rather than repeating your first assessment. Never invent details that weren't given to you.
 ${levelBlock(who)}
 ${LEADER_RULES}`
+}
+
+// Walk me through it is a conversation first: the coach opens with what
+// matters and one question, the leader answers, and they work it out
+// together. Get coaching (leaderFeedbackPrompt with walkThrough) ends it with
+// the full coaching and the words they could use.
+function walkFrame(own: boolean): string {
+  return own
+    ? 'a real situation the leader is facing, described in their own words. Work only from what they told you and never invent details about the people involved'
+    : 'a practice scenario the leader is rehearsing'
+}
+
+export function leaderWalkOpenPrompt(who: LeaderProfile, own: boolean): string {
+  return `${IDENTITY} You are about to talk a leader through ${walkFrame(own)}. They do not know yet what to say, so instead of handing them an answer you will work it out together, the way a mentor would across the desk.
+
+Open the conversation: one or two sentences on what matters most in this moment, then ONE question that gets them thinking — what they want the other person to walk away with, what worries them about it, or what they already know. Under 60 words. Plain text only — no markdown, no lists.
+${levelBlock(who)}
+${LEADER_RULES}`
+}
+
+export function leaderWalkChatPrompt(who: LeaderProfile, own: boolean): string {
+  return `${IDENTITY} You are talking a leader through ${walkFrame(own)}, before they decide what to say. Keep it a real back-and-forth: reply in 2-4 sentences, plain text, no markdown. Respond to what they just said — build on what is strong, gently question what is not — then ask ONE next question that moves them forward.
+
+Work through these roughly in order, only as far as they need: what is really going on for the other person; what that person needs to hear first; the line the leader has to hold; what they can and cannot promise; how to close with a clear next step. When they try actual words, react to those words and help sharpen them. Do not write their whole response for them; if they ask for words, give one line to start from and hand it back. Once they have a clear approach, tell them they can press Get coaching for the full coaching and what they could say.
+${levelBlock(who)}
+${LEADER_RULES}`
+}
+
+// After Get coaching on a walk-through, the follow-up chat needs the coaching
+// it gave: unlike a reviewed response, it was never the conversation's seed.
+export function walkCoachingNote(feedback: string | null, modelResponse: string | null): string {
+  if (!feedback) return ''
+  return `\n\nThe coaching you gave them after talking it through:\n${feedback}${modelResponse ? `\n\nWhat you said they could say:\n${modelResponse}` : ''}`
 }
 
 // "Get a hint" on a curated scenario, for a leader facing an empty box. One

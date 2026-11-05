@@ -1792,7 +1792,7 @@ function previewLeaders(path: string, method: string, body: Json): Json | Json[]
   }
   if (path === '/api/leaders/attempts' && method === 'POST') {
     const curated = [...PREVIEW_LEADER_SCENARIOS, ...previewGenerated].find((s) => s.id === body.scenarioId)
-    const response = String(body.responseText ?? '')
+    const response = body.walkThrough === true ? '' : String(body.responseText ?? '')
     const scenarioText = String(curated?.text ?? body.situationText ?? '')
     const attempt: Json = {
       id: `preview-leader-${previewLeaderAttempts.length + 1}`,
@@ -1808,13 +1808,28 @@ function previewLeaders(path: string, method: string, body: Json): Json | Json[]
       modelResponse: '“Thank you for coming in. I can hear how frustrating this is. I can’t talk about another student’s consequence, but I can walk you through exactly what happened with your daughter and why — and I want to hear what you think we missed.”',
       conversation: [
         { role: 'user', text: scenarioText, createdAt: new Date().toISOString() },
-        { role: 'assistant', text: 'seed', createdAt: new Date().toISOString() },
+        response
+          ? { role: 'assistant', text: 'seed', createdAt: new Date().toISOString() }
+          : { role: 'assistant', text: 'The parent needs to feel heard before anything else lands. What do you most want them to walk away knowing?', createdAt: new Date().toISOString() },
       ],
       saved: false,
       createdAt: new Date().toISOString(),
     }
+    if (!response) {
+      // Walk me through it: a conversation first, coaching on Get coaching.
+      attempt.feedback = null
+      attempt.modelResponse = null
+    }
     previewLeaderAttempts.unshift(attempt)
     return attempt
+  }
+  const coachingFor = path.match(/^\/api\/leaders\/attempts\/([^/]+)\/coaching$/)
+  if (coachingFor && method === 'POST') {
+    const found = previewLeaderAttempts.find((a) => a.id === coachingFor[1])
+    if (!found) return null
+    found.feedback = 'You worked out the most important thing yourself: lead with listening, then be clear about what you can share.\n\n- Open by naming what you heard.\n- Say once what you can’t discuss, and why.\n- End with a specific follow-up and a time.'
+    found.modelResponse = '“Thank you for coming in. I can hear how much this matters to you. Here is what I can tell you today, and here is when I will call you back.”'
+    return found
   }
   const chat = path.match(/^\/api\/leaders\/attempts\/([^/]+)\/chat$/)
   if (chat) {
@@ -1824,7 +1839,13 @@ function previewLeaders(path: string, method: string, body: Json): Json | Json[]
     attempt.conversation = [
       ...(attempt.conversation as Json[]),
       { role: 'user', text: String(body.message ?? ''), createdAt: now },
-      { role: 'assistant', text: 'That version holds the line and still sounds like you. One thing to sharpen: give a day for the follow-up call, not “soon”.', createdAt: now },
+      {
+        role: 'assistant',
+        text: attempt.feedback
+          ? 'That version holds the line and still sounds like you. One thing to sharpen: give a day for the follow-up call, not “soon”.'
+          : 'Good — that is the heart of it. So what is the very first thing you would say when they sit down?',
+        createdAt: now,
+      },
     ]
     return attempt
   }

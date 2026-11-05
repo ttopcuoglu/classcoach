@@ -207,6 +207,16 @@ test('a leader sees only their own practice', async (t) => {
   assert.equal((await call(`/api/leaders/attempts/${id}`, district, { method: 'PATCH', body: JSON.stringify({ saved: true }) })).status, 404)
 })
 
+test('Get coaching is only for your own walk-through, and only once', async (t) => {
+  if (!ctx) return t.skip(skipReason ?? 'no database')
+  const ap = { id: ctx.ids.assistant, role: 'teacher' }
+  const district = { id: ctx.ids.district, role: 'teacher' }
+  const reviewed = (JSON.parse((await call('/api/leaders/attempts', ap)).text) as { id: string }[])[0].id
+  // Someone else's: not found. A reviewed response already has its coaching.
+  assert.equal((await call(`/api/leaders/attempts/${reviewed}/coaching`, district, { method: 'POST' })).status, 404)
+  assert.equal((await call(`/api/leaders/attempts/${reviewed}/coaching`, ap, { method: 'POST' })).status, 409)
+})
+
 test('only a superadmin assigns a level, and it applies on the next request', async (t) => {
   if (!ctx) return t.skip(skipReason ?? 'no database')
   const admin = { id: ctx.ids.admin, role: 'org_admin' }
