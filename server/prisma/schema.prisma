@@ -71,6 +71,11 @@ model User {
   // platform roster — never by the person, and never read from jobTitle,
   // which is self-described. Null = no Leader's Corner.
   leaderLevel           String?
+  // Leader's Corner responsibilities ("student_life", "academics") and whether
+  // they formally evaluate staff. Superadmin-set like leaderLevel; ignored for
+  // district and building, which cover everything.
+  leaderAreas           String[] @default([])
+  leaderEvaluates       Boolean  @default(false)
   organizationId        String? // null = independent teacher, not part of any district
   organization          Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   // "free" | "plus" — individual self-serve billing. Independent of

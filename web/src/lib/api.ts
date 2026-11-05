@@ -398,6 +398,9 @@ export type AdminUser = {
   role: 'teacher' | 'org_admin' | 'superadmin'
   jobTitle: JobTitle | null
   leaderLevel?: LeaderLevel | null
+  // Empty = every area. Both ignored for district and building.
+  leaderAreas?: LeaderArea[]
+  leaderEvaluates?: boolean
   organizationId: string | null
   organizationName: string | null
   suspendedAt: string | null
@@ -1505,7 +1508,12 @@ export function suspendUser(id: string, suspended: boolean): Promise<AdminUser> 
 
 export function updateUser(
   id: string,
-  edits: MemberEdits & { organizationId?: string | null; leaderLevel?: LeaderLevel | null },
+  edits: MemberEdits & {
+    organizationId?: string | null
+    leaderLevel?: LeaderLevel | null
+    leaderAreas?: LeaderArea[]
+    leaderEvaluates?: boolean
+  },
 ): Promise<AdminUser> {
   return request(`/api/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(edits) })
 }
@@ -3103,12 +3111,16 @@ export function updateSchoolInquiryStatus(id: string, status: SchoolInquiry['sta
 
 export type LeaderLevel = 'district' | 'building' | 'assistant' | 'teacher_leader'
 
+export type LeaderArea = 'student_life' | 'academics'
+
 export type LeaderAudience = 'families' | 'students' | 'staff' | 'community' | 'up_the_chain'
 
 export type LeaderScenario = { id: string; audience: LeaderAudience; title: string; text: string }
 
 export type LeaderScenarios = {
   level: { value: LeaderLevel; label: string; titles: string }
+  areas?: { value: LeaderArea; label: string }[]
+  evaluates?: boolean
   audiences: { value: LeaderAudience; label: string }[]
   scenarios: LeaderScenario[]
 }

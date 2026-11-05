@@ -28,6 +28,7 @@ import {
   type AdminOverview,
   type AdminUser,
   type JobTitle,
+  type LeaderArea,
   type LeaderLevel,
   type MemberEdits,
   type ClimateAverages,
@@ -57,7 +58,7 @@ import {
   STRENGTH_MEANING,
 } from '../lib/adminLabels'
 import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
-import { LEADER_LEVEL_OPTIONS, leaderLevelLabel } from '../lib/leaderLevels'
+import { hasLeaderOptions, LEADER_AREA_OPTIONS, LEADER_LEVEL_OPTIONS, leaderDefaults, leaderLevelLabel } from '../lib/leaderLevels'
 import { CHALLENGE_TYPES, MESSAGE_PURPOSES, challengeLabel, purposeLabel } from '../lib/communicationOptions'
 import { ChatBubbleIcon, LockIcon } from '../components/icons'
 import { CoachingPrioritiesPanel } from '../components/CoachingPrioritiesPanel'
@@ -650,6 +651,10 @@ type EditValues = {
   // Leader's Corner. Offered only on the platform-wide list: a superadmin
   // assigns every level, so a school admin's edit never shows it.
   leaderLevel?: LeaderLevel | ''
+  // Which conversations they have, and whether they evaluate staff — for
+  // assistant and teacher-leader only (see hasLeaderOptions).
+  leaderAreas?: LeaderArea[]
+  leaderEvaluates?: boolean
 }
 
 // Opens under the row being edited. School is offered only on the
@@ -676,6 +681,10 @@ function EditUserRow({
   const independent = orgs !== undefined && !values.organizationId
 
   async function handleSave() {
+    if (hasLeaderOptions(values.leaderLevel) && !values.leaderAreas?.length) {
+      setError('Pick at least one Leader’s Corner responsibility.')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -737,7 +746,10 @@ function EditUserRow({
               Leader&rsquo;s Corner
               <select
                 value={values.leaderLevel}
-                onChange={(e) => setValues({ ...values, leaderLevel: e.target.value as LeaderLevel | '' })}
+                onChange={(e) => {
+                  const leaderLevel = e.target.value as LeaderLevel | ''
+                  setValues({ ...values, leaderLevel, ...leaderDefaults(leaderLevel) })
+                }}
                 className={`${inputClass} w-56`}
               >
                 <option value="">Off</option>
@@ -748,6 +760,34 @@ function EditUserRow({
                 ))}
               </select>
             </label>
+          )}
+          {hasLeaderOptions(values.leaderLevel) && (
+            <fieldset className="flex flex-col gap-1 text-xs font-semibold text-ink-soft">
+              <legend className="mb-1">Responsibilities</legend>
+              <div className="flex flex-wrap gap-3 font-normal text-ink">
+                {LEADER_AREA_OPTIONS.map((a) => (
+                  <label key={a.value} className="flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={values.leaderAreas?.includes(a.value) ?? false}
+                      onChange={(e) => {
+                        const rest = (values.leaderAreas ?? []).filter((v) => v !== a.value)
+                        setValues({ ...values, leaderAreas: e.target.checked ? [...rest, a.value] : rest })
+                      }}
+                    />
+                    {a.label}
+                  </label>
+                ))}
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={values.leaderEvaluates ?? false}
+                    onChange={(e) => setValues({ ...values, leaderEvaluates: e.target.checked })}
+                  />
+                  Evaluates staff
+                </label>
+              </div>
+            </fieldset>
           )}
           <label className="flex flex-col gap-1 text-xs font-semibold text-ink-soft">
             Role
@@ -3806,6 +3846,9 @@ function UserRow({
           {user.leaderLevel && (
             <span className="ml-1.5 rounded-full bg-gold-tint px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-forest">
               Leader · {leaderLevelLabel(user.leaderLevel)}
+              {hasLeaderOptions(user.leaderLevel) && user.leaderAreas?.length === 1 &&
+                ` · ${user.leaderAreas[0] === 'academics' ? 'Academics' : 'Student life'}`}
+              {hasLeaderOptions(user.leaderLevel) && user.leaderEvaluates && ' · Evaluates'}
             </span>
           )}
         </td>
@@ -3861,16 +3904,22 @@ function UserRow({
             role: user.role === 'org_admin' ? 'org_admin' : 'teacher',
             organizationId: user.organizationId ?? '',
             leaderLevel: user.leaderLevel ?? '',
+            // Nothing stored means every area, so show it that way.
+            leaderAreas: user.leaderAreas?.length ? user.leaderAreas : LEADER_AREA_OPTIONS.map((a) => a.value),
+            leaderEvaluates: user.leaderEvaluates ?? false,
           }}
           roleLocked={user.role === 'superadmin'}
           orgs={orgs}
           onSave={async (values) => {
             const edits = editsFrom(values)
+            const leader = values.leaderLevel
+              ? { leaderLevel: values.leaderLevel, leaderAreas: values.leaderAreas ?? [], leaderEvaluates: values.leaderEvaluates ?? false }
+              : { leaderLevel: null }
             await updateUser(
               user.id,
               user.role === 'superadmin'
-                ? { name: edits.name, jobTitle: edits.jobTitle, leaderLevel: values.leaderLevel || null }
-                : { ...edits, organizationId: values.organizationId || null, leaderLevel: values.leaderLevel || null },
+                ? { name: edits.name, jobTitle: edits.jobTitle, ...leader }
+                : { ...edits, organizationId: values.organizationId || null, ...leader },
             )
             setEditing(false)
             onChanged()

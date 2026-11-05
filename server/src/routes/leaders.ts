@@ -3,14 +3,15 @@ import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { extractTag, stripStructuralTags } from '../lib/extractTag.ts'
 import { leaderChatPrompt, leaderFeedbackPrompt } from '../lib/leaderCoaching.ts'
-import { findLeaderLevel, type LeaderLevelInfo } from '../lib/leaderLevels.ts'
-import { LEADER_AUDIENCES, findScenarioForLevel, scenariosForLevel } from '../lib/leaderScenarios.ts'
+import { findLeaderLevel, leaderProfile, LEADER_AREAS, type LeaderProfile } from '../lib/leaderLevels.ts'
+import { LEADER_AUDIENCES, findScenarioFor, scenariosFor } from '../lib/leaderScenarios.ts'
 import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
 import { prisma } from '../lib/prisma.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 
 // Leader's Corner. Everything here is the signed-in leader's own: a
-// superadmin-assigned level decides which scenarios they can open, and every
+// superadmin-assigned level, areas and evaluates flag decide which scenarios
+// they can open, and every
 // attempt is read and written by userId alone. No admin route reads
 // LeaderAttempt (leaders.privacy.test.ts holds that).
 
@@ -20,7 +21,7 @@ declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
-      leaderLevel?: LeaderLevelInfo
+      leader?: LeaderProfile
     }
   }
 }
@@ -29,25 +30,32 @@ declare global {
 // session token: a superadmin removing someone's level takes effect on their
 // very next click, not when their session happens to expire.
 async function requireLeader(req: Request, res: Response, next: NextFunction) {
-  const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { leaderLevel: true } })
-  const level = findLeaderLevel(user?.leaderLevel)
-  if (!level) {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    select: { leaderLevel: true, leaderAreas: true, leaderEvaluates: true },
+  })
+  const leader = leaderProfile(user)
+  if (!leader) {
     res.status(403).json({ error: "Leader's Corner isn't turned on for your account." })
     return
   }
-  req.leaderLevel = level
+  req.leader = leader
   next()
 }
 
 leadersRouter.use(requireLeader)
 
-// The leader's own level and its scenarios — never another level's.
+// The leader's own scenarios — never another level's, area's, or the
+// evaluator-only ones when they don't evaluate.
 leadersRouter.get('/scenarios', (req, res) => {
-  const level = req.leaderLevel!
+  const who = req.leader!
+  const { level } = who
   res.json({
     level: { value: level.value, label: level.label, titles: level.titles },
+    areas: LEADER_AREAS.filter((a) => who.areas.includes(a.value)),
+    evaluates: who.evaluates,
     audiences: LEADER_AUDIENCES,
-    scenarios: scenariosForLevel(level.value).map(({ id, audience, title, text }) => ({ id, audience, title, text })),
+    scenarios: scenariosFor(who).map(({ id, audience, title, text }) => ({ id, audience, title, text })),
   })
 })
 
@@ -73,7 +81,7 @@ leadersRouter.get('/attempts/:id', async (req, res) => {
 // or their own situation (situationText). Only their own situation may come
 // without a response, which asks the coach to walk them through it.
 leadersRouter.post('/attempts', async (req, res) => {
-  const level = req.leaderLevel!
+  const who = req.leader!
   const { scenarioId, situationText, responseText } = req.body ?? {}
   const response = typeof responseText === 'string' ? responseText.trim() : ''
   if (response.length > 5000) {
@@ -86,7 +94,7 @@ leadersRouter.post('/attempts', async (req, res) => {
   let curatedId: string | null = null
   let audience: string | null = null
   if (scenarioId !== undefined) {
-    const scenario = findScenarioForLevel(scenarioId, level.value)
+    const scenario = findScenarioFor(scenarioId, who)
     if (!scenario) {
       res.status(404).json({ error: 'Scenario not found' })
       return
@@ -131,7 +139,7 @@ leadersRouter.post('/attempts', async (req, res) => {
       // Thinking draws from max_tokens on this model; left on, a dense
       // scenario can come back with no text at all (see attempts.ts).
       thinking: { type: 'disabled' },
-      system: leaderFeedbackPrompt(level, own, walkThrough),
+      system: leaderFeedbackPrompt(who, own, walkThrough),
       messages: [{ role: 'user', content: context }],
     })
     const text = reply.content
@@ -151,7 +159,7 @@ leadersRouter.post('/attempts', async (req, res) => {
     const attempt = await prisma.leaderAttempt.create({
       data: {
         userId: req.user!.userId,
-        level: level.value,
+        level: who.level.value,
         source,
         curatedId,
         audience,
@@ -194,14 +202,14 @@ leadersRouter.post('/attempts/:id/chat', async (req, res) => {
 
   // Coached at the level they practiced at, so a later level change doesn't
   // rewrite what an old conversation assumed they could promise.
-  const level = findLeaderLevel(attempt.level) ?? req.leaderLevel!
+  const who: LeaderProfile = { ...req.leader!, level: findLeaderLevel(attempt.level) ?? req.leader!.level }
   const trimmed = message.trim()
   try {
     const reply = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 300,
       thinking: { type: 'disabled' },
-      system: leaderChatPrompt(level, attempt.source === 'own'),
+      system: leaderChatPrompt(who, attempt.source === 'own'),
       messages: toClaudeMessages(existing, trimmed),
     })
     const text = reply.content

@@ -34,10 +34,18 @@ test('admin code never reads a leader’s practice', () => {
   }
 })
 
-test('every level has scenarios, and every scenario id is unique', async () => {
-  const { LEADER_LEVELS } = await import('../lib/leaderLevels.ts')
-  const { LEADER_SCENARIOS, scenariosForLevel } = await import('../lib/leaderScenarios.ts')
-  for (const level of LEADER_LEVELS) assert.ok(scenariosForLevel(level.value).length >= 4, `${level.value} has scenarios`)
+test('every level, area and evaluator setting has scenarios, and every id is unique', async () => {
+  const { LEADER_LEVELS, leaderProfile } = await import('../lib/leaderLevels.ts')
+  const { LEADER_SCENARIOS, scenariosFor } = await import('../lib/leaderScenarios.ts')
+  for (const level of LEADER_LEVELS) {
+    for (const leaderAreas of [[], ['student_life'], ['academics']]) {
+      for (const leaderEvaluates of [false, true]) {
+        const who = leaderProfile({ leaderLevel: level.value, leaderAreas, leaderEvaluates })!
+        const n = scenariosFor(who).length
+        assert.ok(n >= 4, `${level.value} ${leaderAreas.join('+') || 'all'} evaluates=${leaderEvaluates} has ${n}`)
+      }
+    }
+  }
   assert.equal(new Set(LEADER_SCENARIOS.map((s) => s.id)).size, LEADER_SCENARIOS.length)
 })
 
@@ -147,11 +155,12 @@ test('no level, no Leader’s Corner — whatever the job title says', async (t)
 
 test('each level gets only its own scenarios, and cannot open another level’s', async (t) => {
   if (!ctx) return t.skip(skipReason ?? 'no database')
-  const { scenariosForLevel } = await import('../lib/leaderScenarios.ts')
+  const { scenariosFor } = await import('../lib/leaderScenarios.ts')
+  const { leaderProfile } = await import('../lib/leaderLevels.ts')
   const ap = { id: ctx.ids.assistant, role: 'teacher' }
   const list = JSON.parse((await call('/api/leaders/scenarios', ap)).text) as { level: { value: string }; scenarios: { id: string }[] }
   assert.equal(list.level.value, 'assistant')
-  const mine = new Set(scenariosForLevel('assistant').map((s) => s.id))
+  const mine = new Set(scenariosFor(leaderProfile({ leaderLevel: 'assistant', leaderAreas: [], leaderEvaluates: false })!).map((s) => s.id))
   assert.equal(list.scenarios.length, mine.size)
   for (const s of list.scenarios) assert.ok(mine.has(s.id), `${s.id} is an assistant scenario`)
 
@@ -193,6 +202,49 @@ test('only a superadmin assigns a level, and it applies on the next request', as
 
   await call(`/api/admin/users/${ctx.ids.teacher}`, staff, { method: 'PATCH', body: JSON.stringify({ leaderLevel: null }) })
   assert.equal((await call('/api/leaders/scenarios', teacher)).status, 403, 'removed takes effect at once')
+})
+
+test('areas and evaluation narrow a level to the person’s own job', async (t) => {
+  if (!ctx) return t.skip(skipReason ?? 'no database')
+  const staff = { id: ctx.ids.superadmin, role: 'superadmin' }
+  const teacher = { id: ctx.ids.teacher, role: 'teacher' }
+  const patch = (body: object) => call(`/api/admin/users/${ctx!.ids.teacher}`, staff, { method: 'PATCH', body: JSON.stringify(body) })
+  const ids = async () => (JSON.parse((await call('/api/leaders/scenarios', teacher)).text) as { scenarios: { id: string }[] }).scenarios.map((s) => s.id)
+
+  assert.equal((await patch({ leaderLevel: 'assistant', leaderAreas: ['sports'] })).status, 400)
+  assert.equal((await patch({ leaderLevel: 'assistant', leaderEvaluates: 'yes' })).status, 400)
+
+  // A Dean of Students: discipline only, no evaluation.
+  assert.equal((await patch({ leaderLevel: 'assistant', leaderAreas: ['student_life'], leaderEvaluates: false })).status, 200)
+  let seen = await ids()
+  assert.ok(seen.includes('assistant-suspension-meeting'))
+  assert.ok(!seen.includes('assistant-grade-dispute'), 'no academics scenarios')
+  assert.ok(!seen.includes('assistant-eval-conference'), 'no evaluator scenarios')
+  const outside = await call('/api/leaders/attempts', teacher, { method: 'POST', body: JSON.stringify({ scenarioId: 'assistant-grade-dispute', responseText: 'I would listen.' }) })
+  assert.equal(outside.status, 404, 'another area’s scenario cannot be opened by id')
+
+  // A Dean of Academics who evaluates.
+  await patch({ leaderAreas: ['academics'], leaderEvaluates: true })
+  seen = await ids()
+  assert.ok(seen.includes('assistant-grade-dispute') && seen.includes('assistant-eval-conference'))
+  assert.ok(!seen.includes('assistant-suspension-meeting'))
+
+  // A coaching-only scenario disappears for a supervisor who evaluates.
+  await patch({ leaderLevel: 'teacher_leader', leaderAreas: ['academics'], leaderEvaluates: true })
+  seen = await ids()
+  assert.ok(seen.includes('teacher-leader-two-hats') && !seen.includes('teacher-leader-defensive'))
+  await patch({ leaderEvaluates: false })
+  seen = await ids()
+  assert.ok(!seen.includes('teacher-leader-two-hats') && seen.includes('teacher-leader-defensive'))
+
+  // A principal gets every building scenario, whatever is stored.
+  await patch({ leaderLevel: 'building', leaderAreas: ['academics'], leaderEvaluates: false })
+  assert.ok((await ids()).includes('building-non-renewal'))
+
+  // Off clears the rest.
+  const off = await patch({ leaderLevel: null })
+  assert.match(off.text, /"leaderAreas":\[\]/)
+  assert.match(off.text, /"leaderEvaluates":false/)
 })
 
 test('no admin GET route returns a leader’s practice, and it never counts as activity', async (t) => {

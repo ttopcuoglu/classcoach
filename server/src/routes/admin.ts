@@ -21,7 +21,7 @@ import { staffQuestionMix } from '../lib/questionMix.ts'
 import { OWN_SITUATION, SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts'
 import { stripe } from '../lib/stripe.ts'
 import { LEADER_ACTIONS } from '../lib/usageLimit.ts'
-import { isLeaderLevel } from '../lib/leaderLevels.ts'
+import { isLeaderArea, isLeaderLevel } from '../lib/leaderLevels.ts'
 
 // Leader's Corner is a leader's own: its usage rows never count toward a
 // school's activity, active users or anyone's "last active" here.
@@ -1806,6 +1806,8 @@ adminRouter.get('/users', requireSuperadmin, async (_req, res) => {
       role: true,
       jobTitle: true,
       leaderLevel: true,
+      leaderAreas: true,
+      leaderEvaluates: true,
       organizationId: true,
       suspendedAt: true,
       createdAt: true,
@@ -1821,6 +1823,8 @@ adminRouter.get('/users', requireSuperadmin, async (_req, res) => {
       role: u.role,
       jobTitle: u.jobTitle,
       leaderLevel: u.leaderLevel,
+      leaderAreas: u.leaderAreas,
+      leaderEvaluates: u.leaderEvaluates,
       organizationId: u.organizationId,
       organizationName: u.organization?.name ?? null,
       suspendedAt: u.suspendedAt,
@@ -1887,8 +1891,18 @@ adminRouter.patch('/users/:id', requireSuperadmin, async (req, res) => {
     return
   }
 
-  const data: UserEdits & { organizationId?: string | null; leaderLevel?: string | null } = { ...parsed.edits }
-  const { organizationId, leaderLevel } = (req.body ?? {}) as { organizationId?: unknown; leaderLevel?: unknown }
+  const data: UserEdits & {
+    organizationId?: string | null
+    leaderLevel?: string | null
+    leaderAreas?: string[]
+    leaderEvaluates?: boolean
+  } = { ...parsed.edits }
+  const { organizationId, leaderLevel, leaderAreas, leaderEvaluates } = (req.body ?? {}) as {
+    organizationId?: unknown
+    leaderLevel?: unknown
+    leaderAreas?: unknown
+    leaderEvaluates?: unknown
+  }
   // Leader's Corner level: here only, never in parseUserEdits, which a school
   // admin's member edit shares — a superadmin assigns every level.
   if (leaderLevel !== undefined) {
@@ -1897,6 +1911,26 @@ adminRouter.patch('/users/:id', requireSuperadmin, async (req, res) => {
       return
     }
     data.leaderLevel = leaderLevel
+    // Turning Leader's Corner off clears the rest, so turning it back on
+    // later starts from the level's defaults, not a forgotten setting.
+    if (leaderLevel === null) {
+      data.leaderAreas = []
+      data.leaderEvaluates = false
+    }
+  }
+  if (leaderAreas !== undefined && leaderLevel !== null) {
+    if (!Array.isArray(leaderAreas) || !leaderAreas.every(isLeaderArea)) {
+      res.status(400).json({ error: 'leaderAreas must be a list of student_life and/or academics' })
+      return
+    }
+    data.leaderAreas = [...new Set(leaderAreas)]
+  }
+  if (leaderEvaluates !== undefined && leaderLevel !== null) {
+    if (typeof leaderEvaluates !== 'boolean') {
+      res.status(400).json({ error: 'leaderEvaluates must be true or false' })
+      return
+    }
+    data.leaderEvaluates = leaderEvaluates
   }
   if (organizationId !== undefined) {
     if (organizationId !== null && typeof organizationId !== 'string') {
@@ -1940,6 +1974,8 @@ adminRouter.patch('/users/:id', requireSuperadmin, async (req, res) => {
       role: true,
       jobTitle: true,
       leaderLevel: true,
+      leaderAreas: true,
+      leaderEvaluates: true,
       organizationId: true,
       suspendedAt: true,
       createdAt: true,
@@ -1953,6 +1989,8 @@ adminRouter.patch('/users/:id', requireSuperadmin, async (req, res) => {
     role: updated.role,
     jobTitle: updated.jobTitle,
     leaderLevel: updated.leaderLevel,
+    leaderAreas: updated.leaderAreas,
+    leaderEvaluates: updated.leaderEvaluates,
     organizationId: updated.organizationId,
     organizationName: updated.organization?.name ?? null,
     suspendedAt: updated.suspendedAt,

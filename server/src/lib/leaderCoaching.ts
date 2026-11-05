@@ -1,5 +1,5 @@
 import { INSTRUCTION_PRIORITY_NOTICE, NO_RATING_NOTICE } from './coachPersona.ts'
-import type { LeaderLevelInfo } from './leaderLevels.ts'
+import { coversEverything, LEADER_AREAS, type LeaderProfile } from './leaderLevels.ts'
 
 // Leader's Corner's coaching prompts. Not the teacher ones with a noun
 // swapped: the teacher PRIVACY_NOTICE forbids suggesting any disciplinary or
@@ -17,9 +17,26 @@ Protect privacy. Never repeat a student's, family's or staff member's name, or a
 export const LEGAL_HR_LINE = `
 Know where you stop. You coach how a conversation goes: tone, order, what to say first, how to listen, how to hold a boundary without losing the relationship, and what to put in writing afterwards. You never give legal advice and never decide the substance of a matter governed by law, policy or HR — suspensions and expulsions beyond the code of conduct, special education (IEP or 504) disputes, Title IX, harassment or discrimination complaints, terminations and non-renewals, anything involving police, child-protection reports, or a threat of legal action. When one of those is in play, say in one short sentence that the substance belongs with district counsel, HR or the relevant policy, then keep coaching the conversation itself. If someone may be in danger, say first that the school's safety and reporting procedures come before any conversation.`
 
-export function levelBlock(level: LeaderLevelInfo): string {
+// Whether they evaluate is the line that changes the coaching most: an
+// evaluator has to be clear which hat they are wearing, and a coach without
+// evaluation authority must never be pushed to hint at it.
+function evaluationLine(who: LeaderProfile): string {
+  if (coversEverything(who.level.value)) return ''
+  return who.evaluates
+    ? ' They formally evaluate staff. When the other person is someone they evaluate, help them be clear which role they are in for this conversation — coaching or evaluating — and never blur the two.'
+    : ' They do not formally evaluate staff. Never coach them to hint at evaluation, ratings or consequences they cannot give; help them be honest about what stays between them and what they would have to take to someone else.'
+}
+
+function areasLine(who: LeaderProfile): string {
+  if (coversEverything(who.level.value) || who.areas.length === LEADER_AREAS.length) return ''
+  const labels = LEADER_AREAS.filter((a) => who.areas.includes(a.value)).map((a) => a.label.toLowerCase())
+  return ` Their responsibilities: ${labels.join('; ')}. When a situation falls outside them, coach them to bring in the colleague who holds it.`
+}
+
+export function levelBlock(who: LeaderProfile): string {
+  const { level } = who
   return `
-Who you are coaching: a school leader at the ${level.label.toLowerCase()} level (${level.titles}). They can commit to ${level.canPromise}. Above that, they bring in ${level.handOff}. Never suggest they promise, decide or announce something above their level; where the situation calls for it, coach them to say honestly what they will take forward, to whom, and when they will follow up.`
+Who you are coaching: a school leader at the ${level.label.toLowerCase()} level (${level.titles}). They can commit to ${level.canPromise}. Above that, they bring in ${level.handOff}.${areasLine(who)}${evaluationLine(who)} Never suggest they promise, decide or announce something above their level; where the situation calls for it, coach them to say honestly what they will take forward, to whom, and when they will follow up.`
 }
 
 const LEADER_RULES = `${INSTRUCTION_PRIORITY_NOTICE}\n${LEADER_PRIVACY_NOTICE}\n${NO_RATING_NOTICE}\n${LEGAL_HR_LINE}`
@@ -32,7 +49,7 @@ const FORMAT = 'Write in plain text only — no markdown (no **bold**, no # head
 const MODEL_RESPONSE_CHANNEL =
   'Match the channel the situation actually has: spoken words for a meeting or a call, a short written message for families or staff, remarks for a public meeting.'
 
-export function leaderFeedbackPrompt(level: LeaderLevelInfo, own: boolean, walkThrough: boolean): string {
+export function leaderFeedbackPrompt(who: LeaderProfile, own: boolean, walkThrough: boolean): string {
   const frame = own
     ? 'A leader has described a real situation they are facing, in their own words. Work only from what they told you — never invent details about the people involved — and where something that matters is missing, say briefly what you are assuming.'
     : 'A leader is rehearsing a practice scenario and has said how they would handle it.'
@@ -49,7 +66,7 @@ Start with one or two sentences on what is most likely going on and what matters
 <model_response>
 What the leader could actually say, word for word. ${MODEL_RESPONSE_CHANNEL}
 </model_response>
-${levelBlock(level)}
+${levelBlock(who)}
 ${LEADER_RULES}`
   }
   return `${IDENTITY} ${frame} Review how they say they would handle it.
@@ -64,12 +81,12 @@ What worked in their approach, then 1-3 specific ways to strengthen it: how they
 <model_response>
 A model example of what the leader could say, in their own voice. ${MODEL_RESPONSE_CHANNEL}
 </model_response>
-${levelBlock(level)}
+${levelBlock(who)}
 ${LEADER_RULES}`
 }
 
-export function leaderChatPrompt(level: LeaderLevelInfo, own: boolean): string {
+export function leaderChatPrompt(who: LeaderProfile, own: boolean): string {
   return `${IDENTITY} You are continuing a conversation about ${own ? 'a real situation the leader is facing' : 'a practice scenario'} you already gave feedback on. When they try their own words — a first try or another one — respond to that version directly: what works, and what to sharpen. Keep replying in 2-4 sentences, conversational, plain text only — no markdown. If they push back, ask a follow-up, or want a different angle, engage with that directly rather than repeating your first assessment. Never invent details that weren't given to you.
-${levelBlock(level)}
+${levelBlock(who)}
 ${LEADER_RULES}`
 }

@@ -1736,17 +1736,17 @@ const PREVIEW_LEADER_SCENARIOS: Json[] = [
   { id: 'assistant-referrals', audience: 'staff', title: 'A teacher who sends too many referrals', text: 'One teacher has written more office referrals this quarter than the rest of the grade level combined. They say: “If you backed me up instead of sending them right back, I wouldn’t have to keep writing them.”' },
 ]
 const LEADER_LEVEL_LABELS: Record<string, [string, string]> = {
-  district: ['District', 'Superintendent, District Leader'],
+  district: ['District', 'District Leader'],
   building: ['Building', 'Principal'],
-  assistant: ['Assistant', 'Assistant Principal, Vice Principal'],
-  teacher_leader: ['Teacher-leader', 'Supervisor, Department Head, Instructional Coach'],
+  assistant: ['Assistant', 'Assistant Principal, Vice Principal, Dean of Students, Dean of Academics'],
+  teacher_leader: ['Teacher-leader', 'Curriculum Supervisor, Department Head, Instructional Coach'],
 }
 const previewLeaderAttempts: Json[] = []
 const PREVIEW_USERS: Json[] = [
   // The preview account itself, so editing your own row can be tried.
-  { id: 'preview', name: 'Preview Teacher', email: 'preview.teacher@wivoza.com', role: 'superadmin', jobTitle: 'Teacher', leaderLevel: null, organizationId: null, organizationName: null, suspendedAt: null, createdAt: '2026-01-01T00:00:00.000Z' },
-  { id: 'u1', name: 'Preview Principal', email: 'principal@maple.example', role: 'org_admin', jobTitle: 'Principal', leaderLevel: 'building', organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', suspendedAt: null, createdAt: '2026-09-01T00:00:00.000Z' },
-  { id: 'u2', name: 'Preview Dept Head', email: 'dept@maple.example', role: 'teacher', jobTitle: 'Instructional Coach', leaderLevel: null, organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', suspendedAt: null, createdAt: '2026-09-02T00:00:00.000Z' },
+  { id: 'preview', name: 'Preview Teacher', email: 'preview.teacher@wivoza.com', role: 'superadmin', jobTitle: 'Teacher', leaderLevel: null, leaderAreas: [], leaderEvaluates: false, organizationId: null, organizationName: null, suspendedAt: null, createdAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'u1', name: 'Preview Principal', email: 'principal@maple.example', role: 'org_admin', jobTitle: 'Principal', leaderLevel: 'building', leaderAreas: [], leaderEvaluates: false, organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', suspendedAt: null, createdAt: '2026-09-01T00:00:00.000Z' },
+  { id: 'u2', name: 'Preview Dept Head', email: 'dept@maple.example', role: 'teacher', jobTitle: 'Instructional Coach', leaderLevel: null, leaderAreas: [], leaderEvaluates: false, organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', suspendedAt: null, createdAt: '2026-09-02T00:00:00.000Z' },
 ]
 
 function previewLeaders(path: string, method: string, body: Json): Json | Json[] | null {
