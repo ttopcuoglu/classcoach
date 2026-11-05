@@ -90,3 +90,16 @@ export function leaderChatPrompt(who: LeaderProfile, own: boolean): string {
 ${levelBlock(who)}
 ${LEADER_RULES}`
 }
+
+// "Get a hint" on a curated scenario, for a leader facing an empty box. One
+// sentence that points at what to weigh, never the words to say: the value of
+// the rehearsal is that the leader composes it, and a scripted line would turn
+// the feedback into a review of the coach's own words.
+export function leaderHintPrompt(who: LeaderProfile, previous: readonly string[]): string {
+  const avoid = previous.length
+    ? `\n\nThey already have these hints, so point at something different:\n${previous.map((h) => `- ${h}`).join('\n')}`
+    : ''
+  return `${IDENTITY} A leader is rehearsing the practice scenario below and is stuck on how to respond. Give them ONE hint: a single sentence, under 25 words, that points at what a strong response would attend to in this moment — the thing a trusted mentor would whisper. Point at what to notice or weigh; never script the words to say, and never list options. Plain text only, no preamble.${avoid}
+${levelBlock(who)}
+${LEADER_RULES}`
+}

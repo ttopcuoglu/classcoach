@@ -3154,6 +3154,12 @@ export function createLeaderAttempt(
   return request('/api/leaders/attempts', { method: 'POST', body: JSON.stringify(body) })
 }
 
+// "Get a hint" on a curated scenario. `previous` is what the page already
+// showed, so another hint points somewhere new. Never stored.
+export function getLeaderHint(scenarioId: string, previous: string[]): Promise<{ hint: string }> {
+  return request(`/api/leaders/scenarios/${scenarioId}/hint`, { method: 'POST', body: JSON.stringify({ previous }) })
+}
+
 export function sendLeaderChat(id: string, message: string): Promise<LeaderAttempt> {
   return request(`/api/leaders/attempts/${id}/chat`, { method: 'POST', body: JSON.stringify({ message }) })
 }

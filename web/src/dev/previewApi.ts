@@ -1752,6 +1752,15 @@ const PREVIEW_USERS: Json[] = [
 function previewLeaders(path: string, method: string, body: Json): Json | Json[] | null {
   const level = String(PROFILE.leaderLevel ?? '')
   if (!LEADER_LEVEL_LABELS[level]) return null
+  if (path.startsWith('/api/leaders/scenarios/') && path.endsWith('/hint')) {
+    const n = Array.isArray(body.previous) ? body.previous.length : 0
+    return {
+      hint: [
+        'Before defending the decision, name what the other person is afraid of losing.',
+        'Decide what you can promise today and what you have to take forward.',
+      ][n % 2],
+    }
+  }
   if (path === '/api/leaders/scenarios') {
     const [label, titles] = LEADER_LEVEL_LABELS[level]
     return {

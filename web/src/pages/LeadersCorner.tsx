@@ -9,6 +9,7 @@ import { LockIcon, StarIcon } from '../components/icons'
 import {
   createLeaderAttempt,
   getLeaderAttempts,
+  getLeaderHint,
   getLeaderScenarios,
   sendLeaderChat,
   setLeaderAttemptSaved,
@@ -48,6 +49,13 @@ export default function LeadersCorner() {
   const [chatDraft, setChatDraft] = useState('')
   const [chatSending, setChatSending] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
+  // "Get a hint" and "Stuck?" on a picked scenario: both closed until asked.
+  // Every hint asked for is kept so the newest shows and the next one is told
+  // what not to repeat.
+  const [hints, setHints] = useState<string[]>([])
+  const [hintLoading, setHintLoading] = useState(false)
+  const [hintError, setHintError] = useState<string | null>(null)
+  const [showGuide, setShowGuide] = useState(false)
 
   // One microphone, pointed at whichever box asked for it — the same as
   // Practice. Speaking adds to what is already typed; starting in one box
@@ -96,8 +104,29 @@ export default function LeadersCorner() {
       .finally(() => setHistoryLoading(false))
   }, [])
 
+  function clearHelpers() {
+    setHints([])
+    setHintError(null)
+    setShowGuide(false)
+  }
+
+  async function handleHint() {
+    if (!scenario || hintLoading) return
+    setHintLoading(true)
+    setHintError(null)
+    try {
+      const { hint } = await getLeaderHint(scenario.id, hints)
+      setHints((prev) => [...prev, hint])
+    } catch (err) {
+      setHintError((err as Error).message || 'Could not get a hint. Please try again.')
+    } finally {
+      setHintLoading(false)
+    }
+  }
+
   function startOver(next: Mode = mode) {
     if (listening) stopSpeech()
+    clearHelpers()
     setMode(next)
     setScenario(null)
     setAttempt(null)
@@ -238,6 +267,7 @@ export default function LeadersCorner() {
                           type="button"
                           onClick={() => {
                             setScenario(s)
+                            clearHelpers()
                             setResponse('')
                             setError(null)
                           }}
@@ -276,6 +306,64 @@ export default function LeadersCorner() {
                     {speakButton('response')}
                   </div>
                 </label>
+                {/* A nudge, never the words: the rehearsal is the leader
+                    composing it. Both helpers stay closed until asked. */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-wrap gap-x-5 gap-y-1">
+                    <button
+                      type="button"
+                      onClick={handleHint}
+                      disabled={submitting || hintLoading}
+                      className="w-fit text-sm font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta disabled:opacity-60"
+                    >
+                      {hintLoading ? 'Thinking...' : hints.length ? 'Another hint' : 'Get a hint'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowGuide((v) => !v)}
+                      aria-expanded={showGuide}
+                      className="w-fit text-sm font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
+                    >
+                      {showGuide ? 'Hide' : 'Stuck? What you can do here'}
+                    </button>
+                  </div>
+                  {hints.length > 0 && (
+                    <p aria-live="polite" className="rounded-2xl bg-gold-tint/50 px-4 py-3 text-sm italic text-ink">
+                      {hints[hints.length - 1]}
+                    </p>
+                  )}
+                  {hintError && <p className="text-xs text-terracotta-600">{hintError}</p>}
+                  {showGuide && (
+                    <ul className="flex flex-col gap-2 rounded-2xl border border-hairline bg-cream px-4 py-3 text-sm text-ink">
+                      {[
+                        speechSupported && {
+                          name: 'Speak',
+                          does: 'Say your answer instead of typing it — the way you would in the room.',
+                        },
+                        {
+                          name: 'Get a hint',
+                          does: 'A nudge toward what a strong response would pay attention to. Tap again for another.',
+                        },
+                        { name: 'Pick a different one', does: 'Go back to the list and choose another scenario.' },
+                        {
+                          name: 'Get Feedback',
+                          does: 'Your coach reads your answer and shows what worked, what to strengthen, and one model response. A rough first try is fine.',
+                        },
+                        {
+                          name: 'Something I’m facing',
+                          does: 'Switch at the top to rehearse a real conversation of your own. Leave your answer empty and your coach walks you through it.',
+                        },
+                      ]
+                        .filter((item): item is { name: string; does: string } => !!item)
+                        .map((item) => (
+                          <li key={item.name}>
+                            <span className="font-semibold text-forest">{item.name}</span>
+                            <span className="text-ink-soft"> — {item.does}</span>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </div>
                 <WorkingRing active={submitting} estimatedMs={9000} label="Reading your response" hint="Usually under ten seconds." className="text-forest" />
                 <div className="flex items-center justify-between gap-3">
                   <button type="button" onClick={() => setScenario(null)} disabled={submitting} className="text-sm font-medium text-ink-soft hover:text-ink">

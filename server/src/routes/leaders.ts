@@ -2,7 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { extractTag, stripStructuralTags } from '../lib/extractTag.ts'
-import { leaderChatPrompt, leaderFeedbackPrompt } from '../lib/leaderCoaching.ts'
+import { leaderChatPrompt, leaderFeedbackPrompt, leaderHintPrompt } from '../lib/leaderCoaching.ts'
 import { findLeaderLevel, leaderProfile, LEADER_AREAS, type LeaderProfile } from '../lib/leaderLevels.ts'
 import { LEADER_AUDIENCES, findScenarioFor, scenariosFor } from '../lib/leaderScenarios.ts'
 import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
@@ -57,6 +57,50 @@ leadersRouter.get('/scenarios', (req, res) => {
     audiences: LEADER_AUDIENCES,
     scenarios: scenariosFor(who).map(({ id, audience, title, text }) => ({ id, audience, title, text })),
   })
+})
+
+// "Get a hint" on one of their own curated scenarios. Not stored: a hint only
+// matters while the response box is empty. `previous` is what the page already
+// showed, so "Another hint" points somewhere new.
+leadersRouter.post('/scenarios/:id/hint', async (req, res) => {
+  const who = req.leader!
+  const scenario = findScenarioFor(req.params.id, who)
+  if (!scenario) {
+    res.status(404).json({ error: 'Scenario not found' })
+    return
+  }
+  const previous = Array.isArray(req.body?.previous)
+    ? (req.body.previous as unknown[]).filter((h): h is string => typeof h === 'string').slice(0, 5).map((h) => h.slice(0, 300))
+    : []
+  const denied = await checkAndLogUsage(req.user!.userId, 'leader_hint')
+  if (denied) {
+    res.status(429).json({ error: denied })
+    return
+  }
+  try {
+    const reply = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 150,
+      thinking: { type: 'disabled' },
+      system: leaderHintPrompt(who, previous),
+      messages: [{ role: 'user', content: `Scenario: ${scenario.text}` }],
+    })
+    const hint = stripStructuralTags(
+      reply.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join(' '),
+    )
+    if (!hint) {
+      res.status(502).json({ error: 'Could not reach your coach. Please try again.' })
+      return
+    }
+    res.json({ hint })
+  } catch (error) {
+    const failure = classifyModelError(error, 'Could not reach your coach')
+    logModelFailure('[leaders] hint failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
+  }
 })
 
 leadersRouter.get('/attempts', async (req, res) => {
