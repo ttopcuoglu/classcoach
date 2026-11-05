@@ -49,13 +49,11 @@ export default function LeadersCorner() {
   const [chatDraft, setChatDraft] = useState('')
   const [chatSending, setChatSending] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
-  // "Get a hint" and "Stuck?" on a picked scenario: both closed until asked.
-  // Every hint asked for is kept so the newest shows and the next one is told
+  // "Get a hint" on a picked scenario, closed until asked. Every hint asked for is kept so the newest shows and the next one is told
   // what not to repeat.
   const [hints, setHints] = useState<string[]>([])
   const [hintLoading, setHintLoading] = useState(false)
   const [hintError, setHintError] = useState<string | null>(null)
-  const [showGuide, setShowGuide] = useState(false)
 
   // One microphone, pointed at whichever box asked for it — the same as
   // Practice. Speaking adds to what is already typed; starting in one box
@@ -107,7 +105,6 @@ export default function LeadersCorner() {
   function clearHelpers() {
     setHints([])
     setHintError(null)
-    setShowGuide(false)
   }
 
   async function handleHint() {
@@ -137,13 +134,17 @@ export default function LeadersCorner() {
     setChatError(null)
   }
 
-  async function handleSubmit() {
+  // walkThrough: a picked scenario with no answer yet, where the coach takes
+  // them through it the way an empty "Something I'm facing" does.
+  async function handleSubmit(walkThrough = false) {
     if (listening) stopSpeech()
     setSubmitting(true)
     setError(null)
     try {
       const created = await createLeaderAttempt(
-        scenario ? { scenarioId: scenario.id, responseText: response } : { situationText: situation, responseText: response },
+        scenario
+          ? { scenarioId: scenario.id, responseText: walkThrough ? '' : response, walkThrough }
+          : { situationText: situation, responseText: response },
       )
       setAttempt(created)
       setHistory((prev) => [created, ...prev])
@@ -203,7 +204,7 @@ export default function LeadersCorner() {
   const audienceLabel = (value: string | null) => data?.audiences.find((a) => a.value === value)?.label ?? null
   const scenarioTitle = (a: LeaderAttempt) =>
     a.source === 'own' ? 'Your situation' : (data?.scenarios.find((s) => s.id === a.curatedId)?.title ?? audienceLabel(a.audience) ?? 'Scenario')
-  const walkedThrough = attempt?.source === 'own' && !attempt.responseText.trim()
+  const walkedThrough = !!attempt && !attempt.responseText.trim()
 
   return (
     <div className="flex flex-col gap-6">
@@ -306,8 +307,9 @@ export default function LeadersCorner() {
                     {speakButton('response')}
                   </div>
                 </label>
-                {/* A nudge, never the words: the rehearsal is the leader
-                    composing it. Both helpers stay closed until asked. */}
+                {/* Two levels of help for an empty box, both closed until
+                    asked: a nudge (never the words: the rehearsal is the
+                    leader composing it), or the coach walking them through. */}
                 <div className="flex flex-col gap-1.5">
                   <div className="flex flex-wrap gap-x-5 gap-y-1">
                     <button
@@ -320,11 +322,11 @@ export default function LeadersCorner() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setShowGuide((v) => !v)}
-                      aria-expanded={showGuide}
-                      className="w-fit text-sm font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
+                      onClick={() => handleSubmit(true)}
+                      disabled={submitting}
+                      className="w-fit text-sm font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta disabled:opacity-60"
                     >
-                      {showGuide ? 'Hide' : 'Stuck? What you can do here'}
+                      Walk me through it
                     </button>
                   </div>
                   {hints.length > 0 && (
@@ -333,36 +335,6 @@ export default function LeadersCorner() {
                     </p>
                   )}
                   {hintError && <p className="text-xs text-terracotta-600">{hintError}</p>}
-                  {showGuide && (
-                    <ul className="flex flex-col gap-2 rounded-2xl border border-hairline bg-cream px-4 py-3 text-sm text-ink">
-                      {[
-                        speechSupported && {
-                          name: 'Speak',
-                          does: 'Say your answer instead of typing it — the way you would in the room.',
-                        },
-                        {
-                          name: 'Get a hint',
-                          does: 'A nudge toward what a strong response would pay attention to. Tap again for another.',
-                        },
-                        { name: 'Pick a different one', does: 'Go back to the list and choose another scenario.' },
-                        {
-                          name: 'Get Feedback',
-                          does: 'Your coach reads your answer and shows what worked, what to strengthen, and one model response. A rough first try is fine.',
-                        },
-                        {
-                          name: 'Something I’m facing',
-                          does: 'Switch at the top to rehearse a real conversation of your own. Leave your answer empty and your coach walks you through it.',
-                        },
-                      ]
-                        .filter((item): item is { name: string; does: string } => !!item)
-                        .map((item) => (
-                          <li key={item.name}>
-                            <span className="font-semibold text-forest">{item.name}</span>
-                            <span className="text-ink-soft"> — {item.does}</span>
-                          </li>
-                        ))}
-                    </ul>
-                  )}
                 </div>
                 <WorkingRing active={submitting} estimatedMs={9000} label="Reading your response" hint="Usually under ten seconds." className="text-forest" />
                 <div className="flex items-center justify-between gap-3">
@@ -371,7 +343,7 @@ export default function LeadersCorner() {
                   </button>
                   <button
                     type="button"
-                    onClick={handleSubmit}
+                    onClick={() => handleSubmit()}
                     disabled={submitting || !response.trim()}
                     className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
                   >
@@ -422,7 +394,7 @@ export default function LeadersCorner() {
                 <div className="flex justify-end">
                   <button
                     type="button"
-                    onClick={handleSubmit}
+                    onClick={() => handleSubmit()}
                     disabled={submitting || situation.trim().length < 15}
                     className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
                   >

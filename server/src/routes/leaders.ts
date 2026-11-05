@@ -122,12 +122,13 @@ leadersRouter.get('/attempts/:id', async (req, res) => {
 })
 
 // One call for both ways in: a curated scenario of their level (scenarioId),
-// or their own situation (situationText). Only their own situation may come
-// without a response, which asks the coach to walk them through it.
+// or their own situation (situationText). With no response the coach walks
+// them through it: their own situation left empty, or a curated one where
+// they tapped "Walk me through it" (walkThrough: true).
 leadersRouter.post('/attempts', async (req, res) => {
   const who = req.leader!
-  const { scenarioId, situationText, responseText } = req.body ?? {}
-  const response = typeof responseText === 'string' ? responseText.trim() : ''
+  const { scenarioId, situationText, responseText, walkThrough: askedToWalk } = req.body ?? {}
+  const response = askedToWalk === true ? '' : typeof responseText === 'string' ? responseText.trim() : ''
   if (response.length > 5000) {
     res.status(400).json({ error: 'Keep your response under 5,000 characters.' })
     return
@@ -143,7 +144,7 @@ leadersRouter.post('/attempts', async (req, res) => {
       res.status(404).json({ error: 'Scenario not found' })
       return
     }
-    if (!response) {
+    if (!response && askedToWalk !== true) {
       res.status(400).json({ error: 'Say how you would handle it, then get feedback.' })
       return
     }
@@ -172,7 +173,7 @@ leadersRouter.post('/attempts', async (req, res) => {
   }
 
   const own = source === 'own'
-  const walkThrough = own && !response
+  const walkThrough = !response
   const context = `${own ? "The situation, in the leader's own words" : 'Scenario'}: ${scenarioText}\n\n${
     walkThrough ? "The leader hasn't decided what to say yet — walk them through it." : `Leader's response: ${response}`
   }`

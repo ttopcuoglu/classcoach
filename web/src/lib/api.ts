@@ -3149,7 +3149,7 @@ export function getLeaderAttempts(): Promise<LeaderAttempt[]> {
 }
 
 export function createLeaderAttempt(
-  body: { scenarioId: string; responseText: string } | { situationText: string; responseText: string },
+  body: { scenarioId: string; responseText: string; walkThrough?: boolean } | { situationText: string; responseText: string },
 ): Promise<LeaderAttempt> {
   return request('/api/leaders/attempts', { method: 'POST', body: JSON.stringify(body) })
 }

@@ -52,7 +52,9 @@ const MODEL_RESPONSE_CHANNEL =
 export function leaderFeedbackPrompt(who: LeaderProfile, own: boolean, walkThrough: boolean): string {
   const frame = own
     ? 'A leader has described a real situation they are facing, in their own words. Work only from what they told you — never invent details about the people involved — and where something that matters is missing, say briefly what you are assuming.'
-    : 'A leader is rehearsing a practice scenario and has said how they would handle it.'
+    : walkThrough
+      ? 'A leader is rehearsing a practice scenario.'
+      : 'A leader is rehearsing a practice scenario and has said how they would handle it.'
   if (walkThrough) {
     return `${IDENTITY} ${frame} They do not know yet what to say and asked you to walk them through it.
 
