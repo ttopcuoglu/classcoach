@@ -416,10 +416,12 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
       <header className="bg-cream">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
           <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-11 w-auto" />
-          {/* Five items, not eight: the three reading pages share one
-              Resources menu, and "Why Wivoza" is a scroll away on the page
-              itself (it stays in the phone menu). Eight links in a row read as
-              a wall at laptop width. */}
+          {/* Story order: what it is, what it does, why to trust it, then the
+              reading pages. Research stands alone because a school leader
+              deciding on Wivoza looks for it; Guide and FAQ share one Resources
+              menu, FAQ first since privacy is the first question a school
+              asks. "Why Wivoza" is a scroll away on the page itself (it stays
+              in the phone menu). Eight links in a row read as a wall. */}
           <nav className="hidden items-center gap-7 whitespace-nowrap text-sm font-medium text-ink-soft lg:flex">
             <a href="#how-it-works" className="hover:text-ink">
               How it works
@@ -427,6 +429,9 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
             <a href="#what-you-can-do" className="hover:text-ink">
               Features
             </a>
+            <Link to="/research" className="hover:text-ink">
+              Research
+            </Link>
             <div className="group relative">
               <button
                 type="button"
@@ -443,9 +448,8 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               <div className="invisible absolute left-1/2 top-full z-20 -translate-x-1/2 pt-3 opacity-0 transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
                 <div className="flex w-56 flex-col rounded-2xl border border-hairline bg-cream-card p-2 shadow-lg">
                   {[
-                    { to: '/guide', label: 'Guide', sub: 'Every feature, in full' },
                     { to: '/faq', label: 'FAQ', sub: 'Privacy, access, and how it works' },
-                    { to: '/research', label: 'Research', sub: 'The studies behind the design' },
+                    { to: '/guide', label: 'Guide', sub: 'Every feature, in full' },
                   ].map((r) => (
                     <Link key={r.to} to={r.to} className="rounded-xl px-3 py-2.5 hover:bg-cream">
                       <span className="block font-semibold text-forest">{r.label}</span>
@@ -515,18 +519,18 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
               Research
             </Link>
             <Link
-              to="/guide"
-              onClick={() => setMobileNavOpen(false)}
-              className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
-            >
-              Guide
-            </Link>
-            <Link
               to="/faq"
               onClick={() => setMobileNavOpen(false)}
               className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
             >
               FAQ
+            </Link>
+            <Link
+              to="/guide"
+              onClick={() => setMobileNavOpen(false)}
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-cream hover:text-ink"
+            >
+              Guide
             </Link>
           </nav>
         )}
