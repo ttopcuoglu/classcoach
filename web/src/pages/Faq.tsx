@@ -149,6 +149,10 @@ const CATEGORIES: Category[] = [
         a: 'No. Only you can see your reports. Wivoza is a private self-coaching companion, not an evaluation tool: Coach never gives you a grade, score or rating, and it is built to avoid language that works like one. Using it to judge teachers would go against the reason it exists.',
       },
       {
+        q: 'Is Wivoza FERPA and COPPA compliant?',
+        a: 'Wivoza is built for FERPA and COPPA. We sign your school\'s student data privacy agreement before any classroom is recorded. Audio is deleted after transcription, student names are masked in transcripts, nothing is used to train AI, and nothing is sold.',
+      },
+      {
         q: 'My school shared a focus. Does my admin know whether I turned it on?',
         a: 'No. A school can share up to two coaching priorities, like academic discussion. Whether Wivoza brings one into your coaching is your choice alone: it is off until you turn it on, you can pause or turn it off any time in Profile & Settings, and your admin never sees who turned it on, paused it, or said no. When it is on, Wivoza only offers an idea when it fits what you are working on, and labels it "Connected to your selected school focus".',
       },
