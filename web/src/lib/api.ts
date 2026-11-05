@@ -1677,6 +1677,32 @@ export function deleteOrganization(id: string): Promise<{ status: string }> {
   return request(`/api/admin/organizations/${id}`, { method: 'DELETE' })
 }
 
+export type SchoolDeletionMember = {
+  userId: string
+  name: string | null
+  email: string
+  lessons: number
+  conversations: number
+  parentMessages: number
+  conversationPrep: number
+  conversationPlans: number
+  assignmentSessions: number
+  practice: number
+  coachMemory: boolean
+}
+
+export type SchoolDeletionReport = { organizationId: string; organizationName: string; members: SchoolDeletionMember[] }
+
+// What ending a school's agreement would delete (nothing is deleted).
+export function previewEndAgreement(id: string): Promise<SchoolDeletionReport> {
+  return request(`/api/admin/organizations/${id}/end-agreement`)
+}
+
+// Deletes the school's classroom data and the school; returns the receipt.
+export function endAgreement(id: string, confirmName: string): Promise<SchoolDeletionReport & { deletedAt: string }> {
+  return request(`/api/admin/organizations/${id}/end-agreement`, { method: 'POST', body: JSON.stringify({ confirmName }) })
+}
+
 export function generateScenario(opts: {
   focusArea?: string
   category?: string

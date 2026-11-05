@@ -22,6 +22,7 @@ import { OWN_SITUATION, SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts
 import { stripe } from '../lib/stripe.ts'
 import { LEADER_ACTIONS } from '../lib/usageLimit.ts'
 import { isLeaderArea, isLeaderLevel } from '../lib/leaderLevels.ts'
+import { endSchoolAgreement, previewSchoolDeletion } from '../lib/schoolDataDeletion.ts'
 
 // Leader's Corner is a leader's own: its usage rows never count toward a
 // school's activity, active users or anyone's "last active" here.
@@ -1387,6 +1388,35 @@ adminRouter.delete('/organizations/:id', requireSuperadmin, async (req, res) => 
   }
   await prisma.organization.delete({ where: { id } })
   res.json({ status: 'ok' })
+})
+
+// Ending a school's agreement (see lib/schoolDataDeletion.ts). The GET shows
+// what would go; the POST does it, and only when the school's exact name is
+// typed back, since it cannot be undone.
+adminRouter.get('/organizations/:id/end-agreement', requireSuperadmin, async (req, res) => {
+  const report = await previewSchoolDeletion(req.params.id as string)
+  if (!report) {
+    res.status(404).json({ error: 'Organization not found' })
+    return
+  }
+  res.json(report)
+})
+
+adminRouter.post('/organizations/:id/end-agreement', requireSuperadmin, async (req, res) => {
+  const id = req.params.id as string
+  const existing = await prisma.organization.findUnique({ where: { id } })
+  if (!existing) {
+    res.status(404).json({ error: 'Organization not found' })
+    return
+  }
+  const confirmName = typeof req.body?.confirmName === 'string' ? req.body.confirmName.trim() : ''
+  if (confirmName !== existing.name.trim()) {
+    res.status(400).json({ error: "Type the school's name exactly to confirm." })
+    return
+  }
+  const receipt = await endSchoolAgreement(id)
+  console.log(`[end-agreement] ${existing.name} (${id}): ${receipt?.members.length ?? 0} member(s) cleared`)
+  res.json(receipt)
 })
 
 // Deliberately manual, not automated per-teacher-count billing — real

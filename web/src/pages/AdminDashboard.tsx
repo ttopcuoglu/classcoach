@@ -6,6 +6,9 @@ import {
   createOrganization,
   createPdFocusArea,
   deleteOrganization,
+  endAgreement,
+  previewEndAgreement,
+  type SchoolDeletionReport,
   deleteUser,
   getAdminBreakdown,
   getAdminFocusAreas,
@@ -3411,6 +3414,7 @@ function OrganizationRow({ org, onChanged }: { org: Organization; onChanged: () 
   const [pilotEndsOn, setPilotEndsOn] = useState(pilotDateInput(org.pilotEndsAt))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [ending, setEnding] = useState(false)
   const pilot = pilotStatus(org)
 
   async function handleSave() {
@@ -3475,6 +3479,10 @@ function OrganizationRow({ org, onChanged }: { org: Organization; onChanged: () 
     )
   }
 
+  if (ending) {
+    return <EndAgreementPanel org={org} onCancel={() => setEnding(false)} onDone={onChanged} />
+  }
+
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-hairline bg-cream-card p-4">
       <div>
@@ -3492,6 +3500,139 @@ function OrganizationRow({ org, onChanged }: { org: Organization; onChanged: () 
         </button>
         <button type="button" onClick={handleDelete} className="text-xs font-medium text-ink-soft hover:text-terracotta-600">
           Delete
+        </button>
+        <button type="button" onClick={() => setEnding(true)} className="text-xs font-medium text-ink-soft hover:text-terracotta-600">
+          End agreement
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function deletionSummary(m: SchoolDeletionReport['members'][number]): string {
+  const parts = [
+    [m.lessons, 'lesson'],
+    [m.conversations, 'conversation'],
+    [m.parentMessages, 'parent message'],
+    [m.conversationPrep + m.conversationPlans, 'conversation plan'],
+    [m.assignmentSessions, 'assignment session'],
+    [m.practice, 'practice item'],
+  ]
+    .filter(([n]) => (n as number) > 0)
+    .map(([n, label]) => `${n} ${label}${n === 1 ? '' : 's'}`)
+  if (m.coachMemory) parts.push("Coach's memory")
+  return parts.length ? parts.join(', ') : 'nothing stored'
+}
+
+// The written confirmation a school is owed when its agreement ends. Counts
+// only — no teacher content — so it is safe to email to the school.
+function receiptText(r: SchoolDeletionReport & { deletedAt: string }): string {
+  const when = new Date(r.deletedAt).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short', timeZone: 'America/New_York' })
+  const lines = r.members.map((m) => `- ${m.name ?? m.email}: ${deletionSummary(m)}`)
+  return [
+    `Wivoza data deletion confirmation: ${r.organizationName}`,
+    '',
+    `On ${when} (Eastern), at the end of ${r.organizationName}'s agreement, Wivoza permanently deleted the classroom data of the school's ${r.members.length} member account${r.members.length === 1 ? '' : 's'}: lesson recordings' transcripts and reports, coaching conversations, parent messages, conversation plans, Assignment Coach sessions, practice responses, and Coach's memory. The school's own settings were deleted too.`,
+    '',
+    ...lines,
+    '',
+    "Teachers keep their accounts and their own lesson plans, which hold no student data. Copies may remain in the hosting provider's backups until those backups expire.",
+    '',
+    'Edinexa Technologies LLC (Wivoza), hello@wivoza.com',
+  ].join('\n')
+}
+
+// Ending a school's agreement: shows every member and what of theirs will go,
+// asks for the school's name typed back, then shows the confirmation to send.
+function EndAgreementPanel({ org, onCancel, onDone }: { org: Organization; onCancel: () => void; onDone: () => void }) {
+  const [report, setReport] = useState<SchoolDeletionReport | null>(null)
+  const [receipt, setReceipt] = useState<string | null>(null)
+  const [typed, setTyped] = useState('')
+  const [working, setWorking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    previewEndAgreement(org.id).then(setReport, (err) => setError((err as Error).message))
+  }, [org.id])
+
+  async function handleEnd() {
+    setWorking(true)
+    setError(null)
+    try {
+      setReceipt(receiptText(await endAgreement(org.id, typed)))
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  async function handleCopy() {
+    if (!receipt) return
+    try {
+      await navigator.clipboard.writeText(receipt)
+      setCopied(true)
+    } catch {
+      // Clipboard refused; the text is still selectable below.
+    }
+  }
+
+  if (receipt) {
+    return (
+      <div className="rounded-xl border border-forest/40 bg-mint-tint/40 p-4">
+        <p className="text-sm font-semibold text-forest">{org.name}&rsquo;s classroom data is deleted.</p>
+        <p className="mt-1 text-xs text-ink-soft">Send this confirmation to the school. It holds counts only, no teacher content.</p>
+        <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-hairline bg-cream p-3 font-sans text-xs text-ink">{receipt}</pre>
+        <div className="mt-3 flex gap-3">
+          <button type="button" onClick={handleCopy} className={primaryButtonClass}>
+            {copied ? 'Copied' : 'Copy confirmation'}
+          </button>
+          <button type="button" onClick={onDone} className="text-sm font-medium text-ink-soft">
+            Done
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const matches = report !== null && typed.trim() === org.name.trim()
+  return (
+    <div className="rounded-xl border border-terracotta/40 bg-cream-card p-4">
+      <p className="text-sm font-semibold text-ink">End {org.name}&rsquo;s agreement</p>
+      <p className="mt-1 text-xs leading-relaxed text-ink-soft">
+        Permanently deletes every member&rsquo;s lessons, conversations, parent messages, conversation plans, Assignment
+        Coach sessions, practice and Coach&rsquo;s memory, then the school. Teachers keep their accounts and lesson plans
+        and become independent. This cannot be undone. Export anything the school asked for first.
+      </p>
+      {!report && !error && <p className="mt-3 text-xs text-ink-soft">Counting…</p>}
+      {report && (
+        <ul className="mt-3 flex flex-col gap-1 text-xs text-ink">
+          {report.members.length === 0 && <li className="text-ink-soft">No members. Only the school itself is deleted.</li>}
+          {report.members.map((m) => (
+            <li key={m.userId}>
+              <span className="font-semibold">{m.name ?? m.email}</span>
+              {m.name ? <span className="text-ink-soft"> ({m.email})</span> : null}: {deletionSummary(m)}
+            </li>
+          ))}
+        </ul>
+      )}
+      <label className="mt-3 flex flex-col gap-1 text-xs font-medium text-ink-soft">
+        Type <span className="font-semibold text-ink">{org.name}</span> to confirm
+        <input value={typed} onChange={(e) => setTyped(e.target.value)} className={inputClass} />
+      </label>
+      {error && <p className="mt-2 text-sm text-terracotta-600">{error}</p>}
+      <div className="mt-3 flex gap-3">
+        <button
+          type="button"
+          onClick={handleEnd}
+          disabled={!matches || working}
+          className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-cream disabled:opacity-40"
+        >
+          {working ? 'Deleting…' : 'Delete school data'}
+        </button>
+        <button type="button" onClick={onCancel} className="text-sm font-medium text-ink-soft">
+          Cancel
         </button>
       </div>
     </div>

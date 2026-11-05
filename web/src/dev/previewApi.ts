@@ -2043,6 +2043,17 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
     }
   }
   if (path === '/api/admin/organizations') return [{ id: 'preview-org', name: 'Maple Ridge Academy', joinCode: 'MAPLE', adminEmails: null, teacherCount: 2 }]
+  if (path === '/api/admin/organizations/preview-org/end-agreement') {
+    const report = {
+      organizationId: 'preview-org',
+      organizationName: 'Maple Ridge Academy',
+      members: [
+        { userId: 'p1', name: 'Dana Reyes', email: 'dana@maple.example', lessons: 12, conversations: 7, parentMessages: 2, conversationPrep: 1, conversationPlans: 0, assignmentSessions: 3, practice: 4, coachMemory: true },
+        { userId: 'p2', name: null, email: 'sam@maple.example', lessons: 0, conversations: 0, parentMessages: 0, conversationPrep: 0, conversationPlans: 0, assignmentSessions: 0, practice: 0, coachMemory: false },
+      ],
+    }
+    return method === 'POST' ? { ...report, deletedAt: new Date().toISOString() } : report
+  }
   if (path.startsWith('/api/admin/overview')) return adminOverview()
   if (path.startsWith('/api/admin/')) return []
 
