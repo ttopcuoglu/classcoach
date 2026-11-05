@@ -219,7 +219,24 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'Do I need to tell my students?',
-        a: 'We encourage it, and once is enough, not every lesson. Something like: "This year I\'ll sometimes record my own teaching so I can get better at it. It\'s just for me." Wivoza shows this before your first recording. There are no student accounts and nothing students have to do.',
+        a: (
+          <>
+            We encourage it, and once is enough, not every lesson. Students usually take it well: it shows them
+            you&rsquo;re working on your teaching, the same way you ask them to work on their learning. There are no
+            student accounts and nothing students have to do.
+            <span className="mt-3 block">Here&rsquo;s an example of what you might say:</span>
+            <span className="mt-2 block border-l-4 border-gold pl-4 italic">
+              &ldquo;This year I&rsquo;m going to record some of my lessons. It&rsquo;s not about you, it&rsquo;s
+              about me: it helps me see how clearly I explain things and whether I&rsquo;m leaving enough room for
+              your ideas. It&rsquo;s just for me, and the recording is deleted once it&rsquo;s been read. Can I get a
+              volunteer to remind me to press record?&rdquo;
+            </span>
+            <span className="mt-3 block">
+              Some teachers also share the &ldquo;one thing to try&rdquo; from the last lesson&rsquo;s report with
+              the class, so students can help with it.
+            </span>
+          </>
+        ),
       },
       {
         q: 'Will Coach follow up with me?',
