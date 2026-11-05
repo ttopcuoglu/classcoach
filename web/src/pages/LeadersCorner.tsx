@@ -405,41 +405,34 @@ export default function LeadersCorner() {
                   <p className="mt-4 text-base leading-relaxed text-cream">{scenario.text}</p>
                 </div>
                 <label className="flex flex-col gap-1.5">
-                  <span className="font-heading text-xl font-bold text-forest">How would you handle this?</span>
+                  <span className="font-heading text-xl font-bold text-forest">
+                    How would you handle this? <span className="text-sm font-normal text-ink-soft">(optional)</span>
+                  </span>
                   <div className="relative">
                     <textarea
                       value={response}
                       onChange={(e) => setResponse(e.target.value)}
                       disabled={submitting}
                       rows={5}
-                      placeholder="What do you say first — and where do you take the conversation from there?"
+                      placeholder="What you'd say first, and where you'd take it. Or leave this empty and your coach will walk you through it."
                       className={boxClass('response')}
                     />
                     {speakButton('response')}
                   </div>
                 </label>
-                {/* Two levels of help for an empty box, both closed until
-                    asked: a nudge (never the words: the rehearsal is the
-                    leader composing it), or the coach walking them through. */}
+                {/* A nudge for an empty box, closed until asked — never the
+                    words: the rehearsal is the leader composing it. Left
+                    empty, the main button walks them through it instead,
+                    the same as Something I'm facing. */}
                 <div className="flex flex-col gap-1.5">
-                  <div className="flex flex-wrap gap-x-5 gap-y-1">
-                    <button
-                      type="button"
-                      onClick={handleHint}
-                      disabled={submitting || hintLoading}
-                      className="w-fit text-sm font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta disabled:opacity-60"
-                    >
-                      {hintLoading ? 'Thinking...' : hints.length ? 'Another hint' : 'Get a hint'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSubmit(true)}
-                      disabled={submitting}
-                      className="w-fit text-sm font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta disabled:opacity-60"
-                    >
-                      Walk me through it
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleHint}
+                    disabled={submitting || hintLoading}
+                    className="w-fit text-sm font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta disabled:opacity-60"
+                  >
+                    {hintLoading ? 'Thinking...' : hints.length ? 'Another hint' : 'Get a hint'}
+                  </button>
                   {hints.length > 0 && (
                     <p aria-live="polite" className="rounded-2xl bg-gold-tint/50 px-4 py-3 text-sm italic text-ink">
                       {hints[hints.length - 1]}
@@ -447,18 +440,18 @@ export default function LeadersCorner() {
                   )}
                   {hintError && <p className="text-xs text-terracotta-600">{hintError}</p>}
                 </div>
-                <WorkingRing active={submitting} estimatedMs={9000} label="Reading your response" hint="Usually under ten seconds." className="text-forest" />
+                <WorkingRing active={submitting} estimatedMs={9000} label={response.trim() ? 'Reading your response' : 'Starting your walk-through'} hint="Usually under ten seconds." className="text-forest" />
                 <div className="flex items-center justify-between gap-3">
                   <button type="button" onClick={() => setScenario(null)} disabled={submitting} className="text-sm font-medium text-ink-soft hover:text-ink">
                     Pick a different one
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleSubmit()}
-                    disabled={submitting || !response.trim()}
+                    onClick={() => handleSubmit(!response.trim())}
+                    disabled={submitting}
                     className="rounded-full bg-terracotta px-6 py-3 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
                   >
-                    {submitting ? 'Getting feedback...' : 'Get Feedback'}
+                    {submitting ? 'Working...' : response.trim() ? 'Get Feedback' : 'Walk me through it'}
                   </button>
                 </div>
               </div>
