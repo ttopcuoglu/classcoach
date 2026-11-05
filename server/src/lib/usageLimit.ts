@@ -104,6 +104,7 @@ export type UsageAction =
   | 'leader_feedback'
   | 'leader_chat'
   | 'leader_hint'
+  | 'leader_generate'
 
 // Every turn-based call in the two free-forever features. Kept as one list so
 // a future action in either area doesn't silently fall back into the flat cap.
@@ -126,12 +127,13 @@ export const CONVERSATIONAL_ACTIONS: readonly UsageAction[] = [
   'leader_feedback',
   'leader_chat',
   'leader_hint',
+  'leader_generate',
 ]
 
 // A leader's own practice is private, including the fact of it: these rows
 // are left out of every school activity count, active-user tally and "last
 // active" date an admin can see (routes/admin.ts).
-export const LEADER_ACTIONS: readonly UsageAction[] = ['leader_feedback', 'leader_chat', 'leader_hint']
+export const LEADER_ACTIONS: readonly UsageAction[] = ['leader_feedback', 'leader_chat', 'leader_hint', 'leader_generate']
 
 // A user already loaded by the caller. The live coaching turns select this
 // once and hand it to both the usage check and the plan check, rather than

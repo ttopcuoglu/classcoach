@@ -326,7 +326,8 @@ model LeaderAttempt {
   // The level the person held when they practiced — what the coaching was
   // written for, even if a superadmin changes their level later.
   level         String
-  // "curated" (from the bank, curatedId set) | "own" (Something I'm facing).
+  // "curated" (from the bank, curatedId set) | "generated" (Generate a
+  // scenario; no id) | "own" (Something I'm facing).
   source        String
   curatedId     String?
   // Who the conversation is with: families | students | staff | community |

@@ -3154,7 +3154,7 @@ export type LeaderScenarios = {
 export type LeaderAttempt = {
   id: string
   level: LeaderLevel
-  source: 'curated' | 'own'
+  source: 'curated' | 'generated' | 'own'
   curatedId: string | null
   audience: LeaderAudience | null
   scenarioText: string
@@ -3182,8 +3182,15 @@ export function createLeaderAttempt(
 
 // "Get a hint" on a curated scenario. `previous` is what the page already
 // showed, so another hint points somewhere new. Never stored.
+// "Generate a scenario": a new one for this leader's level. Its id is signed by
+// the server, so hints and feedback take it like a curated one. `previous` is
+// the titles already generated this visit, so the next is a new situation.
+export function generateLeaderScenario(audience: LeaderAudience | null, previous: string[]): Promise<LeaderScenario> {
+  return request('/api/leaders/scenarios/generate', { method: 'POST', body: JSON.stringify({ audience, previous }) })
+}
+
 export function getLeaderHint(scenarioId: string, previous: string[]): Promise<{ hint: string }> {
-  return request(`/api/leaders/scenarios/${scenarioId}/hint`, { method: 'POST', body: JSON.stringify({ previous }) })
+  return request(`/api/leaders/scenarios/${encodeURIComponent(scenarioId)}/hint`, { method: 'POST', body: JSON.stringify({ previous }) })
 }
 
 export function sendLeaderChat(id: string, message: string): Promise<LeaderAttempt> {

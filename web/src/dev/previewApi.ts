@@ -1734,7 +1734,16 @@ const PREVIEW_LEADER_SCENARIOS: Json[] = [
   { id: 'assistant-suspension-meeting', audience: 'families', title: 'A suspension meeting with a parent who feels their child is targeted', text: 'You are meeting with a parent about a two-day suspension for a fight. The parent says: “Every time something happens, it’s my daughter who gets punished.” You cannot discuss the other student’s consequence.' },
   { id: 'assistant-restorative', audience: 'students', title: 'A restorative conversation after a conflict', text: 'You are leading a restorative conversation between two 9th graders after a fight. Five minutes in, one says: “This is stupid. She knows what she did,” and pushes back from the table.' },
   { id: 'assistant-referrals', audience: 'staff', title: 'A teacher who sends too many referrals', text: 'One teacher has written more office referrals this quarter than the rest of the grade level combined. They say: “If you backed me up instead of sending them right back, I wouldn’t have to keep writing them.”' },
+  { id: 'assistant-attendance', audience: 'families', title: 'A chronic-absence meeting', text: 'A 10th grader has missed 22 days this semester. Their mother, who works nights, says: “I wake him up before I leave. I can’t make him get on the bus.”' },
+  { id: 'assistant-grade-dispute', audience: 'families', title: 'A parent disputes a final grade', text: 'A parent says: “That C+ costs her the honors scholarship. Two of the labs were graded unfairly and the teacher won’t even answer me.”' },
+  { id: 'assistant-curriculum-pushback', audience: 'staff', title: 'A department pushes back on common assessments', text: 'At the first department meeting, a teacher says: “So now we all teach to the same test? This is how you kill good teaching,” and two others agree.' },
 ]
+// Generate a scenario, in the preview: a few canned ones in turn.
+const PREVIEW_GENERATED = [
+  { audience: 'families', title: 'A grandparent asks for a different bus stop', text: 'A grandparent raising two children stops you in the parking lot: “The new bus stop is a mile from our house and there’s no sidewalk. I’ve called three times. Does anybody here care?” Bus routes are set by the district.' },
+  { audience: 'staff', title: 'A coach wants a player’s grade raised', text: 'The varsity basketball coach comes to your office: “He’s two points from eligible. One retake and he plays Friday. You know what this season means to him.” The teacher has already said no.' },
+]
+const previewGenerated: Json[] = []
 const LEADER_LEVEL_LABELS: Record<string, [string, string]> = {
   district: ['District', 'District Leader'],
   building: ['Building', 'Principal'],
@@ -1761,6 +1770,12 @@ function previewLeaders(path: string, method: string, body: Json): Json | Json[]
       ][n % 2],
     }
   }
+  if (path === '/api/leaders/scenarios/generate' && method === 'POST') {
+    const next = PREVIEW_GENERATED[previewGenerated.length % PREVIEW_GENERATED.length]
+    const made: Json = { id: `gen.preview-${previewGenerated.length + 1}`, ...next }
+    previewGenerated.push(made)
+    return made
+  }
   if (path === '/api/leaders/scenarios') {
     const [label, titles] = LEADER_LEVEL_LABELS[level]
     return {
@@ -1776,14 +1791,14 @@ function previewLeaders(path: string, method: string, body: Json): Json | Json[]
     }
   }
   if (path === '/api/leaders/attempts' && method === 'POST') {
-    const curated = PREVIEW_LEADER_SCENARIOS.find((s) => s.id === body.scenarioId)
+    const curated = [...PREVIEW_LEADER_SCENARIOS, ...previewGenerated].find((s) => s.id === body.scenarioId)
     const response = String(body.responseText ?? '')
     const scenarioText = String(curated?.text ?? body.situationText ?? '')
     const attempt: Json = {
       id: `preview-leader-${previewLeaderAttempts.length + 1}`,
       level,
-      source: curated ? 'curated' : 'own',
-      curatedId: curated?.id ?? null,
+      source: !curated ? 'own' : String(curated.id).startsWith('gen.') ? 'generated' : 'curated',
+      curatedId: curated && !String(curated.id).startsWith('gen.') ? curated.id : null,
       audience: curated?.audience ?? null,
       scenarioText,
       responseText: response,

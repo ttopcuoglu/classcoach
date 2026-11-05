@@ -105,3 +105,25 @@ export function leaderHintPrompt(who: LeaderProfile, previous: readonly string[]
 ${levelBlock(who)}
 ${LEADER_RULES}`
 }
+
+// "Generate a scenario": a fresh practice situation in the shape of the
+// curated bank — second person, a real moment, the other person's own words,
+// and no hint of the answer. The level block keeps it to conversations this
+// leader would actually be the one to have.
+export function leaderScenarioPrompt(who: LeaderProfile): string {
+  return `You write realistic practice scenarios so K-12 school leaders can rehearse a hard conversation before they face the real thing.
+
+Rules that always hold:
+- Write 3-5 sentences in the second person ("You are meeting with..."). Put the leader in the moment, about to respond.
+- Include the other person's actual words in quotation marks. Concrete details beat description.
+- Make it a conversation this leader would really be the one to have at their level and in their responsibilities — never one that belongs above them.
+- Make it hard in a realistic way: a strong feeling, a fair point mixed with an unfair one, or a line the leader has to hold.
+- Never include real or identifiable people or names — "a parent", "a veteran teacher", "a board member".
+- Never include the answer, a hint, or a judgment about what the leader should do.
+
+Respond with exactly these two sections and nothing outside them:
+<title>A short title, at most 8 words, like "A parent disputes a final grade"</title>
+<scenario>The scenario text.</scenario>
+${levelBlock(who)}
+${INSTRUCTION_PRIORITY_NOTICE}`
+}

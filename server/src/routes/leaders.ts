@@ -2,7 +2,8 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { anthropic, CLAUDE_MODEL } from '../lib/anthropic.ts'
 import { appendTurn, CHAT_TURN_CAP, CONVERSATION_FULL_MESSAGE, countUserTurns, toClaudeMessages, type ChatMessage } from '../lib/coachingChat.ts'
 import { extractTag, stripStructuralTags } from '../lib/extractTag.ts'
-import { leaderChatPrompt, leaderFeedbackPrompt, leaderHintPrompt } from '../lib/leaderCoaching.ts'
+import { leaderChatPrompt, leaderFeedbackPrompt, leaderHintPrompt, leaderScenarioPrompt } from '../lib/leaderCoaching.ts'
+import { chooseAudience, generateContext, isGeneratedId, readGenerated, signGenerated } from '../lib/leaderGenerated.ts'
 import { findLeaderLevel, leaderProfile, LEADER_AREAS, type LeaderProfile } from '../lib/leaderLevels.ts'
 import { LEADER_AUDIENCES, findScenarioFor, scenariosFor } from '../lib/leaderScenarios.ts'
 import { classifyModelError, logModelFailure } from '../lib/modelErrors.ts'
@@ -45,6 +46,11 @@ async function requireLeader(req: Request, res: Response, next: NextFunction) {
 
 leadersRouter.use(requireLeader)
 
+// A curated scenario of theirs, or one the server generated for their level.
+function findScenario(id: unknown, who: LeaderProfile) {
+  return findScenarioFor(id, who) ?? readGenerated(id, who)
+}
+
 // The leader's own scenarios — never another level's, area's, or the
 // evaluator-only ones when they don't evaluate.
 leadersRouter.get('/scenarios', (req, res) => {
@@ -59,12 +65,55 @@ leadersRouter.get('/scenarios', (req, res) => {
   })
 })
 
-// "Get a hint" on one of their own curated scenarios. Not stored: a hint only
+// "Generate a scenario": a new one for their level, areas and evaluation
+// side, with a signed id so the rest of the page treats it like a curated one.
+// Not stored until they practice it. `previous` is the titles the page has
+// already generated, so the next one is a different situation.
+leadersRouter.post('/scenarios/generate', async (req, res) => {
+  const who = req.leader!
+  const audience = chooseAudience(who, req.body?.audience)
+  const previous = Array.isArray(req.body?.previous)
+    ? (req.body.previous as unknown[]).filter((t): t is string => typeof t === 'string').slice(0, 20).map((t) => t.slice(0, 120))
+    : []
+  const denied = await checkAndLogUsage(req.user!.userId, 'leader_generate')
+  if (denied) {
+    res.status(429).json({ error: denied })
+    return
+  }
+  try {
+    const reply = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 500,
+      thinking: { type: 'disabled' },
+      system: leaderScenarioPrompt(who),
+      messages: [{ role: 'user', content: generateContext(who, audience, previous) }],
+    })
+    const raw = reply.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+    const text = (extractTag(raw, 'scenario') ?? stripStructuralTags(raw)).trim()
+    const title = (extractTag(raw, 'title') ?? 'A new scenario').trim().slice(0, 120)
+    if (text.length < 40) {
+      console.error('[leaders] generate came back empty; stop_reason:', reply.stop_reason)
+      res.status(502).json({ error: 'Could not write a scenario. Please try again.' })
+      return
+    }
+    const { id } = signGenerated(who.level.value, audience, title, text.slice(0, 3000))
+    res.status(201).json({ id, audience, title, text: text.slice(0, 3000) })
+  } catch (error) {
+    const failure = classifyModelError(error, 'Could not write a scenario')
+    logModelFailure('[leaders] generate failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
+  }
+})
+
+// "Get a hint" on one of their own scenarios, curated or generated. Not stored: a hint only
 // matters while the response box is empty. `previous` is what the page already
 // showed, so "Another hint" points somewhere new.
 leadersRouter.post('/scenarios/:id/hint', async (req, res) => {
   const who = req.leader!
-  const scenario = findScenarioFor(req.params.id, who)
+  const scenario = findScenario(req.params.id, who)
   if (!scenario) {
     res.status(404).json({ error: 'Scenario not found' })
     return
@@ -134,12 +183,12 @@ leadersRouter.post('/attempts', async (req, res) => {
     return
   }
 
-  let source: 'curated' | 'own'
+  let source: 'curated' | 'generated' | 'own'
   let scenarioText: string
   let curatedId: string | null = null
   let audience: string | null = null
   if (scenarioId !== undefined) {
-    const scenario = findScenarioFor(scenarioId, who)
+    const scenario = findScenario(scenarioId, who)
     if (!scenario) {
       res.status(404).json({ error: 'Scenario not found' })
       return
@@ -148,9 +197,12 @@ leadersRouter.post('/attempts', async (req, res) => {
       res.status(400).json({ error: 'Say how you would handle it, then get feedback.' })
       return
     }
-    source = 'curated'
+    // A generated one stores no id: the signed id is the whole scenario, and
+    // its text is already kept in scenarioText.
+    const generated = isGeneratedId(scenario.id)
+    source = generated ? 'generated' : 'curated'
     scenarioText = scenario.text
-    curatedId = scenario.id
+    curatedId = generated ? null : scenario.id
     audience = scenario.audience
   } else {
     const trimmed = typeof situationText === 'string' ? situationText.trim() : ''

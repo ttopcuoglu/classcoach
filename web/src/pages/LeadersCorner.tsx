@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import AnswerSection from '../components/AnswerSection'
 import CoachingChat from '../components/CoachingChat'
 import PastList from '../components/PastList'
@@ -8,6 +8,7 @@ import { WorkingRing } from '../components/ProgressRing'
 import { LockIcon, StarIcon } from '../components/icons'
 import {
   createLeaderAttempt,
+  generateLeaderScenario,
   getLeaderAttempts,
   getLeaderHint,
   getLeaderScenarios,
@@ -29,6 +30,19 @@ import {
 // Wivoza Coach on a result, never as a standalone Talk It Through.
 
 type Mode = 'scenario' | 'own'
+
+// How many of the written scenarios show at once. A fresh draw on every visit
+// (ones not practiced yet first), so the page doesn't open on the same list.
+const SHOWN = 4
+
+function shuffled<T>(list: readonly T[]): T[] {
+  const out = [...list]
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
 
 const chip = (on: boolean) =>
   `rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${on ? 'bg-forest text-cream' : 'bg-cream text-ink-soft hover:text-ink'}`
@@ -54,6 +68,12 @@ export default function LeadersCorner() {
   const [hints, setHints] = useState<string[]>([])
   const [hintLoading, setHintLoading] = useState(false)
   const [hintError, setHintError] = useState<string | null>(null)
+  // Scenarios generated this visit, newest first; kept while they browse.
+  const [generated, setGenerated] = useState<LeaderScenario[]>([])
+  const [generating, setGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState<string | null>(null)
+  // Bumped by "Show different ones" to redraw the written scenarios.
+  const [draw, setDraw] = useState(0)
 
   // One microphone, pointed at whichever box asked for it — the same as
   // Practice. Speaking adds to what is already typed; starting in one box
@@ -118,6 +138,28 @@ export default function LeadersCorner() {
       setHintError((err as Error).message || 'Could not get a hint. Please try again.')
     } finally {
       setHintLoading(false)
+    }
+  }
+
+  function openScenario(s: LeaderScenario) {
+    setScenario(s)
+    clearHelpers()
+    setResponse('')
+    setError(null)
+  }
+
+  async function handleGenerate() {
+    if (generating) return
+    setGenerating(true)
+    setGenerateError(null)
+    try {
+      const fresh = await generateLeaderScenario(audience, generated.map((s) => s.title))
+      setGenerated((prev) => [fresh, ...prev])
+      openScenario(fresh)
+    } catch (err) {
+      setGenerateError((err as Error).message || 'Could not write a scenario. Please try again.')
+    } finally {
+      setGenerating(false)
     }
   }
 
@@ -188,6 +230,17 @@ export default function LeadersCorner() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const fits = (s: LeaderScenario) => !audience || s.audience === audience
+  const freshOnes = generated.filter(fits)
+  const written = data ? data.scenarios.filter(fits) : []
+  const practiced = new Set(history.map((a) => a.curatedId).filter(Boolean))
+  // Not-yet-practiced first, each group in a new order every draw.
+  const shown = useMemo(
+    () => [...shuffled(written.filter((s) => !practiced.has(s.id))), ...shuffled(written.filter((s) => practiced.has(s.id)))].slice(0, SHOWN),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data, audience, draw, historyLoading],
+  )
+
   if (loadError) {
     return (
       <div className="flex flex-col gap-2">
@@ -200,10 +253,31 @@ export default function LeadersCorner() {
   }
 
   const audiences = data ? data.audiences.filter((a) => data.scenarios.some((s) => s.audience === a.value)) : []
-  const shown = data ? data.scenarios.filter((s) => !audience || s.audience === audience) : []
   const audienceLabel = (value: string | null) => data?.audiences.find((a) => a.value === value)?.label ?? null
   const scenarioTitle = (a: LeaderAttempt) =>
-    a.source === 'own' ? 'Your situation' : (data?.scenarios.find((s) => s.id === a.curatedId)?.title ?? audienceLabel(a.audience) ?? 'Scenario')
+    a.source === 'own'
+      ? 'Your situation'
+      : a.source === 'generated'
+        ? // Its title only lives in this visit; after that, who it was with.
+          (generated.find((s) => s.text === a.scenarioText)?.title ??
+          ['New scenario', audienceLabel(a.audience)].filter(Boolean).join(' · '))
+        : (data?.scenarios.find((s) => s.id === a.curatedId)?.title ?? audienceLabel(a.audience) ?? 'Scenario')
+  const card = (s: LeaderScenario, isNew: boolean) => (
+    <li key={s.id}>
+      <button
+        type="button"
+        onClick={() => openScenario(s)}
+        className="flex h-full w-full flex-col gap-1.5 rounded-2xl border border-hairline bg-cream p-4 text-left transition-colors hover:border-forest"
+      >
+        <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-terracotta-600">
+          {audienceLabel(s.audience)}
+          {isNew && <span className="rounded-full bg-gold-tint px-1.5 py-0.5 text-forest">New</span>}
+        </span>
+        <span className="text-sm font-semibold text-forest">{s.title}</span>
+        <span className="line-clamp-3 text-xs leading-relaxed text-ink-soft">{s.text}</span>
+      </button>
+    </li>
+  )
   const walkedThrough = !!attempt && !attempt.responseText.trim()
 
   return (
@@ -262,25 +336,34 @@ export default function LeadersCorner() {
                   <p className="text-sm text-ink-soft">Loading...</p>
                 ) : (
                   <ul className="grid gap-3 md:grid-cols-2">
-                    {shown.map((s) => (
-                      <li key={s.id}>
+                    {freshOnes.map((s) => card(s, true))}
+                    {shown.map((s) => card(s, false))}
+                  </ul>
+                )}
+                {data && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                      <button
+                        type="button"
+                        onClick={handleGenerate}
+                        disabled={generating}
+                        className="rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-forest/90 disabled:opacity-60"
+                      >
+                        {generating ? 'Writing a scenario...' : 'Generate a scenario'}
+                      </button>
+                      {written.length > SHOWN && (
                         <button
                           type="button"
-                          onClick={() => {
-                            setScenario(s)
-                            clearHelpers()
-                            setResponse('')
-                            setError(null)
-                          }}
-                          className="flex h-full w-full flex-col gap-1.5 rounded-2xl border border-hairline bg-cream p-4 text-left transition-colors hover:border-forest"
+                          onClick={() => setDraw((n) => n + 1)}
+                          className="text-sm font-medium text-ink-soft underline decoration-hairline underline-offset-4 hover:text-terracotta"
                         >
-                          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-terracotta-600">{audienceLabel(s.audience)}</span>
-                          <span className="text-sm font-semibold text-forest">{s.title}</span>
-                          <span className="line-clamp-3 text-xs leading-relaxed text-ink-soft">{s.text}</span>
+                          Show different ones
                         </button>
-                      </li>
-                    ))}
-                  </ul>
+                      )}
+                    </div>
+                    <WorkingRing active={generating} estimatedMs={6000} label="Writing a new scenario for you" hint="Usually a few seconds." className="text-forest" />
+                    {generateError && <p className="text-xs text-terracotta-600">{generateError}</p>}
+                  </div>
                 )}
               </div>
             )}
