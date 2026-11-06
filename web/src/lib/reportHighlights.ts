@@ -192,7 +192,7 @@ export type NextTimeItem = { id: string; from: string; text: string; lead?: stri
 /// evidence behind it. "Worth double-checking" notes are left out — a caution
 /// about possible content errors is not something to build a lesson on — and
 /// so is "What worked", which is praise: it sat under Try next time as if it
-/// were a change, and now joins Keep doing (workedNote).
+/// were a change, and now shows as a Summary Highlight.
 export function buildNextTimeItems(
   session: Pick<AudioSessionWithSegments, 'momentToRevisit' | 'nextSteps' | 'contentNotes'>,
 ): NextTimeItem[] {
@@ -229,9 +229,4 @@ export function buildContentExtras(
     ...stuck.filter((t) => t.trim()).map((t, i) => ({ id: `stuck-${i}`, kind: 'stuck' as const, text: t.trim() })),
     ...ways.filter((t) => t.trim()).map((t, i) => ({ id: `way-${i}`, kind: 'way' as const, text: t.trim() })),
   ]
-}
-
-/// The content specialist's "What worked" note, for Keep doing.
-export function workedNote(session: Pick<AudioSessionWithSegments, 'contentNotes'>): string | null {
-  return session.contentNotes?.notes.find((n) => n.label === 'What worked')?.text.trim() || null
 }

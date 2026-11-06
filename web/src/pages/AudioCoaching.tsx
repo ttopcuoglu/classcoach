@@ -87,7 +87,7 @@ import {
   speechRateMetric,
   LOW_CAPTURE_PCT,
 } from '../lib/reportConfidence'
-import { buildContentExtras, buildNextTimeItems, workedNote, type NoticeCandidate } from '../lib/reportHighlights'
+import { buildContentExtras, buildNextTimeItems, type NoticeCandidate } from '../lib/reportHighlights'
 import { checkCount } from '../lib/questionMix'
 import { focusLineKey, lineIgnoresPause, stepIgnoresPause } from '../lib/focusLine'
 import { shownWaitTime } from '../lib/pauseGates'
@@ -2420,7 +2420,6 @@ function ReportPanel({
           classSummarySending={classSummarySending || awaitingRewrite}
           onNavigateInsights={(section) => handleViewSource('insights', '', section)}
           onDiscussWithCoach={handleDiscussWithCoach}
-          onSavePdf={() => setPrinting(true)}
         />
       )}
 
@@ -2799,8 +2798,8 @@ function SchoolFocusDebriefIdea({ session, onUpdate }: { session: AudioSessionWi
 /// Two parts in two places. The list sits under the focus and stays closed
 /// until "Want more to try?" opens it: five or six suggestions under the one
 /// focus left a teacher asking which to do. The school focus idea and the
-/// planning question sit at the foot of the Summary, always shown, so they
-/// close the page rather than interrupt it. Choosing what to plan with opens
+/// planning question sit right under the focus (2026-11-06; they used to
+/// close the page). Choosing what to plan with opens
 /// the list; paper prints it whole. The choosing state lives in SummaryTab so
 /// both parts share it.
 type TryNextTimeChoice = {
@@ -2901,13 +2900,15 @@ function TryNextTimeList({
   )
 
   if (part === 'planning') {
-    // On paper only the school-focus idea, if any, is left in here, so the
-    // card's own frame goes too rather than printing as an empty box.
+    // Right under the focus, before the list it opens. While choosing, the
+    // list below carries the plan buttons, so they show here only when there
+    // is no list (the focus alone).
+    const listShows = items.length > 0 || extras.length > 0
     return (
-      <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-4 print:border-0 print:bg-transparent print:p-0">
+      <div className="flex flex-col gap-3">
         <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} />
         {!choosing ? (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-6 print:hidden">
             <p className="text-sm font-semibold text-ink">Would you like to plan your next class with this in mind?</p>
             <button
               type="button"
@@ -2926,7 +2927,7 @@ function TryNextTimeList({
             </button>
           </div>
         ) : (
-          planButtons
+          !listShows && planButtons
         )}
       </div>
     )
@@ -3023,12 +3024,9 @@ function SummaryTab({
   onNavigateInsights,
   onDiscussWithCoach,
   onUpdate,
-  onSavePdf,
 }: {
   session: AudioSessionWithSegments
   onUpdate: (s: AudioSessionWithSegments) => void
-  /// The whole report — this Summary and every Insights section — as a PDF.
-  onSavePdf: () => void
   talkInsight: string | null
   questioningInsight: string | null
   cfuInsight: string | null
@@ -3099,7 +3097,6 @@ function SummaryTab({
   // Participation's four shares and pace, then Questions and Checks
   // (2026-11-02).
   const { questions, selfAnswered: answeredSelf } = countedQuestions(session)
-  const mixCount = (k: MixKey) => questions.filter((q) => q.mix === k).length
   const arc = moves?.arc ?? []
   const teacherPct = session.teacherTalkPct
   const studentPct = session.studentTalkPct
@@ -3177,17 +3174,10 @@ function SummaryTab({
     },
   ]
 
-  // Keep doing: a reasoning question, else one of the talk moves.
-  const reasoningQ = questions.find((q) => q.mix === 'reason')
-  const keep: KeepLine | null = reasoningQ
-    ? {
-        text:
-          `${mixCount('reason')} of your questions asked students to explain or reason, not just recall.`,
-        quote: reasoningQ.quote,
-        timestampSec: reasoningQ.timestampSec,
-      }
-    : null
-  const worked = workedNote(session)
+  // Highlights: each Insights section's Keep, in the sections' order, so a
+  // strong Talk or Climate moment reaches the Summary too. A section with
+  // nothing to keep is left out; thin fallbacks are not called strengths.
+  const highlights = highlightsOf(session)
   // Shared by the list under the focus and the planning block at the foot.
   const tryNextTimeProps = {
     session,
@@ -3296,8 +3286,9 @@ function SummaryTab({
         </div>
       )}
 
-      {/* Try next time, right under the focus it is the alternative to,
-          closed until "Want more to try?" opens it. */}
+      {/* The planning question, right under the focus, then Try next time —
+          closed until "Want more to try?" or the question opens it. */}
+      <TryNextTimeList part="planning" {...tryNextTimeProps} />
       <TryNextTimeList part="list" {...tryNextTimeProps} />
 
       {/* The lesson summary, whole: what the lesson was about, what went
@@ -3371,43 +3362,37 @@ function SummaryTab({
         </dl>
       </DetailsOpenOnPaper>
 
-      {/* Keep doing: your strongest question, and what the content
-          specialist said worked. */}
-      {(keep || worked) && (
-        <div className="flex flex-col gap-2 rounded-3xl bg-mint-tint/70 p-5">
-          <p className="text-xs font-bold uppercase tracking-wide text-forest">Keep doing</p>
-          {keep && (
-            <>
-              <p className="text-base text-ink">{keep.text}</p>
-              <p className="text-sm text-ink-soft">
-                “{keep.quote}” <span className="font-mono text-xs">{formatTime(keep.timestampSec)}</span>
-              </p>
-            </>
-          )}
-          {worked && (
-            <p className={`text-base text-ink ${keep ? 'mt-2 border-t border-forest/10 pt-3' : ''}`}>
-              {worked}
-              <span className="mt-1 block text-xs font-semibold uppercase tracking-wide text-forest/60">From Clarity &amp; Content</span>
-            </p>
-          )}
+      {/* Highlights: what went well, one line per section, each a step
+          into the section that found it. */}
+      {highlights.length > 0 && (
+        <div className="rounded-3xl bg-mint-tint/70 p-5">
+          <p className="text-xs font-bold uppercase tracking-wide text-forest">Highlights</p>
+          <p className="mt-1 text-sm text-ink-soft">What went well in this lesson.</p>
+          <ul className="mt-3 flex flex-col">
+            {highlights.map((h, i) => (
+              <li key={h.section} className={`flex gap-3 py-3 ${i > 0 ? 'border-t border-forest/10' : ''}`}>
+                <ThumbsUp />
+                <div className="min-w-0">
+                  <p className="text-base text-ink">{h.keep.text}</p>
+                  {h.keep.quote && (
+                    <p className="mt-1 text-sm text-ink-soft">
+                      “{shortQuote(h.keep.quote)}” <span className="font-mono text-xs">{formatTime(h.keep.timestampSec)}</span>
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onNavigateInsights(h.section)}
+                    className="mt-1 text-xs font-semibold uppercase tracking-wide text-forest/70 hover:underline print:hidden"
+                  >
+                    {h.label} →
+                  </button>
+                  <span className="mt-1 hidden text-xs font-semibold uppercase tracking-wide text-forest/70 print:block">{h.label}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
-
-      {/* The school focus idea and the planning question close the page. */}
-      <TryNextTimeList part="planning" {...tryNextTimeProps} />
-
-      {/* The whole report, to keep or share. */}
-      <button
-        type="button"
-        onClick={onSavePdf}
-        className="flex items-center justify-between gap-4 rounded-2xl border border-hairline bg-cream-card p-4 text-left transition-colors hover:border-forest print:hidden"
-      >
-        <span>
-          <span className="block text-sm font-semibold text-forest">Save the full report as a PDF</span>
-          <span className="block text-xs text-ink-soft">This Summary, Content Specialist and all four Insights sections, every moment opened up.</span>
-        </span>
-        <span className="shrink-0 text-sm font-semibold text-terracotta-600">Save PDF →</span>
-      </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-1 print:hidden">
         <span className="text-sm text-ink-soft">🔒 Audio was used for transcription only and has been deleted.</span>
@@ -4939,12 +4924,7 @@ function LessonContentTab({
     </span>
   )
 
-  const worked = notes.find((n) => n.label === 'What worked')
-  const keep: KeepLine | null = worked
-    ? { text: worked.text, quote: worked.excerpt, timestampSec: worked.timestampSec }
-    : explanations[0]
-      ? { text: `You ${(EXPLANATION_LABEL[explanations[0].kind] ?? 'opened the content up').toLowerCase()} to make the content concrete.`, quote: explanations[0].quote, timestampSec: explanations[0].timestampSec }
-      : null
+  const keep = contentKeep(contentNotes, teachingMoves)
   const tryNext = notes.find((n) => n.label === 'Where it could go further')?.text
 
   return (
@@ -5628,10 +5608,7 @@ function ClimateRoutinesTab({
         ? `You invited students to ask for help ${help.length} time${help.length === 1 ? '' : 's'}.`
         : null
 
-  const keep: KeepLine | null =
-    (specific[0] && { text: 'You named what was right, not just “good”.', quote: specific[0].text, timestampSec: specific[0].timestampSec }) ||
-    (actionable[0] && { text: 'Your redirection told students what to do.', quote: actionable[0].quote, timestampSec: actionable[0].timestampSec }) ||
-    null
+  const keep = climateKeep(session)
 
   return (
     <SectionShell
@@ -5765,22 +5742,12 @@ function TalkParticipationTab({
 
   const nonSpeech = nonSpeechSplit(session.metricsDetail, session.durationSec)
   const moves = session.teachingMoves
-  const p = moves?.participation
-  const invitations = (p?.invitations ?? moves?.invitations ?? []).map((q) => ({
-    ...q,
-    tag: 'format' in q ? (INVITE_FORMAT_LABEL[(q as { format: keyof typeof INVITE_FORMAT_LABEL }).format] ?? 'Opened the floor') : 'Opened the floor',
-  }))
-  const followUps = (p?.extending ?? moves?.revisionPrompts ?? []).map((q) => ({
-    ...q,
-    tag: 'kind' in q ? (EXTEND_KIND_LABEL[(q as { kind: keyof typeof EXTEND_KIND_LABEL }).kind] ?? 'Follow-up') : 'Follow-up',
-  }))
-  const widening = (p?.widening ?? []).map((q) => ({ ...q, tag: 'Beyond volunteers' }))
 
   return (
     <SectionShell
       section="talk"
       note={talkInsight}
-      keep={keepFrom(followUps, widening, invitations, tawtOf(session).questions)}
+      keep={talkKeep(session)}
       tryNext={session.nextSteps?.talk}
       lastRow={lastRow}
       onDiscuss={onDiscuss}
@@ -5851,15 +5818,6 @@ function TalkParticipationTab({
   )
 }
 
-const INVITE_FORMAT_LABEL = {
-  hands: 'Hands up',
-  call_out: 'Call out',
-  turn_and_talk: 'Turn and talk',
-  write_first: 'Write first',
-  show_me: 'Everyone shows',
-  choral: 'All together',
-  open: 'Opened the floor',
-} as const
 const EXTEND_KIND_LABEL = { probe: 'Probing', reasoning: 'Asking for reasoning', build_on_peer: 'Building on a classmate' } as const
 
 /// The lesson summary on Summary: the first paragraph — what the lesson was
@@ -5921,7 +5879,104 @@ function CoachNoteCard({ text }: { text: string }) {
 /// follow-up first (asking for reasoning or building on a classmate before a
 /// plain probe), then reaching beyond volunteers, then an invitation. Never a
 /// claim about what it did for students; the recording cannot show that.
-type KeepLine = { text: string; quote: string; timestampSec: number }
+type KeepLine = {
+  text: string
+  quote: string
+  timestampSec: number
+  /// A fallback that is fine inside its section but too thin to call a
+  /// strength on the Summary's Highlights ("You put a question to the room").
+  thin?: boolean
+}
+
+// Each Insights section's Keep, worked out once so the section and the
+// Summary's Highlights never disagree.
+
+function talkFollowUps(session: AudioSessionWithSegments) {
+  const moves = session.teachingMoves
+  const p = moves?.participation
+  return (p?.extending ?? moves?.revisionPrompts ?? []).map((q) => ({
+    ...q,
+    tag: 'kind' in q ? (EXTEND_KIND_LABEL[(q as { kind: keyof typeof EXTEND_KIND_LABEL }).kind] ?? 'Follow-up') : 'Follow-up',
+  }))
+}
+
+function talkWidening(session: AudioSessionWithSegments) {
+  return (session.teachingMoves?.participation?.widening ?? []).map((q) => ({ ...q, tag: 'Beyond volunteers' }))
+}
+
+function talkKeep(session: AudioSessionWithSegments): KeepLine | null {
+  const moves = session.teachingMoves
+  const invitations = moves?.participation?.invitations ?? moves?.invitations ?? []
+  return keepFrom(talkFollowUps(session), talkWidening(session), invitations, tawtOf(session).questions)
+}
+
+function questioningKeep(session: AudioSessionWithSegments): KeepLine | null {
+  const { questions } = countedQuestions(session)
+  const reasoning = questions.filter((q) => q.mix === 'reason')
+  return reasoning[0]
+    ? {
+        text: `${reasoning.length} of your questions asked students to explain or reason, not just recall.`,
+        quote: reasoning[0].quote,
+        timestampSec: reasoning[0].timestampSec,
+      }
+    : null
+}
+
+function contentKeep(contentNotes: AudioContentNotes | null, teachingMoves: AudioTeachingMoves | null): KeepLine | null {
+  const worked = (contentNotes?.notes ?? []).find((n) => n.label === 'What worked')
+  const explanation = teachingMoves?.explanations?.[0]
+  return worked
+    ? { text: worked.text, quote: worked.excerpt, timestampSec: worked.timestampSec }
+    : explanation
+      ? {
+          text: `You ${(EXPLANATION_LABEL[explanation.kind] ?? 'opened the content up').toLowerCase()} to make the content concrete.`,
+          quote: explanation.quote,
+          timestampSec: explanation.timestampSec,
+        }
+      : null
+}
+
+function climateKeep(session: AudioSessionWithSegments): KeepLine | null {
+  const specific = (session.feedbackLog ?? []).filter((f) => f.kind === 'specific')
+  const actionable = (session.teachingMoves?.redirections ?? []).filter((r) => r.clarity === 'actionable')
+  return (
+    (specific[0] && { text: 'You named what was right, not just “good”.', quote: specific[0].text, timestampSec: specific[0].timestampSec }) ||
+    (actionable[0] && { text: 'Your redirection told students what to do.', quote: actionable[0].quote, timestampSec: actionable[0].timestampSec }) ||
+    null
+  )
+}
+
+type Highlight = { section: InsightsSection; label: string; keep: KeepLine }
+
+/// The Summary's Highlights: the four sections' Keeps, in their order.
+function highlightsOf(session: AudioSessionWithSegments): Highlight[] {
+  const keeps: Record<string, KeepLine | null> = {
+    talk: talkKeep(session),
+    questions: questioningKeep(session),
+    content: contentKeep(session.contentNotes ?? null, session.teachingMoves ?? null),
+    routines: climateKeep(session),
+  }
+  return INSIGHTS_SECTIONS.flatMap(({ key, label }) => {
+    const keep = keeps[key]
+    return keep && !keep.thin ? [{ section: key, label, keep }] : []
+  })
+}
+
+function shortQuote(quote: string): string {
+  const words = quote.split(/\s+/)
+  return words.length > 25 ? `${words.slice(0, 25).join(' ')}…` : quote
+}
+
+/// A small thumbs-up beside each highlight: encouragement at a glance.
+function ThumbsUp() {
+  return (
+    <span aria-hidden="true" className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-forest text-gold">
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
+        <path d="M2 21h3a1 1 0 0 0 1-1V10a1 1 0 0 0-1-1H2zm20-10.5A2.5 2.5 0 0 0 19.5 8h-5.3l.8-3.9.02-.24a1.5 1.5 0 0 0-.44-1.06L13.53 2 7.8 7.74A2 2 0 0 0 7.2 9.2V19a2 2 0 0 0 2 2h8.1a2.3 2.3 0 0 0 2.12-1.4l2.42-5.66c.1-.26.16-.53.16-.82z" />
+      </svg>
+    </span>
+  )
+}
 function keepFrom(
   followUps: { quote: string; timestampSec: number; tag: string }[],
   widening: { quote: string; timestampSec: number }[],
@@ -5939,9 +5994,9 @@ function keepFrom(
     (followUps[0] && { line: followUps[0], text: 'You asked a student to say more.' }) ||
     (widening[0] && { line: widening[0], text: 'You reached past the usual volunteers.' }) ||
     (invitations[0] && { line: invitations[0], text: 'You opened the floor to the room.' }) ||
-    (toRoom && { line: toRoom, text: 'You put a question to the room.' }) ||
+    (toRoom && { line: toRoom, text: 'You put a question to the room.', thin: true }) ||
     null
-  return pick ? { text: pick.text, quote: pick.line.quote, timestampSec: pick.line.timestampSec } : null
+  return pick ? { text: pick.text, quote: pick.line.quote, timestampSec: pick.line.timestampSec, thin: 'thin' in pick } : null
 }
 
 /// Keep and Try next time, side by side; one takes the full width when the
@@ -6319,8 +6374,6 @@ function QuestioningCheckingTab({
   onDiscuss: () => void
 }) {
   const moves = session.teachingMoves
-  const { questions } = countedQuestions(session)
-  const count = (k: MixKey) => questions.filter((q) => q.mix === k).length
 
   // The follow-up rate now lives only in the goal under Try next time; the
   // follow-ups themselves are a kind on the questions timeline.
@@ -6337,15 +6390,7 @@ function QuestioningCheckingTab({
   const [showAlsoHeardState, setShowAlsoHeard] = useState(false)
   const showAlsoHeard = showAlsoHeardState || usePrintAll()
 
-  const reasoningFirst = questions.find((q) => q.mix === 'reason')
-  const keep: KeepLine | null = reasoningFirst
-    ? {
-        text:
-          `${count('reason')} of your questions asked students to explain or reason, not just recall.`,
-        quote: reasoningFirst.quote,
-        timestampSec: reasoningFirst.timestampSec,
-      }
-    : null
+  const keep = questioningKeep(session)
   const goal = showRate && followed! < heard! ? `Goal: ${Math.min(heard!, followed! + 2)} of ${heard} answers followed up, up from ${followed}.` : null
 
   return (

@@ -73,7 +73,7 @@ struct NextTimeItem: Identifiable, Equatable {
 
     /// "Take further · Clarity & Content" → "Clarity & Content".
     var section: String { from.components(separatedBy: " · ").last ?? from }
-    /// Every item is a change to aim at; "What worked" moved to Keep doing.
+    /// Every item is a change to aim at; "What worked" is a Summary Highlight.
     var focusable: Bool { true }
     var insightsSection: InsightsSection? {
         switch id {
@@ -117,7 +117,7 @@ struct NextTimeItem: Identifiable, Equatable {
         add("content-further", "Take further · Clarity & Content",
             notes.first { $0.label == "Where it could go further" }?.text, lead: "Take this further")
         add("climate", "Climate & Routines", session.nextSteps?.climate)
-        // "What worked" is praise, not a change: it joins Keep doing.
+        // "What worked" is praise, not a change: it is a Summary Highlight.
         return items
     }
 }
@@ -406,13 +406,15 @@ struct OverviewTab: View {
             // The focus first: it is the takeaway, and a teacher should not
             // have to read the summary to reach it.
             focusCard
-            if moreOpen { tryNextTimeCard }
+            // The school focus idea and the planning question, right under
+            // the focus (web matches, 2026-11-06). While choosing, its own
+            // ticks stand in for the Try next time list.
+            planningCard
+            if moreOpen && !choosingForPlan { tryNextTimeCard }
             headlineCard
             lessonMovedCard
             numbersCard
-            keepDoingCard
-            // The school focus idea and the planning question close the page.
-            planningCard
+            highlightsCard
         }
     }
 
@@ -736,38 +738,51 @@ struct OverviewTab: View {
         }
     }
 
-    // MARK: Keep doing
+    // MARK: Highlights
 
-    /// Your strongest questions, and what the content specialist said worked.
-    @ViewBuilder private var keepDoingCard: some View {
-        // The questions Questioning counts: answered-yourself ones are apart.
-        let questions = ThinkingPause.detail(session).questions
-        let reasoning = questions.filter { $0.mix == .reason }.count
-        let q = questions.first(where: { $0.mix == .reason })
-        let worked = session.contentNotes?.notes.first { $0.label == "What worked" }?.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if q != nil || !(worked ?? "").isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("KEEP DOING").font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(AppTheme.forest)
-                if let q {
-                    Text("\(reasoning) of your questions asked students to explain or reason, not just recall.")
-                        .font(.body).foregroundStyle(AppTheme.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    (Text("\u{201C}\(Redaction.withoutAddressedNames(q.entry.text))\u{201D} ")
-                        + Text(ReportConfidence.formatDuration(q.entry.timestampSec)).font(.caption.monospacedDigit()))
-                        .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let worked, !worked.isEmpty {
-                    if q != nil { Divider().padding(.vertical, 4) }
-                    Text(worked).font(.body).foregroundStyle(AppTheme.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("FROM CLARITY & CONTENT").font(.caption2.weight(.semibold)).foregroundStyle(AppTheme.forest.opacity(0.6))
+    /// What went well: each Insights section's Keep, one line per section,
+    /// each a step into the section that found it (web: Summary Highlights).
+    @ViewBuilder private var highlightsCard: some View {
+        let highlights = SectionKeep.highlights(session)
+        if !highlights.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("HIGHLIGHTS").font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(AppTheme.forest)
+                Text("What went well in this lesson.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                    .padding(.top, 2).padding(.bottom, 6)
+                ForEach(Array(highlights.enumerated()), id: \.element.section) { i, h in
+                    if i > 0 { Divider() }
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: "hand.thumbsup.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppTheme.gold)
+                            .frame(width: 32, height: 32)
+                            .background(AppTheme.forest, in: Circle())
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(h.keep.text).font(.body).foregroundStyle(AppTheme.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if !h.keep.quote.isEmpty {
+                                (Text("\u{201C}\(Self.shortQuote(Redaction.withoutAddressedNames(h.keep.quote)))\u{201D} ")
+                                    + Text(ReportConfidence.formatDuration(h.keep.timestampSec)).font(.caption.monospacedDigit()))
+                                    .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Button("\(h.section.title.uppercased()) \u{2192}") { onNavigateInsights(h.section) }
+                                .font(.caption2.weight(.semibold)).foregroundStyle(AppTheme.forest.opacity(0.7))
+                        }
+                    }
+                    .padding(.vertical, 10)
                 }
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(AppTheme.mintTint.opacity(0.7), in: RoundedRectangle(cornerRadius: 22))
         }
+    }
+
+    private static func shortQuote(_ quote: String) -> String {
+        let words = quote.split(whereSeparator: \.isWhitespace)
+        return words.count > 25 ? words.prefix(25).joined(separator: " ") + "\u{2026}" : quote
     }
 
     // MARK: Try next time
@@ -862,9 +877,8 @@ struct OverviewTab: View {
         .padding(.top, 4)
     }
 
-    /// The school focus idea and the planning question, closing the page.
-    /// On a phone the ticks appear right here on a yes, rather than up at the
-    /// list, so choosing never means scrolling back to the top.
+    /// The school focus idea and the planning question, under the focus.
+    /// The ticks appear right here on a yes.
     @ViewBuilder private var planningCard: some View {
         let rest = items.filter { $0.id != focus?.id }
         if !rest.isEmpty || focus != nil {

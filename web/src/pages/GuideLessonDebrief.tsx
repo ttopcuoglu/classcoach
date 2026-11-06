@@ -191,9 +191,13 @@ function SampleReport() {
       </div>
 
       <div className="rounded-xl border border-mint-tint bg-mint-tint/50 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-forest">Keep doing</p>
-        <p className="mt-1.5 text-sm text-ink">
-          “What would change if the cell had no oxygen at all?” <span className="text-xs text-ink-soft">14:32</span>
+        <p className="text-xs font-semibold uppercase tracking-wide text-forest">Highlights</p>
+        <p className="mt-1.5 flex gap-2 text-sm text-ink">
+          <span aria-hidden="true">👍</span>
+          <span>
+            You asked students to explain their reasoning: “What would change if the cell had no oxygen at all?”{' '}
+            <span className="text-xs text-ink-soft">14:32</span>
+          </span>
         </p>
       </div>
     </GuideSample>

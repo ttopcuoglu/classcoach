@@ -1,5 +1,5 @@
 // One strength from a lesson, in the teacher's own words — Home's "Keep
-// doing" card. Chosen the way the report's Summary chooses its Keep doing: a
+// doing" card. Chosen the way the report's old Summary Keep doing did: a
 // question that asked students to reason (justify, compare, judge), else one
 // that asked them to explain; failing those, a follow-up that pushed a
 // student further, then the content specialist's "What worked" note.

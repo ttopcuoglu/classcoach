@@ -14,6 +14,60 @@ struct KeepLine {
     let text: String
     let quote: String
     let timestampSec: Double
+    /// A fallback that is fine inside its section but too thin to call a
+    /// strength on the Summary's Highlights ("You put a question to the room").
+    var thin = false
+}
+
+/// Each Insights section's Keep, worked out once so the section and the
+/// Summary's Highlights never disagree (mirrors talkKeep, questioningKeep,
+/// contentKeep and climateKeep in AudioCoaching.tsx).
+enum SectionKeep {
+    static func talk(_ session: AudioSessionWithSegments) -> KeepLine? {
+        ParticipationMoves(session).keep
+    }
+
+    static func questions(_ session: AudioSessionWithSegments) -> KeepLine? {
+        let reasoning = ThinkingPause.detail(session).questions.filter { $0.mix == .reason }
+        return reasoning.first.map {
+            KeepLine(text: "\(reasoning.count) of your questions asked students to explain or reason, not just recall.",
+                     quote: $0.entry.text, timestampSec: $0.entry.timestampSec)
+        }
+    }
+
+    static func content(_ session: AudioSessionWithSegments) -> KeepLine? {
+        let worked = (session.contentNotes?.notes ?? []).first { $0.label == "What worked" }
+        return worked.map { KeepLine(text: $0.text, quote: $0.excerpt, timestampSec: $0.timestampSec) }
+            ?? session.teachingMoves?.explanations?.first.map {
+                KeepLine(text: "You \(($0.kind.flatMap { ContentSection.explanationLabel[$0] } ?? "opened the content up").lowercased()) to make the content concrete.",
+                         quote: $0.quote, timestampSec: $0.timestampSec)
+            }
+    }
+
+    static func routines(_ session: AudioSessionWithSegments) -> KeepLine? {
+        let specific = (session.feedbackLog ?? []).filter { $0.kind == "specific" }
+        let actionable = (session.teachingMoves?.redirections ?? []).filter { $0.clarity == "actionable" }
+        return specific.first.map { KeepLine(text: "You named what was right, not just \u{201C}good\u{201D}.", quote: $0.text, timestampSec: $0.timestampSec) }
+            ?? actionable.first.map { KeepLine(text: "Your redirection told students what to do.", quote: $0.quote, timestampSec: $0.timestampSec) }
+    }
+
+    static func keep(_ section: InsightsSection, _ session: AudioSessionWithSegments) -> KeepLine? {
+        switch section {
+        case .talk: return talk(session)
+        case .questions: return questions(session)
+        case .content: return content(session)
+        case .routines: return routines(session)
+        }
+    }
+
+    /// The Summary's Highlights: the four sections' Keeps, in their order,
+    /// leaving out sections with nothing to keep and thin fallbacks.
+    static func highlights(_ session: AudioSessionWithSegments) -> [(section: InsightsSection, keep: KeepLine)] {
+        InsightsSection.allCases.compactMap { section in
+            guard let keep = keep(section, session), !keep.thin else { return nil }
+            return (section, keep)
+        }
+    }
 }
 
 /// A moment in your own words, labelled with what it was.
@@ -407,7 +461,7 @@ struct ParticipationMoves {
             ?? line(followUps.first, "You asked a student to say more.")
             ?? line(widening.first, "You reached past the usual volunteers.")
             ?? line(invitations.first, "You opened the floor to the room.")
-            ?? line(toRoom, "You put a question to the room.")
+            ?? line(toRoom, "You put a question to the room.").map { KeepLine(text: $0.text, quote: $0.quote, timestampSec: $0.timestampSec, thin: true) }
     }
 }
 
@@ -871,11 +925,7 @@ struct QuestionsSection: View {
         let heard = session.metricsDetail?["answersHeardCount"].map { Int($0) }
         let followed = session.metricsDetail?["answersFollowedUpCount"].map { Int($0) }
         let showRate = (heard ?? 0) >= 3 && followed != nil
-        let first = questions.first { $0.mix == .reason }
-        let keep = first.map {
-            KeepLine(text: "\(count(.reason)) of your questions asked students to explain or reason, not just recall.",
-                     quote: $0.entry.text, timestampSec: $0.entry.timestampSec)
-        }
+        let keep = SectionKeep.questions(session)
         // The follow-up rate lives only in this goal; the follow-ups
         // themselves are a kind on the questions timeline.
         let goal = showRate && followed! < heard! ? "Goal: \(min(heard!, followed! + 2)) of \(heard!) answers followed up, up from \(followed!)." : nil
@@ -1273,7 +1323,7 @@ struct ContentSection: View {
     let onDiscuss: () -> Void
 
     private static let arcRole = ["opened": "Opened with", "built": "Built", "applied": "Applied to", "practiced": "Practiced", "closed": "Closed with"]
-    private static let explanationLabel = ["example": "Gave an example", "analogy": "Used an analogy", "vocabulary": "Gave a meaning", "modeling": "Thought aloud"]
+    static let explanationLabel = ["example": "Gave an example", "analogy": "Used an analogy", "vocabulary": "Gave a meaning", "modeling": "Thought aloud"]
     private static let connectionLabel = ["prior": "Linked to earlier learning", "purpose": "Said why it matters", "closing": "Drew it together"]
 
     var body: some View {
@@ -1294,12 +1344,7 @@ struct ContentSection: View {
                        items: (session.lessonContent?.connections ?? []).map { EvidenceLine(tag: "Connection", quote: $0.quote, timestampSec: $0.timestampSec) }),
         ]
         let lessonCount = options.reduce(0) { $0 + $1.items.count }
-        let worked = notes.first { $0.label == "What worked" }
-        let keep = worked.map { KeepLine(text: $0.text, quote: $0.excerpt, timestampSec: $0.timestampSec) }
-            ?? explanations.first.map {
-                KeepLine(text: "You \(($0.kind.flatMap { Self.explanationLabel[$0] } ?? "opened the content up").lowercased()) to make the content concrete.",
-                         quote: $0.quote, timestampSec: $0.timestampSec)
-            }
+        let keep = SectionKeep.content(session)
         var read = ["\u{201C}From your lesson\u{201D} is your own words, found in the transcript. Ideas for teaching \(subject) \u{2014} the specialist\u{2019}s notes, ways in, and where students get stuck \u{2014} are in the Content Specialist tab."]
         if !keyTerms.isEmpty {
             read.append("Vocabulary is counted from the transcript, so read the counts as \u{201C}at least\u{201D}: unusual terms are the words a recording most often mishears, and student counts include only what the microphone picked up.")
@@ -1491,8 +1536,7 @@ struct RoutinesSection: View {
                 + (help.isEmpty ? "" : ", and you invited students to ask for help \(help.count) time\(help.count == 1 ? "" : "s")") + "."
             : !help.isEmpty ? "You invited students to ask for help \(help.count) time\(help.count == 1 ? "" : "s")." : nil
 
-        let keep = specific.first.map { KeepLine(text: "You named what was right, not just \u{201C}good\u{201D}.", quote: $0.text, timestampSec: $0.timestampSec) }
-            ?? actionable.first.map { KeepLine(text: "Your redirection told students what to do.", quote: $0.quote, timestampSec: $0.timestampSec) }
+        let keep = SectionKeep.routines(session)
         // Repeated redirections: the read the section shows when the report
         // has it; older reports keep the Keeping learning on track view until
         // they are re-read.
