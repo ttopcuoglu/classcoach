@@ -580,9 +580,12 @@ struct OverviewTab: View {
                     }
                 }
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Color(hex: 0x8E3F22))
-                // The school focus idea belongs with the focus it sits beside.
-                SchoolFocusIdeaRow(session: session, onUpdate: onUpdate)
-                    .padding(.top, 4)
+                // The school focus idea, closed until "Want more to try?" (or
+                // planning) opens the rest; with nothing more to open, it shows.
+                if moreOpen || choosingForPlan || items.allSatisfy({ $0.id == focus.id }) {
+                    SchoolFocusIdeaRow(session: session, onUpdate: onUpdate)
+                        .padding(.top, 4)
+                }
             }
             // No card around it: the focus is the page's opening line, not a
             // box on it. A rule on the left marks where it starts.

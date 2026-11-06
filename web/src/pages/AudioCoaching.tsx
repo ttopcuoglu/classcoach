@@ -3286,8 +3286,12 @@ function SummaryTab({
                 )}
               </span>
             </div>
-            {/* The school focus idea belongs with the focus it sits beside. */}
-            <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} className="mt-4" />
+            {/* The school focus idea, inside the focus card but closed until
+                "Want more to try?" (or planning) opens the rest; with nothing
+                more to open, it shows. */}
+            {(moreOpen || choosing || moreCount === 0) && (
+              <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} className="mt-4" />
+            )}
           </div>
           {withGoal && (
             <div className="flex flex-col items-start gap-2">
