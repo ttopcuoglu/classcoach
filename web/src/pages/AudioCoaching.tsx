@@ -2700,7 +2700,15 @@ let schoolFocusOnce: Promise<SchoolFocusItem[]> | null = null
 /// (docs/coaching-priorities.md), asked for here and only from the teacher's
 /// own words. On screen only: hidden when printing, and never in the export,
 /// the Coach's digest or anything an admin sees.
-function SchoolFocusDebriefIdea({ session, onUpdate }: { session: AudioSessionWithSegments; onUpdate: (s: AudioSessionWithSegments) => void }) {
+function SchoolFocusDebriefIdea({
+  session,
+  onUpdate,
+  className = '',
+}: {
+  session: AudioSessionWithSegments
+  onUpdate: (s: AudioSessionWithSegments) => void
+  className?: string
+}) {
   const [focuses, setFocuses] = useState<SchoolFocusItem[]>([])
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -2743,7 +2751,7 @@ function SchoolFocusDebriefIdea({ session, onUpdate }: { session: AudioSessionWi
 
   if (idea?.text && idea.quote) {
     return (
-      <section aria-label="An idea connected to your school focus" className="rounded-2xl border-[1.5px] border-gold bg-gold-tint/40 p-4 print:hidden">
+      <section aria-label="An idea connected to your school focus" className={`${className} rounded-2xl border-[1.5px] border-gold bg-gold-tint/40 p-4 print:hidden`}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <p className="font-heading text-sm font-bold text-forest">One option for next time</p>
           <span className="rounded-full bg-gold-tint px-2.5 py-0.5 text-xs font-semibold text-ink">
@@ -2763,14 +2771,14 @@ function SchoolFocusDebriefIdea({ session, onUpdate }: { session: AudioSessionWi
 
   if (idea) {
     return (
-      <p className="rounded-2xl border border-dashed border-gold px-4 py-3 text-sm text-ink print:hidden">
+      <p className={`${className} rounded-2xl border border-dashed border-gold px-4 py-3 text-sm text-ink print:hidden`}>
         <span className="font-semibold text-forest">{idea.name}:</span> {idea.none ?? "this recording didn't give a clear moment to build on."}
       </p>
     )
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-gold px-4 py-3 print:hidden">
+    <div className={`${className} flex flex-col gap-2 rounded-2xl border border-dashed border-gold px-4 py-3 print:hidden`}>
       {focuses.map((f) => (
         <div key={f.id} className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <p className="min-w-0 flex-1 text-sm text-ink">
@@ -2797,8 +2805,8 @@ function SchoolFocusDebriefIdea({ session, onUpdate }: { session: AudioSessionWi
 ///
 /// Two parts in two places. The list sits under the focus and stays closed
 /// until "Want more to try?" opens it: five or six suggestions under the one
-/// focus left a teacher asking which to do. The school focus idea and the
-/// planning question sit right under the focus (2026-11-06; they used to
+/// focus left a teacher asking which to do. "Plan my next class" and the
+/// school focus idea sit inside the focus card (2026-11-06; they used to
 /// close the page). Choosing what to plan with opens
 /// the list; paper prints it whole. The choosing state lives in SummaryTab so
 /// both parts share it.
@@ -2906,7 +2914,8 @@ function TryNextTimeList({
     const listShows = items.length > 0 || extras.length > 0
     return (
       <div className="flex flex-col gap-3">
-        <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} />
+        {/* With a focus, the school focus idea sits inside its card. */}
+        {!focusText && <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} />}
         {/* With a focus, "Plan my next class" sits in the focus card's own
             footer; the question is only for a report with no focus. */}
         {!choosing ? (
@@ -3277,6 +3286,8 @@ function SummaryTab({
                 )}
               </span>
             </div>
+            {/* The school focus idea belongs with the focus it sits beside. */}
+            <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} className="mt-4" />
           </div>
           {withGoal && (
             <div className="flex flex-col items-start gap-2">

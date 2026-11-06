@@ -580,6 +580,9 @@ struct OverviewTab: View {
                     }
                 }
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Color(hex: 0x8E3F22))
+                // The school focus idea belongs with the focus it sits beside.
+                SchoolFocusIdeaRow(session: session, onUpdate: onUpdate)
+                    .padding(.top, 4)
             }
             // No card around it: the focus is the page's opening line, not a
             // box on it. A rule on the left marks where it starts.
@@ -889,15 +892,16 @@ struct OverviewTab: View {
     /// The ticks appear right here on a yes.
     @ViewBuilder private var planningCard: some View {
         let rest = items.filter { $0.id != focus?.id }
+        // With a focus, "Plan my next class" and the school focus idea live
+        // in the focus card; this card is only the ticks.
         if !choosingForPlan && focus != nil {
-            // "Plan my next class" lives in the focus card's footer.
-            SchoolFocusIdeaRow(session: session, onUpdate: onUpdate)
+            EmptyView()
         } else if !rest.isEmpty || focus != nil {
             let chosenItems = rest.filter { !skippedForPlan.contains($0.id) }
             let extras = ContentExtra.items(for: session)
             let pickedExtras = extras.filter { pickedForPlan.contains($0.id) }
             VStack(alignment: .leading, spacing: 8) {
-                SchoolFocusIdeaRow(session: session, onUpdate: onUpdate)
+                if focus == nil { SchoolFocusIdeaRow(session: session, onUpdate: onUpdate) }
                 if !choosingForPlan {
                     Text("Would you like to plan your next class with this in mind?")
                         .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.textPrimary)
