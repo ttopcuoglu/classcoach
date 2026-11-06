@@ -319,6 +319,21 @@ enum ThinkingPause {
         return checks.count + tagged.count
     }
 
+    /// The checks worth calling a strength, for a Keep — mirrors
+    /// `strongChecks` in web lib/questionMix.ts: stored checks the read did
+    /// not set aside, minus "Does everyone understand?", plus counted
+    /// questions tagged as checks the stored list does not hold.
+    static func strongChecks(_ session: AudioSessionWithSegments) -> [(quote: String, timestampSec: Double)] {
+        let all = (session.cfuLog ?? []).filter { $0.loop?.who != "not_a_check" }
+        let stored = all.filter { $0.loop?.who != "asked_if_understood" }.map { (quote: $0.text, timestampSec: $0.timestampSec) }
+        let kinds = session.teachingMoves?.questionKinds ?? []
+        let tagged = detail(session).questions.filter { q in
+            kinds.contains { abs($0.timestampSec - q.entry.timestampSec) <= 4 && $0.check != nil }
+                && !all.contains { abs($0.timestampSec - q.entry.timestampSec) <= 4 }
+        }.map { (quote: $0.entry.text, timestampSec: $0.entry.timestampSec) }
+        return (stored + tagged).sorted { $0.timestampSec < $1.timestampSec }
+    }
+
     /// The average, and how many questions it rests on.
     static func tawt(_ session: AudioSessionWithSegments) -> (average: Double, count: Int)? {
         let d = detail(session)

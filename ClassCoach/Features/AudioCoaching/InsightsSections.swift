@@ -29,10 +29,16 @@ enum SectionKeep {
 
     static func questions(_ session: AudioSessionWithSegments) -> KeepLine? {
         let reasoning = ThinkingPause.detail(session).questions.filter { $0.mix == .reason }
-        return reasoning.first.map {
-            KeepLine(text: "\(reasoning.count) of your questions asked students to explain or reason, not just recall.",
-                     quote: $0.entry.text, timestampSec: $0.entry.timestampSec)
+        if let first = reasoning.first {
+            return KeepLine(text: "\(reasoning.count) of your questions asked students to explain or reason, not just recall.",
+                            quote: first.entry.text, timestampSec: first.entry.timestampSec)
         }
+        // Else checks for understanding, two or more; "Does everyone
+        // understand?" is not counted.
+        let checks = ThinkingPause.strongChecks(session)
+        guard checks.count >= 2, let first = checks.first else { return nil }
+        return KeepLine(text: "You checked for understanding \(checks.count) times.",
+                        quote: Redaction.withoutAddressedNames(first.quote), timestampSec: first.timestampSec)
     }
 
     static func content(_ session: AudioSessionWithSegments) -> KeepLine? {

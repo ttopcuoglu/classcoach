@@ -7,7 +7,7 @@
 // The server mirror is server/src/lib/questionMix.ts.
 
 import type { AudioSession } from './api'
-import { withoutAddressedNames } from './keepDoing'
+import { withoutAddressedNames } from './keepDoing.ts'
 
 const RECALL_KINDS = new Set(['remember', 'recall'])
 const MATCH_WINDOW_SEC = 4
@@ -43,6 +43,27 @@ export function checkCount(session: Pick<AudioSession, 'questionLog' | 'teaching
       !checks.some((c) => Math.abs(c.timestampSec - q.timestampSec) <= MATCH_WINDOW_SEC),
   )
   return checks.length + tagged.length
+}
+
+/// The checks worth calling a strength, for a Keep: the stored checks the
+/// read did not set aside, minus "Does everyone understand?" (it asks
+/// students to judge themselves, not show what they know), plus counted
+/// questions tagged as checks the stored list does not hold. Lessons read
+/// before the checks read have no `loop` and keep every stored check.
+export function strongChecks(
+  session: Pick<AudioSession, 'questionLog' | 'teachingMoves' | 'cfuLog'>,
+): { quote: string; timestampSec: number }[] {
+  const all = (session.cfuLog ?? []).filter((c) => c.loop?.who !== 'not_a_check')
+  const stored = all.filter((c) => c.loop?.who !== 'asked_if_understood').map((c) => ({ quote: c.text, timestampSec: c.timestampSec }))
+  const kinds = session.teachingMoves?.questionKinds ?? []
+  const tagged = counted(session)
+    .filter(
+      (q) =>
+        kinds.some((k) => Math.abs(k.timestampSec - q.timestampSec) <= MATCH_WINDOW_SEC && k.check) &&
+        !all.some((c) => Math.abs(c.timestampSec - q.timestampSec) <= MATCH_WINDOW_SEC),
+    )
+    .map((q) => ({ quote: q.text, timestampSec: q.timestampSec }))
+  return [...stored, ...tagged].sort((a, b) => a.timestampSec - b.timestampSec)
 }
 
 export function beyondRecall(session: Pick<AudioSession, 'questionLog' | 'teachingMoves'>): { beyond: number; total: number } | null {

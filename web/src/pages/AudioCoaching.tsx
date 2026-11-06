@@ -88,7 +88,7 @@ import {
   LOW_CAPTURE_PCT,
 } from '../lib/reportConfidence'
 import { buildContentExtras, buildNextTimeItems, type NoticeCandidate } from '../lib/reportHighlights'
-import { checkCount } from '../lib/questionMix'
+import { checkCount, strongChecks } from '../lib/questionMix'
 import { focusLineKey, lineIgnoresPause, stepIgnoresPause } from '../lib/focusLine'
 import { shownWaitTime } from '../lib/pauseGates'
 
@@ -5947,14 +5947,26 @@ function talkKeep(session: AudioSessionWithSegments): KeepLine | null {
 function questioningKeep(session: AudioSessionWithSegments): KeepLine | null {
   const { questions } = countedQuestions(session)
   const reasoning = questions.filter((q) => q.mix === 'reason')
-  return reasoning[0]
+  if (reasoning[0]) {
+    return {
+      text: `${reasoning.length} of your questions asked students to explain or reason, not just recall.`,
+      quote: reasoning[0].quote,
+      timestampSec: reasoning[0].timestampSec,
+    }
+  }
+  // Else checks for understanding, two or more: one could be an accident,
+  // two is a habit. "Does everyone understand?" is not counted.
+  const checks = strongChecks(session)
+  return checks.length >= MIN_CHECKS_FOR_KEEP
     ? {
-        text: `${reasoning.length} of your questions asked students to explain or reason, not just recall.`,
-        quote: reasoning[0].quote,
-        timestampSec: reasoning[0].timestampSec,
+        text: `You checked for understanding ${checks.length} times.`,
+        quote: withoutAddressedNames(checks[0].quote),
+        timestampSec: checks[0].timestampSec,
       }
     : null
 }
+
+const MIN_CHECKS_FOR_KEEP = 2
 
 function contentKeep(contentNotes: AudioContentNotes | null, teachingMoves: AudioTeachingMoves | null): KeepLine | null {
   const worked = (contentNotes?.notes ?? []).find((n) => n.label === 'What worked')
