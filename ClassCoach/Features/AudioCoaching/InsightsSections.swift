@@ -60,12 +60,31 @@ enum SectionKeep {
         }
     }
 
+    /// One Summary highlight; `section` nil means the Content Specialist tab.
+    struct Highlight: Identifiable {
+        let id: String
+        let section: InsightsSection?
+        let label: String
+        let keep: KeepLine
+    }
+
     /// The Summary's Highlights: the four sections' Keeps, in their order,
-    /// leaving out sections with nothing to keep and thin fallbacks.
-    static func highlights(_ session: AudioSessionWithSegments) -> [(section: InsightsSection, keep: KeepLine)] {
-        InsightsSection.allCases.compactMap { section in
-            guard let keep = keep(section, session), !keep.thin else { return nil }
-            return (section, keep)
+    /// leaving out sections with nothing to keep and thin fallbacks. In
+    /// Clarity & Content's place come every "What worked" note from the
+    /// Content Specialist; only with none does the section's own line stand in
+    /// (mirrors highlightsOf in AudioCoaching.tsx).
+    static func highlights(_ session: AudioSessionWithSegments) -> [Highlight] {
+        let worked = (session.contentNotes?.notes ?? [])
+            .filter { $0.label == "What worked" && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .enumerated()
+            .map { i, n in
+                Highlight(id: "worked-\(i)", section: nil, label: "Content Specialist",
+                          keep: KeepLine(text: n.text.trimmingCharacters(in: .whitespacesAndNewlines), quote: n.excerpt, timestampSec: n.timestampSec))
+            }
+        return InsightsSection.allCases.flatMap { section -> [Highlight] in
+            if section == .content && !worked.isEmpty { return worked }
+            guard let keep = keep(section, session), !keep.thin else { return [] }
+            return [Highlight(id: section.rawValue, section: section, label: section.title, keep: keep)]
         }
     }
 }

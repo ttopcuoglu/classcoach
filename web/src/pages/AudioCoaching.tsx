@@ -2418,7 +2418,7 @@ function ReportPanel({
           // shown: the ring says it is on its way.
           classSummary={awaitingRewrite ? null : session.classSummary}
           classSummarySending={classSummarySending || awaitingRewrite}
-          onNavigateInsights={(section) => handleViewSource('insights', '', section)}
+          onNavigateInsights={(section) => (section === 'topic' ? handleViewSource('specialist', '') : handleViewSource('insights', '', section))}
           onDiscussWithCoach={handleDiscussWithCoach}
         />
       )}
@@ -2689,8 +2689,8 @@ function focusOf(session: Pick<AudioSessionWithSegments, 'momentToRevisit' | 'ne
   return { suggested, chosen, focus: chosen ?? suggested }
 }
 
-/// Every item on the list is a change to aim at; "What worked" moved to Keep
-/// doing. Kept as a function so a future non-focusable item has a home.
+/// Every item on the list is a change to aim at; "What worked" is in
+/// Highlights. Kept as a function so a future non-focusable item has a home.
 const FOCUSABLE = (_id: string) => true
 
 /// The school focuses this teacher has on, read once per page.
@@ -2907,8 +2907,10 @@ function TryNextTimeList({
     return (
       <div className="flex flex-col gap-3">
         <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} />
+        {/* With a focus, "Plan my next class" sits in the focus card's own
+            footer; the question is only for a report with no focus. */}
         {!choosing ? (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-6 print:hidden">
+          !focusText && <div className="flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
             <p className="text-sm font-semibold text-ink">Would you like to plan your next class with this in mind?</p>
             <button
               type="button"
@@ -3240,6 +3242,22 @@ function SummaryTab({
                     {suggested ? 'Back to the suggestion' : 'Clear my focus'}
                   </button>
                 )}
+                {/* Planning: the list below opens with ticks and the plan
+                    button (TryNextTimeList). */}
+                {!choosing && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChoosing(true)
+                      if (moreCount > 0 || buildContentExtras(session).length > 0) {
+                        requestAnimationFrame(() => document.getElementById('try-next-time')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+                      }
+                    }}
+                    className="hover:underline"
+                  >
+                    Plan my next class ›
+                  </button>
+                )}
                 {/* The rest of what the report suggests, opened right here. */}
                 {moreCount > 0 && (
                   <button
@@ -3370,7 +3388,7 @@ function SummaryTab({
           <p className="mt-1 text-sm text-ink-soft">What went well in this lesson.</p>
           <ul className="mt-3 flex flex-col">
             {highlights.map((h, i) => (
-              <li key={h.section} className={`flex gap-3 py-3 ${i > 0 ? 'border-t border-forest/10' : ''}`}>
+              <li key={h.key} className={`flex gap-3 py-3 ${i > 0 ? 'border-t border-forest/10' : ''}`}>
                 <ThumbsUp />
                 <div className="min-w-0">
                   <p className="text-base text-ink">{h.keep.text}</p>
@@ -5946,10 +5964,22 @@ function climateKeep(session: AudioSessionWithSegments): KeepLine | null {
   )
 }
 
-type Highlight = { section: InsightsSection; label: string; keep: KeepLine }
+type Highlight = { key: string; section: InsightsSection; label: string; keep: KeepLine }
 
-/// The Summary's Highlights: the four sections' Keeps, in their order.
+/// The Summary's Highlights: the four sections' Keeps, in their order. In
+/// Clarity & Content's place come every "What worked" note from the Content
+/// Specialist (it often writes two); only with none does the section's own
+/// explanation line stand in.
 function highlightsOf(session: AudioSessionWithSegments): Highlight[] {
+  const worked: Highlight[] = (session.contentNotes?.notes ?? [])
+    .filter((n) => n.label === 'What worked' && n.text.trim())
+    .map((n, i) => ({
+      key: `worked-${i}`,
+      // 'topic' opens the Content Specialist tab (see onNavigateInsights).
+      section: 'topic',
+      label: 'Content Specialist',
+      keep: { text: n.text.trim(), quote: n.excerpt, timestampSec: n.timestampSec },
+    }))
   const keeps: Record<string, KeepLine | null> = {
     talk: talkKeep(session),
     questions: questioningKeep(session),
@@ -5957,8 +5987,9 @@ function highlightsOf(session: AudioSessionWithSegments): Highlight[] {
     routines: climateKeep(session),
   }
   return INSIGHTS_SECTIONS.flatMap(({ key, label }) => {
+    if (key === 'content' && worked.length > 0) return worked
     const keep = keeps[key]
-    return keep && !keep.thin ? [{ section: key, label, keep }] : []
+    return keep && !keep.thin ? [{ key, section: key, label, keep }] : []
   })
 }
 

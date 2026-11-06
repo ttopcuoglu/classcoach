@@ -233,7 +233,8 @@ struct ReportView: View {
                         rewritingSummary: awaitingRewrite,
                         readingMoment: readingMoment,
                         onUpdate: onUpdate,
-                        onNavigateInsights: { target in section = target; tab = .insights }
+                        onNavigateInsights: { target in section = target; tab = .insights },
+                        onOpenSpecialist: { tab = .specialist }
                     )
                     Text("\u{1F512} Audio was used for transcription only and has been deleted.")
                         .font(.caption).foregroundStyle(AppTheme.textSecondary)

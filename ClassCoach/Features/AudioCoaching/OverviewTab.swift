@@ -341,6 +341,8 @@ struct OverviewTab: View {
     var readingMoment = false
     let onUpdate: (AudioSessionWithSegments) -> Void
     let onNavigateInsights: (InsightsSection) -> Void
+    /// A Content Specialist highlight opens its own tab.
+    var onOpenSpecialist: () -> Void = {}
 
     private var m: OverviewMetrics { OverviewMetrics(session) }
 
@@ -565,6 +567,10 @@ struct OverviewTab: View {
                         if let chosen, suggested?.id != chosen.id {
                             Button(suggested == nil ? "Clear my focus" : "Back to the suggestion") { chooseFocus(nil) }
                         }
+                        // Planning: the ticks open in the card below.
+                        if !choosingForPlan {
+                            Button("Plan my next class ›") { withAnimation { choosingForPlan = true } }
+                        }
                         let more = items.filter { $0.id != focus.id }.count
                         if more > 0 {
                             Button(moreOpen ? "Hide the other ideas" : "Want more to try? (\(more)) ›") {
@@ -749,7 +755,7 @@ struct OverviewTab: View {
                 Text("HIGHLIGHTS").font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(AppTheme.forest)
                 Text("What went well in this lesson.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                     .padding(.top, 2).padding(.bottom, 6)
-                ForEach(Array(highlights.enumerated()), id: \.element.section) { i, h in
+                ForEach(Array(highlights.enumerated()), id: \.element.id) { i, h in
                     if i > 0 { Divider() }
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: "hand.thumbsup.fill")
@@ -767,7 +773,9 @@ struct OverviewTab: View {
                                     .font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
-                            Button("\(h.section.title.uppercased()) \u{2192}") { onNavigateInsights(h.section) }
+                            Button("\(h.label.uppercased()) \u{2192}") {
+                                if let section = h.section { onNavigateInsights(section) } else { onOpenSpecialist() }
+                            }
                                 .font(.caption2.weight(.semibold)).foregroundStyle(AppTheme.forest.opacity(0.7))
                         }
                     }
@@ -881,7 +889,10 @@ struct OverviewTab: View {
     /// The ticks appear right here on a yes.
     @ViewBuilder private var planningCard: some View {
         let rest = items.filter { $0.id != focus?.id }
-        if !rest.isEmpty || focus != nil {
+        if !choosingForPlan && focus != nil {
+            // "Plan my next class" lives in the focus card's footer.
+            SchoolFocusIdeaRow(session: session, onUpdate: onUpdate)
+        } else if !rest.isEmpty || focus != nil {
             let chosenItems = rest.filter { !skippedForPlan.contains($0.id) }
             let extras = ContentExtra.items(for: session)
             let pickedExtras = extras.filter { pickedForPlan.contains($0.id) }
