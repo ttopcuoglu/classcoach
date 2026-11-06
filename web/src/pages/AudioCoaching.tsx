@@ -5917,7 +5917,8 @@ type KeepLine = {
   quote: string
   timestampSec: number
   /// A fallback that is fine inside its section but too thin to call a
-  /// strength on the Summary's Highlights ("You put a question to the room").
+  /// strength on the Summary's Highlights: "You put a question to the room",
+  /// and an open floor by hands up, call-out or plain question.
   thin?: boolean
 }
 
@@ -6023,23 +6024,35 @@ function ThumbsUp() {
     </span>
   )
 }
+const EVERYONE_FORMAT_TEXT: Record<string, string> = {
+  turn_and_talk: 'You had everyone turn and talk.',
+  write_first: 'You had everyone write before anyone answered.',
+  show_me: 'You had every student show an answer.',
+  choral: 'You had the whole class answer together.',
+}
+
 function keepFrom(
   followUps: { quote: string; timestampSec: number; tag: string }[],
   widening: { quote: string; timestampSec: number }[],
-  invitations: { quote: string; timestampSec: number }[],
+  /// Older reads have no format; those count as a plain open floor.
+  invitations: { quote: string; timestampSec: number; format?: string }[],
   /// The questions left with students, for when no move was found: the card
   /// vanished on a lesson whose re-read counted no invitation, though the
   /// teacher had plainly asked the room.
   questions: { quote: string; timestampSec: number; byName: boolean }[] = [],
 ): KeepLine | null {
   const toRoom = questions.find((q) => !q.byName) ?? questions[0]
+  // A format where every student does something is a strength; hands up, a
+  // call-out or a plain open question gets one volunteer, so it is thin.
+  const everyone = invitations.find((q) => q.format && EVERYONE_FORMAT_TEXT[q.format])
   const byTag = (tag: string) => followUps.find((f) => f.tag === tag)
   const pick =
     (byTag('Building on a classmate') && { line: byTag('Building on a classmate')!, text: 'You asked students to build on each other’s ideas.' }) ||
     (byTag('Asking for reasoning') && { line: byTag('Asking for reasoning')!, text: 'You asked a student for their reasoning, not just the answer.' }) ||
     (followUps[0] && { line: followUps[0], text: 'You asked a student to say more.' }) ||
     (widening[0] && { line: widening[0], text: 'You reached past the usual volunteers.' }) ||
-    (invitations[0] && { line: invitations[0], text: 'You opened the floor to the room.' }) ||
+    (everyone && { line: everyone, text: EVERYONE_FORMAT_TEXT[everyone.format!] }) ||
+    (invitations[0] && { line: invitations[0], text: 'You opened the floor to the room.', thin: true }) ||
     (toRoom && { line: toRoom, text: 'You put a question to the room.', thin: true }) ||
     null
   return pick ? { text: pick.text, quote: pick.line.quote, timestampSec: pick.line.timestampSec, thin: 'thin' in pick } : null

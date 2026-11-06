@@ -445,8 +445,19 @@ private let extendKindLabel = ["probe": "Probing", "reasoning": "Asking for reas
 /// Your three ways of bringing students in, from the participation read —
 /// lessons read before it fall back to the older invitation and
 /// revision-prompt reads.
+/// Formats where every student does something: a strength for Highlights.
+/// Hands up, a call-out or a plain open question gets one volunteer.
+private let everyoneFormatText = [
+    "turn_and_talk": "You had everyone turn and talk.",
+    "write_first": "You had everyone write before anyone answered.",
+    "show_me": "You had every student show an answer.",
+    "choral": "You had the whole class answer together.",
+]
+
 struct ParticipationMoves {
     let invitations: [EvidenceLine]
+    /// The first invitation where everyone took part, with its line.
+    let everyone: (line: EvidenceLine, text: String)?
     let followUps: [EvidenceLine]
     let widening: [EvidenceLine]
     /// The first question left with the room, for when no move was found —
@@ -459,6 +470,10 @@ struct ParticipationMoves {
         invitations = (p?.invitations ?? moves?.invitations ?? []).map {
             EvidenceLine(tag: $0.format.flatMap { inviteFormatLabel[$0] } ?? "Opened the floor", quote: $0.quote, timestampSec: $0.timestampSec)
         }
+        everyone = (p?.invitations ?? moves?.invitations ?? []).lazy.compactMap { q -> (line: EvidenceLine, text: String)? in
+            guard let text = q.format.flatMap({ everyoneFormatText[$0] }) else { return nil }
+            return (EvidenceLine(tag: "Everyone", quote: q.quote, timestampSec: q.timestampSec), text)
+        }.first
         followUps = (p?.extending ?? moves?.revisionPrompts ?? []).map {
             EvidenceLine(tag: $0.kind.flatMap { extendKindLabel[$0] } ?? "Follow-up", quote: $0.quote, timestampSec: $0.timestampSec)
         }
@@ -479,7 +494,8 @@ struct ParticipationMoves {
             ?? line(followUps.first { $0.tag == "Asking for reasoning" }, "You asked a student for their reasoning, not just the answer.")
             ?? line(followUps.first, "You asked a student to say more.")
             ?? line(widening.first, "You reached past the usual volunteers.")
-            ?? line(invitations.first, "You opened the floor to the room.")
+            ?? everyone.flatMap { line($0.line, $0.text) }
+            ?? line(invitations.first, "You opened the floor to the room.").map { KeepLine(text: $0.text, quote: $0.quote, timestampSec: $0.timestampSec, thin: true) }
             ?? line(toRoom, "You put a question to the room.").map { KeepLine(text: $0.text, quote: $0.quote, timestampSec: $0.timestampSec, thin: true) }
     }
 }
