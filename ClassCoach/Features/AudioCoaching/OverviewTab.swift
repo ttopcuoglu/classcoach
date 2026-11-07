@@ -516,7 +516,8 @@ struct OverviewTab: View {
         if let focus {
             let line = focusLine(for: focus)
             VStack(alignment: .leading, spacing: 10) {
-                Text("NEXT LESSON, TRY THIS")
+                Label("NEXT LESSON, TRY THIS", systemImage: "target")
+                    .labelStyle(CardTitleLabelStyle())
                     .font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(Color(hex: 0x8E3F22))
                 if let line {
                     if let well = line.well {
@@ -653,13 +654,29 @@ struct OverviewTab: View {
 
     @State private var readingOpen = false
 
+    /// The Summary tiles' icons, by label, matching the web's.
+    private static let tileIcon: [String: String] = [
+        "Teacher Talk": "mic",
+        "Student Talk": "bubble.left",
+        "Group Talk": "bubble.left.and.bubble.right",
+        "Silence": "pause",
+        "Pace": "gauge.with.needle",
+        "Questions": "questionmark.bubble",
+        "Checks": "checklist.checked",
+    ]
+
     @ViewBuilder private var numbersCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 ForEach(tiles) { t in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 5) {
-                            if let swatch = t.swatch { Circle().fill(swatch).frame(width: 8, height: 8) }
+                            // The tile's icon, in the voice's colour where it has one
+                            // (in place of the dot), as on the web.
+                            if let icon = Self.tileIcon[t.label] {
+                                Image(systemName: icon).font(.caption2.weight(.bold))
+                                    .foregroundStyle(t.swatch ?? AppTheme.forest.opacity(0.6))
+                            } else if let swatch = t.swatch { Circle().fill(swatch).frame(width: 8, height: 8) }
                             Text(t.label.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(AppTheme.forest.opacity(0.6))
                         }
                         (Text(t.value ?? "\u{2014}").font(.heading(.title)).foregroundColor(AppTheme.forest)
@@ -715,7 +732,8 @@ struct OverviewTab: View {
         let arc = session.teachingMoves?.arc ?? []
         if !arc.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                Text("How the lesson moved").font(.heading(.title3)).foregroundStyle(AppTheme.forest)
+                Label("How the lesson moved", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                    .labelStyle(CardTitleLabelStyle()).font(.heading(.title3)).foregroundStyle(AppTheme.forest)
                 VStack(spacing: 6) {
                     ForEach(Array(arc.enumerated()), id: \.offset) { i, stage in
                         VStack(alignment: .leading, spacing: 3) {
@@ -746,7 +764,8 @@ struct OverviewTab: View {
         let highlights = SectionKeep.highlights(session)
         if !highlights.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                Text("HIGHLIGHTS").font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(AppTheme.forest)
+                Label("HIGHLIGHTS", systemImage: "sparkles").labelStyle(CardTitleLabelStyle())
+                    .font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(AppTheme.forest)
                 Text("What went well in this lesson.").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                     .padding(.top, 2).padding(.bottom, 6)
                 ForEach(Array(highlights.enumerated()), id: \.element.id) { i, h in
@@ -1111,5 +1130,16 @@ enum Redaction {
             result.replaceSubrange(range, with: "[name]")
         }
         return result
+    }
+}
+
+
+/// A card title with a small icon before it, sized to the title's text.
+private struct CardTitleLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 6) {
+            configuration.icon
+            configuration.title
+        }
     }
 }

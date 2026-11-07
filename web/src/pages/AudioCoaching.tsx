@@ -1,6 +1,7 @@
 import { cloneElement, createContext, isValidElement, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
+import { ClipboardCheck, Gauge, MessageCircle, MessageCircleQuestion, MessagesSquare, Mic, Pause, Route, Sparkles, Target, type LucideIcon } from 'lucide-react'
 import TalkFlowStrip, { FLOW_COLOR, ROOM_COLOR, ROOM_LABEL, type ShareSlice } from '../components/TalkFlowStrip'
 import { roomBreakdown, type RoomBreakdown } from '../lib/roomBreakdown'
 import { withStudentSpans } from '../lib/studentSpans'
@@ -3215,7 +3216,10 @@ function SummaryTab({
       {/* How the lesson moved — only where the arc read found its stages. */}
       {arc.length > 0 && (
         <div className="flex break-inside-avoid flex-col gap-3 rounded-3xl bg-cream-card p-5">
-          <p className="font-heading text-xl font-bold text-forest">How the lesson moved</p>
+          <p className="flex items-center gap-2 font-heading text-xl font-bold text-forest">
+            <Route aria-hidden className="h-5 w-5 shrink-0" strokeWidth={2.25} />
+            How the lesson moved
+          </p>
           <div className="flex flex-col gap-1.5 sm:flex-row">
             {arc.map((st, i) => (
               <div
@@ -3241,6 +3245,7 @@ function SummaryTab({
             <StatTile
               key={t.label}
               label={t.label}
+              icon={TILE_ICON[t.label]}
               value={t.metric.display}
               unit={confident ? t.unit : undefined}
               hint={confident ? undefined : t.metric.reason}
@@ -3273,7 +3278,10 @@ function SummaryTab({
           into the section that found it. */}
       {highlights.length > 0 && (
         <div className="rounded-3xl bg-mint-tint/70 p-5">
-          <p className="text-xs font-bold uppercase tracking-wide text-forest">Highlights</p>
+          <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-forest">
+            <Sparkles aria-hidden className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+            Highlights
+          </p>
           <p className="mt-1 text-sm text-ink-soft">What went well in this lesson.</p>
           <ul className="mt-3 flex flex-col">
             {highlights.map((h, i) => (
@@ -3308,7 +3316,10 @@ function SummaryTab({
         // on it. A rule on the left marks where it starts.
         <div className="grid items-center gap-5 border-l-4 border-terracotta py-1 pl-5 sm:grid-cols-[1fr_auto]">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-[#8E3F22]">Next lesson, try this</p>
+            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-[#8E3F22]">
+              <Target aria-hidden className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+              Next lesson, try this
+            </p>
             {focusLine ? (
               <>
                 {focusLine.well && <p className="mt-2 text-base leading-relaxed text-[#6E4A3A]">{focusLine.well}</p>}
@@ -5830,6 +5841,18 @@ const EXTEND_KIND_LABEL = { probe: 'Probing', reasoning: 'Asking for reasoning',
 /// third paragraph, the recommendation (one idea to take the content
 /// further), is set in italics (2026-11-02); a shorter summary, from a thin
 /// recording, has none.
+/// The Summary tiles' icons, by label, so the newer and older-recording
+/// tiles take the same one.
+const TILE_ICON: Record<string, LucideIcon> = {
+  'Teacher Talk': Mic,
+  'Student Talk': MessageCircle,
+  'Group Talk': MessagesSquare,
+  Silence: Pause,
+  Pace: Gauge,
+  Questions: MessageCircleQuestion,
+  Checks: ClipboardCheck,
+}
+
 function SummaryNoteCard({ text }: { text: string }) {
   const [openState, setOpen] = useState(false)
   // Everything is open on paper.

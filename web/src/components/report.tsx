@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import type { ComponentType, CSSProperties } from 'react'
 
 // Shared chrome for every printable report (Lesson Debrief, Talk It Through,
 // Ask & Practice, Planning Coach, Assignment Coach, Communication Coach).
@@ -152,6 +153,7 @@ export function StatTile({
   note,
   accent,
   swatch,
+  icon: Icon,
 }: {
   label: string
   value: string
@@ -164,6 +166,9 @@ export function StatTile({
   /// voice on the Talk & Participation strip. The tile takes a tint of it and
   /// a dot of it, so one voice is one colour across tabs.
   swatch?: string
+  /// A small icon before the label. Where the tile has a swatch it takes
+  /// that colour in place of the dot.
+  icon?: ComponentType<{ className?: string; style?: CSSProperties; 'aria-hidden'?: boolean; strokeWidth?: number }>
 }) {
   return (
     <div
@@ -171,7 +176,11 @@ export function StatTile({
       style={swatch ? { backgroundColor: `color-mix(in srgb, ${swatch} 16%, var(--color-cream-card))` } : undefined}
     >
       <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-forest/60">
-        {swatch && <span aria-hidden className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: swatch }} />}
+        {Icon ? (
+          <Icon aria-hidden strokeWidth={2.25} className="h-3.5 w-3.5 shrink-0" style={swatch ? { color: swatch } : undefined} />
+        ) : (
+          swatch && <span aria-hidden className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: swatch }} />
+        )}
         {label}
       </p>
       <p className="mt-1 font-heading text-4xl font-extrabold leading-none text-forest">
