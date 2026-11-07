@@ -963,15 +963,12 @@ struct QuestionsSection: View {
         // The questions the card counts: answered-yourself ones are apart.
         let questions = ThinkingPause.detail(session).questions
         let count = { (k: QuestionMix) in questions.filter { $0.mix == k }.count }
-        let heard = session.metricsDetail?["answersHeardCount"].map { Int($0) }
-        let followed = session.metricsDetail?["answersFollowedUpCount"].map { Int($0) }
-        let showRate = (heard ?? 0) >= 3 && followed != nil
         let keep = SectionKeep.questions(session)
-        // The follow-up rate lives only in this goal; the follow-ups
-        // themselves are a kind on the questions timeline.
-        let goal = showRate && followed! < heard! ? "Goal: \(min(heard!, followed! + 2)) of \(heard!) answers followed up, up from \(followed!)." : nil
+        // No follow-up rate or goal (removed 2026-11-06, web matches): answers
+        // heard depend on telling students' voices apart, so it was an
+        // estimate shown as a count.
         return SectionCard(
-            section: .questions, note: note, keep: keep, tryNext: session.nextSteps?.questions, tryGoal: goal,
+            section: .questions, note: note, keep: keep, tryNext: session.nextSteps?.questions,
             howToRead: [
                 "Questions are the ones you asked and left with students \u{2014} not \u{201C}okay?\u{201D}, \u{201C}right?\u{201D} or \u{201C}are we ready?\u{201D}. Each is sorted by what answering it asked for: recall (a fact, name or step students already had), or explaining and reasoning (why or how, applying, comparing, judging). \u{201C}What else?\u{201D} and \u{201C}Are we missing anything?\u{201D} are recall. A question you answered yourself before a student could, and a follow-up straight after a student answer, each have their own colour on the timeline. Tags like \u{201C}right?\u{201D} and housekeeping questions are listed but not counted.",
                 "A check is a moment you asked students to show or say what they understood. Each says who it asked and what you did next \u{2014} from your own words, so a check you acted on silently (scanning boards, changing course without saying so) shows as nothing heard. It never says whether students understood.",

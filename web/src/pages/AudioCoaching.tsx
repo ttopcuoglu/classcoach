@@ -3049,10 +3049,7 @@ function SummaryTab({
   const classSummaryProgress = useSimulatedProgress(classSummarySending, 14000)
   const spotlight = buildSpotlight(talkInsight, questioningInsight, cfuInsight)
   const moves = session.teachingMoves
-  const detail = (session.metricsDetail ?? {}) as Record<string, unknown>
 
-  const heard = typeof detail.answersHeardCount === 'number' ? detail.answersHeardCount : null
-  const followed = typeof detail.answersFollowedUpCount === 'number' ? detail.answersFollowedUpCount : null
 
   // One focus: the Try the teacher made their focus; else the one in the
   // section the headline's pattern points to; else questioning, talk, climate
@@ -3060,8 +3057,6 @@ function SummaryTab({
   const tryItems = buildNextTimeItems(session)
   const { suggested, chosen: chosenFocus, focus } = focusOf(session)
   const focusSection = focus ? ITEM_SECTION[focus.id] : undefined
-  const withGoal = focus?.id === 'questions' && heard != null && followed != null && heard >= 3 && followed < heard
-  const goalTarget = withGoal ? Math.min(heard!, followed! + 2) : 0
   // The focus said simply (server lib/focusLine.ts): written the first time a
   // Summary opens on it, kept with the lesson. Until then, or if it cannot be
   // written, the card shows the suggestion as it is.
@@ -3293,29 +3288,6 @@ function SummaryTab({
               <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} className="mt-4" />
             )}
           </div>
-          {withGoal && (
-            <div className="flex flex-col items-start gap-2">
-              <span className="flex max-w-[260px] flex-wrap gap-1.5" role="img" aria-label={`Aim: ${goalTarget} of ${heard} answers followed up, ${followed} today`}>
-                {Array.from({ length: heard! }, (_, i) => {
-                  const filled = i < followed!
-                  const goal = !filled && i < goalTarget
-                  return (
-                    <i
-                      key={i}
-                      className={`inline-block h-5 w-5 rounded-full border-2 ${goal ? 'border-dashed' : ''}`}
-                      style={{
-                        borderColor: filled || goal ? '#B4593A' : '#D8B9A4',
-                        background: filled ? '#B4593A' : 'var(--color-cream-card)',
-                      }}
-                    />
-                  )
-                })}
-              </span>
-              <span className="text-sm text-ink-soft">
-                {followed} of {heard} followed up today → aim for {goalTarget}
-              </span>
-            </div>
-          )}
         </div>
       )}
 
@@ -6446,12 +6418,10 @@ function QuestioningCheckingTab({
 }) {
   const moves = session.teachingMoves
 
-  // The follow-up rate now lives only in the goal under Try next time; the
-  // follow-ups themselves are a kind on the questions timeline.
-  const detail = (session.metricsDetail ?? {}) as Record<string, unknown>
-  const heard = typeof detail.answersHeardCount === 'number' ? detail.answersHeardCount : null
-  const followed = typeof detail.answersFollowedUpCount === 'number' ? detail.answersFollowedUpCount : null
-  const showRate = heard != null && followed != null && heard >= 3
+  // No follow-up rate or goal (removed 2026-11-06): answers heard depend on
+  // telling students' voices apart, so "1 of 7 followed up" was an estimate
+  // shown as a count. The follow-ups themselves are a kind on the questions
+  // timeline.
 
   // Also heard: question marks that asked nothing of students. Tags are
   // counted from the transcript (lib/questionTags); housekeeping comes from
@@ -6462,7 +6432,6 @@ function QuestioningCheckingTab({
   const showAlsoHeard = showAlsoHeardState || usePrintAll()
 
   const keep = questioningKeep(session)
-  const goal = showRate && followed! < heard! ? `Goal: ${Math.min(heard!, followed! + 2)} of ${heard} answers followed up, up from ${followed}.` : null
 
   return (
     <SectionShell
@@ -6470,7 +6439,6 @@ function QuestioningCheckingTab({
       note={questioningInsight}
       keep={keep}
       tryNext={nextStep}
-      tryGoal={goal}
       lastRow={lastRow}
       onDiscuss={onDiscuss}
       howToRead={

@@ -377,8 +377,6 @@ struct OverviewTab: View {
     private var noticedSummary: String? { AudioInsights.buildWivozaNoticedSummary([talkInsight, questioningInsight, cfuInsight]) }
 
     private var detail: [String: Double] { session.metricsDetail ?? [:] }
-    private var heard: Int? { detail["answersHeardCount"].map { Int($0) } }
-    private var followed: Int? { detail["answersFollowedUpCount"].map { Int($0) } }
 
     // MARK: One focus
 
@@ -518,7 +516,6 @@ struct OverviewTab: View {
 
     @ViewBuilder private var focusCard: some View {
         if let focus {
-            let withGoal = focus.id == "questions" && (heard ?? 0) >= 3 && (followed ?? Int.max) < (heard ?? 0)
             let line = focusLine(for: focus)
             VStack(alignment: .leading, spacing: 10) {
                 Text("NEXT LESSON, TRY THIS")
@@ -533,28 +530,6 @@ struct OverviewTab: View {
                 } else {
                     Text(focus.text).font(.body).foregroundStyle(AppTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
-                }
-                if withGoal, let heard, let followed {
-                    let target = min(heard, followed + 2)
-                    VStack(alignment: .leading, spacing: 6) {
-                        FlowLayout(spacing: 5) {
-                            ForEach(0..<heard, id: \.self) { i in
-                                let filled = i < followed
-                                let goal = !filled && i < target
-                                Circle()
-                                    .fill(filled ? AppTheme.terracotta : AppTheme.card)
-                                    .overlay(Circle().strokeBorder(
-                                        filled || goal ? AppTheme.terracotta : Color(hex: 0xD8B9A4),
-                                        style: StrokeStyle(lineWidth: 2, dash: goal ? [3, 2] : [])
-                                    ))
-                                    .frame(width: 18, height: 18)
-                            }
-                        }
-                        Text("\(followed) of \(heard) followed up today → aim for \(target)")
-                            .font(.caption).foregroundStyle(AppTheme.textSecondary)
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Aim: \(target) of \(heard) answers followed up, \(followed) today")
                 }
                 // The full suggestion, and where it came from, one tap away.
                 if line != nil && whyOpen {
