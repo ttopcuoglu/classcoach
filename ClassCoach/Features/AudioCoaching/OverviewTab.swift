@@ -418,18 +418,16 @@ struct OverviewTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // The focus first: it is the takeaway, and a teacher should not
-            // have to read the summary to reach it.
-            focusCard
-            // The school focus idea and the planning question, right under
-            // the focus (web matches, 2026-11-06). While choosing, its own
-            // ticks stand in for the Try next time list.
-            planningCard
-            if moreOpen && !choosingForPlan { tryNextTimeCard }
             headlineCard
             lessonMovedCard
             numbersCard
             highlightsCard
+            // The focus after Highlights (2026-11-06, web matches): what went
+            // well first, then what to try. The planning ticks open under it;
+            // while choosing they stand in for the Try next time list.
+            focusCard
+            planningCard
+            if moreOpen && !choosingForPlan { tryNextTimeCard }
         }
     }
 

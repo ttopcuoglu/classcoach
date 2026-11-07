@@ -3198,104 +3198,6 @@ function SummaryTab({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Your one focus for next lesson, first: it is the takeaway, and a
-          teacher should not have to read the summary to reach it. */}
-      {focus && (
-        // No card around it: the focus is the page's opening line, not a box
-        // on it. A rule on the left marks where it starts.
-        <div className="grid items-center gap-5 border-l-4 border-terracotta py-1 pl-5 sm:grid-cols-[1fr_auto]">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-[#8E3F22]">Next lesson, try this</p>
-            {focusLine ? (
-              <>
-                {focusLine.well && <p className="mt-2 text-base leading-relaxed text-[#6E4A3A]">{focusLine.well}</p>}
-                <p className="mt-1.5 font-heading text-xl font-bold leading-snug text-ink">{focusLine.try}</p>
-              </>
-            ) : (
-              <p className="mt-1.5 text-lg leading-relaxed text-ink">{focus.text}</p>
-            )}
-            {/* The full suggestion, and where it came from, one tap away. */}
-            {focusLine && whyOpen && (
-              <div className="mt-3 border-t border-hairline pt-3 text-sm leading-relaxed text-[#6E4A3A]">
-                <p>{focus.text}</p>
-                {focusSection ? (
-                  <button type="button" onClick={() => onNavigateInsights(focusSection)} className="mt-1.5 font-semibold hover:underline">
-                    See it in {focus.from.split(' · ').pop()} →
-                  </button>
-                ) : (
-                  <p className="mt-1.5">From {focus.from.split(' · ').pop()}</p>
-                )}
-              </div>
-            )}
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm font-semibold text-[#8E3F22] print:hidden">
-              {focusLine ? (
-                <button type="button" onClick={() => setWhyOpen((v) => !v)} aria-expanded={whyOpen} className="hover:underline">
-                  {whyOpen ? 'Hide why' : 'Why this ›'}
-                </button>
-              ) : focusSection ? (
-                <button type="button" onClick={() => onNavigateInsights(focusSection)} className="hover:underline">
-                  From {focus.from.split(' · ').pop()} →
-                </button>
-              ) : (
-                <span>From {focus.from.split(' · ').pop()}</span>
-              )}
-              <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                {/* With no suggestion to go back to, the way out is to clear it. */}
-                {chosenFocus && suggested?.id !== chosenFocus.id && (
-                  <button type="button" onClick={() => void chooseFocus(null)} className="hover:underline">
-                    {suggested ? 'Back to the suggestion' : 'Clear my focus'}
-                  </button>
-                )}
-                {/* Planning: the list below opens with ticks and the plan
-                    button (TryNextTimeList). */}
-                {!choosing && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setChoosing(true)
-                      if (moreCount > 0 || buildContentExtras(session).length > 0) {
-                        requestAnimationFrame(() => document.getElementById('try-next-time')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
-                      }
-                    }}
-                    className="hover:underline"
-                  >
-                    Plan my next class ›
-                  </button>
-                )}
-                {/* The rest of what the report suggests, opened right here. */}
-                {moreCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // Hiding the list also ends choosing, which keeps it open.
-                      if (moreOpen || choosing) {
-                        setMoreOpen(false)
-                        setChoosing(false)
-                      } else setMoreOpen(true)
-                    }}
-                    aria-expanded={moreOpen || choosing}
-                    className="hover:underline"
-                  >
-                    {moreOpen || choosing ? 'Hide the other ideas' : `Want more to try? (${moreCount}) ›`}
-                  </button>
-                )}
-              </span>
-            </div>
-            {/* The school focus idea, inside the focus card but closed until
-                "Want more to try?" (or planning) opens the rest; with nothing
-                more to open, it shows. */}
-            {(moreOpen || choosing || moreCount === 0) && (
-              <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} className="mt-4" />
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* The planning question, right under the focus, then Try next time —
-          closed until "Want more to try?" or the question opens it. */}
-      <TryNextTimeList part="planning" {...tryNextTimeProps} />
-      <TryNextTimeList part="list" {...tryNextTimeProps} />
-
       {/* The lesson summary, whole: what the lesson was about, what went
           well, and what might be worth a look — three paragraphs, at the
           teacher's request, not folded to a line. The short pattern headline
@@ -3398,6 +3300,104 @@ function SummaryTab({
           </ul>
         </div>
       )}
+
+      {/* Your one focus for next lesson, after Highlights (2026-11-06, the
+          user's call): what went well first, then what to try. */}
+      {focus && (
+        // No card around it: the focus is the page's opening line, not a box
+        // on it. A rule on the left marks where it starts.
+        <div className="grid items-center gap-5 border-l-4 border-terracotta py-1 pl-5 sm:grid-cols-[1fr_auto]">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-[#8E3F22]">Next lesson, try this</p>
+            {focusLine ? (
+              <>
+                {focusLine.well && <p className="mt-2 text-base leading-relaxed text-[#6E4A3A]">{focusLine.well}</p>}
+                <p className="mt-1.5 font-heading text-xl font-bold leading-snug text-ink">{focusLine.try}</p>
+              </>
+            ) : (
+              <p className="mt-1.5 text-lg leading-relaxed text-ink">{focus.text}</p>
+            )}
+            {/* The full suggestion, and where it came from, one tap away. */}
+            {focusLine && whyOpen && (
+              <div className="mt-3 border-t border-hairline pt-3 text-sm leading-relaxed text-[#6E4A3A]">
+                <p>{focus.text}</p>
+                {focusSection ? (
+                  <button type="button" onClick={() => onNavigateInsights(focusSection)} className="mt-1.5 font-semibold hover:underline">
+                    See it in {focus.from.split(' · ').pop()} →
+                  </button>
+                ) : (
+                  <p className="mt-1.5">From {focus.from.split(' · ').pop()}</p>
+                )}
+              </div>
+            )}
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm font-semibold text-[#8E3F22] print:hidden">
+              {focusLine ? (
+                <button type="button" onClick={() => setWhyOpen((v) => !v)} aria-expanded={whyOpen} className="hover:underline">
+                  {whyOpen ? 'Hide why' : 'Why this ›'}
+                </button>
+              ) : focusSection ? (
+                <button type="button" onClick={() => onNavigateInsights(focusSection)} className="hover:underline">
+                  From {focus.from.split(' · ').pop()} →
+                </button>
+              ) : (
+                <span>From {focus.from.split(' · ').pop()}</span>
+              )}
+              <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                {/* With no suggestion to go back to, the way out is to clear it. */}
+                {chosenFocus && suggested?.id !== chosenFocus.id && (
+                  <button type="button" onClick={() => void chooseFocus(null)} className="hover:underline">
+                    {suggested ? 'Back to the suggestion' : 'Clear my focus'}
+                  </button>
+                )}
+                {/* Planning: the list below opens with ticks and the plan
+                    button (TryNextTimeList). */}
+                {!choosing && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChoosing(true)
+                      if (moreCount > 0 || buildContentExtras(session).length > 0) {
+                        requestAnimationFrame(() => document.getElementById('try-next-time')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+                      }
+                    }}
+                    className="hover:underline"
+                  >
+                    Plan my next class ›
+                  </button>
+                )}
+                {/* The rest of what the report suggests, opened right here. */}
+                {moreCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Hiding the list also ends choosing, which keeps it open.
+                      if (moreOpen || choosing) {
+                        setMoreOpen(false)
+                        setChoosing(false)
+                      } else setMoreOpen(true)
+                    }}
+                    aria-expanded={moreOpen || choosing}
+                    className="hover:underline"
+                  >
+                    {moreOpen || choosing ? 'Hide the other ideas' : `Want more to try? (${moreCount}) ›`}
+                  </button>
+                )}
+              </span>
+            </div>
+            {/* The school focus idea, inside the focus card but closed until
+                "Want more to try?" (or planning) opens the rest; with nothing
+                more to open, it shows. */}
+            {(moreOpen || choosing || moreCount === 0) && (
+              <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} className="mt-4" />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* The planning question, right under the focus, then Try next time —
+          closed until "Want more to try?" or the question opens it. */}
+      <TryNextTimeList part="planning" {...tryNextTimeProps} />
+      <TryNextTimeList part="list" {...tryNextTimeProps} />
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-1 print:hidden">
         <span className="text-sm text-ink-soft">🔒 Audio was used for transcription only and has been deleted.</span>
