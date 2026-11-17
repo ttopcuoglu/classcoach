@@ -8,6 +8,7 @@ import { assignmentCoachRouter } from './routes/assignmentCoach.ts'
 import { attemptsRouter } from './routes/attempts.ts'
 import { leadersRouter } from './routes/leaders.ts'
 import { audioSessionsRouter, failOrphanedAnalyses, failOrphanedTranscriptions } from './routes/audioSessions.ts'
+import { selfEvalSharesRouter } from './routes/selfEvalShares.ts'
 import { authRouter } from './routes/auth.ts'
 import { billingRouter } from './routes/billing.ts'
 import { billingWebhookRouter } from './routes/billingWebhook.ts'
@@ -137,6 +138,7 @@ app.use('/api/parent-messages', requireAuth, parentMessageRouter)
 app.use('/api/admin', requireAuth, adminRouter)
 app.use('/api/billing', requireAuth, billingRouter)
 app.use('/api/audio-sessions', requireAuth, audioSessionsRouter)
+app.use('/api/self-eval-shares', requireAuth, selfEvalSharesRouter)
 app.use('/api/lesson-plans', requireAuth, lessonPlansRouter)
 app.use('/api/lesson-templates', requireAuth, lessonTemplatesRouter)
 app.use('/api/conversation-prep', requireAuth, conversationPrepRouter)

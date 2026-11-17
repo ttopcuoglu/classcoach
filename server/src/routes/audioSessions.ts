@@ -1577,6 +1577,77 @@ audioSessionsRouter.put('/:id/rubric-lens/note', async (req, res) => {
   res.json(updated)
 })
 
+// Self-Eval sharing, from the teacher's side. Who their supervisor is comes
+// only from a superadmin's assignment; the teacher can share one lesson's
+// Self-Eval with that person and take it back at any time. What the
+// supervisor can then read is in routes/selfEvalShares.ts.
+async function selfEvalShareState(userId: string, sessionId: string) {
+  const [me, session] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { supervisor: { select: { id: true, name: true, email: true } } },
+    }),
+    prisma.audioSession.findFirst({
+      where: { id: sessionId, userId },
+      select: { id: true, rubricLens: true, selfEvalSharedWithId: true, selfEvalSharedAt: true },
+    }),
+  ])
+  if (!session) return null
+  const supervisor = me?.supervisor ?? null
+  // A share to someone who is no longer the supervisor is dead (they can't
+  // read it), so it shows as not shared.
+  const live = !!supervisor && session.selfEvalSharedWithId === supervisor.id
+  return {
+    session,
+    supervisor,
+    body: {
+      supervisorName: supervisor ? (supervisor.name ?? supervisor.email) : null,
+      sharedAt: live ? session.selfEvalSharedAt : null,
+    },
+  }
+}
+
+audioSessionsRouter.get('/:id/self-eval/share', async (req, res) => {
+  const state = await selfEvalShareState(req.user!.userId, String(req.params.id))
+  if (!state) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  res.json(state.body)
+})
+
+audioSessionsRouter.post('/:id/self-eval/share', async (req, res) => {
+  const userId = req.user!.userId
+  const share = req.body?.share
+  if (typeof share !== 'boolean') {
+    res.status(400).json({ error: 'share must be true or false' })
+    return
+  }
+  const state = await selfEvalShareState(userId, String(req.params.id))
+  if (!state) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  if (share) {
+    if (!state.supervisor) {
+      res.status(400).json({ error: "You don't have a supervisor assigned yet. Your school sets this up." })
+      return
+    }
+    if (!(state.session.rubricLens as RubricLensResult | null)?.scored) {
+      res.status(400).json({ error: 'Build your Self-Eval with levels before sharing it.' })
+      return
+    }
+  }
+  await prisma.audioSession.update({
+    where: { id: state.session.id },
+    data: share
+      ? { selfEvalSharedWithId: state.supervisor!.id, selfEvalSharedAt: new Date() }
+      : { selfEvalSharedWithId: null, selfEvalSharedAt: null },
+  })
+  const after = await selfEvalShareState(userId, state.session.id)
+  res.json(after!.body)
+})
+
 // An idea for next time connected to a school focus the teacher chose — on
 // request from Try next time, never part of the analysis. Kept once made, like
 // Rubric Lens; only from the teacher's own words (lib/debriefSchoolFocus.ts).

@@ -22,6 +22,7 @@ import { OWN_SITUATION, SCENARIO_CATEGORIES } from '../lib/scenarioCategories.ts
 import { stripe } from '../lib/stripe.ts'
 import { LEADER_ACTIONS } from '../lib/usageLimit.ts'
 import { isLeaderArea, isLeaderLevel } from '../lib/leaderLevels.ts'
+import { endSupervisionFor, supervisorError } from '../lib/supervision.ts'
 import { endSchoolAgreement, previewSchoolDeletion } from '../lib/schoolDataDeletion.ts'
 
 // Leader's Corner is a leader's own: its usage rows never count toward a
@@ -1122,6 +1123,7 @@ adminRouter.delete('/members/:id', async (req, res) => {
   // school admin straight back into the school.
   await setListedAsAdmin(organizationId, target.email, false)
   await prisma.user.update({ where: { id: targetId }, data: { organizationId: null, role: 'teacher' } })
+  await endSupervisionFor(targetId)
   res.json({ status: 'ok' })
 })
 
@@ -1839,6 +1841,7 @@ adminRouter.get('/users', requireSuperadmin, async (_req, res) => {
       leaderAreas: true,
       leaderEvaluates: true,
       organizationId: true,
+      supervisorId: true,
       suspendedAt: true,
       createdAt: true,
       organization: { select: { name: true } },
@@ -1856,6 +1859,7 @@ adminRouter.get('/users', requireSuperadmin, async (_req, res) => {
       leaderAreas: u.leaderAreas,
       leaderEvaluates: u.leaderEvaluates,
       organizationId: u.organizationId,
+      supervisorId: u.supervisorId,
       organizationName: u.organization?.name ?? null,
       suspendedAt: u.suspendedAt,
       createdAt: u.createdAt,
@@ -1926,12 +1930,14 @@ adminRouter.patch('/users/:id', requireSuperadmin, async (req, res) => {
     leaderLevel?: string | null
     leaderAreas?: string[]
     leaderEvaluates?: boolean
+    supervisorId?: string | null
   } = { ...parsed.edits }
-  const { organizationId, leaderLevel, leaderAreas, leaderEvaluates } = (req.body ?? {}) as {
+  const { organizationId, leaderLevel, leaderAreas, leaderEvaluates, supervisorId } = (req.body ?? {}) as {
     organizationId?: unknown
     leaderLevel?: unknown
     leaderAreas?: unknown
     leaderEvaluates?: unknown
+    supervisorId?: unknown
   }
   // Leader's Corner level: here only, never in parseUserEdits, which a school
   // admin's member edit shares — a superadmin assigns every level.
@@ -1979,6 +1985,17 @@ adminRouter.patch('/users/:id', requireSuperadmin, async (req, res) => {
     return
   }
   const finalOrg = data.organizationId !== undefined ? data.organizationId : target.organizationId
+  const schoolChanged = finalOrg !== target.organizationId
+  // Supervisor for Self-Eval sharing: here only, superadmin-set like the
+  // Leader's Corner level, and checked against the school they end up in.
+  if (supervisorId !== undefined) {
+    const problem = await supervisorError(id, finalOrg, supervisorId)
+    if (problem) {
+      res.status(400).json({ error: problem })
+      return
+    }
+    data.supervisorId = supervisorId as string | null
+  }
   let finalRole = data.role ?? target.role
   if (finalRole === 'org_admin' && !finalOrg) {
     data.role = 'teacher'
@@ -1994,6 +2011,9 @@ adminRouter.patch('/users/:id', requireSuperadmin, async (req, res) => {
     if (finalOrg) await setListedAsAdmin(finalOrg, target.email, finalRole === 'org_admin')
   }
 
+  // A school change ends every supervision link through this person first;
+  // a supervisor named in this same edit is then set below, in the new school.
+  if (schoolChanged) await endSupervisionFor(id)
   const updated = await prisma.user.update({
     where: { id },
     data,
@@ -2007,6 +2027,7 @@ adminRouter.patch('/users/:id', requireSuperadmin, async (req, res) => {
       leaderAreas: true,
       leaderEvaluates: true,
       organizationId: true,
+      supervisorId: true,
       suspendedAt: true,
       createdAt: true,
       organization: { select: { name: true } },
@@ -2022,6 +2043,7 @@ adminRouter.patch('/users/:id', requireSuperadmin, async (req, res) => {
     leaderAreas: updated.leaderAreas,
     leaderEvaluates: updated.leaderEvaluates,
     organizationId: updated.organizationId,
+    supervisorId: updated.supervisorId,
     organizationName: updated.organization?.name ?? null,
     suspendedAt: updated.suspendedAt,
     createdAt: updated.createdAt,

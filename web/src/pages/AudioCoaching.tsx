@@ -1,5 +1,6 @@
 import { cloneElement, createContext, isValidElement, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { RubricLevelBadge } from '../components/RubricLevel'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
 import { ClipboardCheck, Gauge, MessageCircle, MessageCircleQuestion, MessagesSquare, Mic, Pause, Route, Sparkles, Target, type LucideIcon } from 'lucide-react'
 import TalkFlowStrip, { FLOW_COLOR, ROOM_COLOR, ROOM_LABEL, type ShareSlice } from '../components/TalkFlowStrip'
@@ -35,7 +36,9 @@ import {
   writeFocusLine,
   generateRubricLens,
   saveRubricLensNote,
-  RUBRIC_LEVEL_NAMES,
+  getSelfEvalShare,
+  setSelfEvalShare,
+  type SelfEvalShareState,
   getAudioSession,
   getAudioSessions,
   getProfile,
@@ -2612,6 +2615,7 @@ function ReportPanel({
       {tab === 'rubric' && !printing && (
         <div className="flex flex-col gap-8">
           <RubricLensTab
+            sessionId={session.id}
             rubricLens={session.rubricLens}
             locked={locked}
             isShort={coverage.isShort}
@@ -5076,6 +5080,7 @@ const HARD_LOOK_SHOWN = false
 // Danielson level (since 2026-11-16) for the teacher alone, with room for
 // their own note where they disagree; the export never prints either.
 function RubricLensTab({
+  sessionId,
   rubricLens,
   locked,
   isShort,
@@ -5084,6 +5089,7 @@ function RubricLensTab({
   onGenerate,
   onSaveNote,
 }: {
+  sessionId: string
   rubricLens: AudioRubricLens | null
   locked: boolean
   isShort: boolean
@@ -5106,7 +5112,7 @@ function RubricLensTab({
             <li>· Levels come from what audio can show. Anything visual, like room setup, is left out.</li>
             <li>· When the recording doesn't show enough, it says so instead of guessing.</li>
             <li>· Disagree with a level? Add your own note beside it.</li>
-            <li>· Only you see it. Levels are not part of the export.</li>
+            <li>· Only you see it, unless you share it with your supervisor. Levels are not part of the export.</li>
           </ul>
           {locked ? (
             <p className="mt-5 text-sm text-ink-soft">This report is locked, so a Self-Eval can't be added to it.</p>
@@ -5134,7 +5140,7 @@ function RubricLensTab({
   return (
     <div className="flex flex-col gap-6">
       <div className="rounded-xl border border-dashed border-hairline p-4 text-xs text-ink-soft">
-        {rubricLens.frameworkName}, Domains 2 and 3. Each level is an estimate from this one recording, for you alone.
+        {rubricLens.frameworkName}, Domains 2 and 3. Each level is an estimate from this one recording, private to you unless you share it.
         It can't see the room or student work, and "not enough evidence" only means audio couldn't show it, not that
         it didn't happen. Disagree? Add a note beside the level.
         {isShort && (
@@ -5144,6 +5150,8 @@ function RubricLensTab({
           </span>
         )}
       </div>
+
+      {rubricLens.scored && <SelfEvalShareBar sessionId={sessionId} />}
 
       {!rubricLens.scored && !locked && (
         <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-5">
@@ -5231,36 +5239,84 @@ function RubricLensTab({
   )
 }
 
-const RUBRIC_LEVEL_FILL: Record<1 | 2 | 3 | 4, string> = {
-  1: 'bg-terracotta',
-  2: 'bg-gold',
-  3: 'bg-brand-400',
-  4: 'bg-forest',
-}
+// Share this lesson's Self-Eval with the supervisor a superadmin assigned —
+// the teacher's choice, one lesson at a time, and undoable. What the
+// supervisor can open is only this tab (see server routes/selfEvalShares.ts).
+function SelfEvalShareBar({ sessionId }: { sessionId: string }) {
+  const [state, setState] = useState<SelfEvalShareState | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-// Four steps, filled up to the level, with the framework's name beside it —
-// or a dashed "not enough evidence" when the recording couldn't place it.
-function RubricLevelBadge({ level }: { level: 1 | 2 | 3 | 4 | null }) {
-  if (level == null) {
+  useEffect(() => {
+    let live = true
+    getSelfEvalShare(sessionId)
+      .then((s) => live && setState(s))
+      .catch(() => live && setState(null))
+    return () => {
+      live = false
+    }
+  }, [sessionId])
+
+  async function toggle(share: boolean) {
+    setBusy(true)
+    setError(null)
+    try {
+      setState(await setSelfEvalShare(sessionId, share))
+    } catch (err) {
+      setError((err as Error).message || 'Could not update sharing. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!state) return null
+  if (!state.supervisorName) {
     return (
-      <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-dashed border-hairline px-3 py-1 text-xs font-semibold text-ink-soft">
-        Not enough evidence in this recording
-      </div>
+      <p className="text-xs text-ink-soft">
+        No supervisor is assigned to you yet, so this Self-Eval can't be shared. Your school sets this up.
+      </p>
     )
   }
+
+  const shared = state.sharedAt != null
   return (
-    <div className="mt-3 flex items-center gap-3" aria-label={`Level ${level} of 4: ${RUBRIC_LEVEL_NAMES[level]}`}>
-      <div className="flex gap-1" aria-hidden="true">
-        {[1, 2, 3, 4].map((step) => (
-          <span
-            key={step}
-            className={`h-2.5 w-7 rounded-full ${step <= level ? RUBRIC_LEVEL_FILL[level] : 'bg-hairline'}`}
-          />
-        ))}
+    <div className="flex flex-col gap-2 rounded-2xl border border-hairline bg-cream-card p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          {shared ? (
+            <p className="text-sm font-semibold text-forest">
+              Shared with {state.supervisorName} on{' '}
+              {new Date(state.sharedAt!).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+            </p>
+          ) : (
+            <p className="text-sm font-semibold text-forest">Share with my supervisor</p>
+          )}
+          <p className="mt-0.5 text-xs text-ink-soft">
+            {state.supervisorName} {shared ? 'can see' : 'will see'} the levels, the moments behind them, the next steps and
+            your notes. Not the recording, the transcript or the rest of the report.
+          </p>
+        </div>
+        {shared ? (
+          <button
+            type="button"
+            onClick={() => toggle(false)}
+            disabled={busy}
+            className="shrink-0 rounded-full border border-hairline px-4 py-2 text-xs font-semibold text-ink hover:border-forest disabled:opacity-50"
+          >
+            {busy ? 'Stopping...' : 'Stop sharing'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => toggle(true)}
+            disabled={busy}
+            className="shrink-0 rounded-full bg-forest px-4 py-2 text-xs font-semibold text-cream disabled:bg-hairline disabled:text-ink-soft"
+          >
+            {busy ? 'Sharing...' : `Share with ${state.supervisorName}`}
+          </button>
+        )}
       </div>
-      <span className="text-sm font-bold text-forest">
-        {level} · {RUBRIC_LEVEL_NAMES[level]}
-      </span>
+      {error && <p className="text-sm text-terracotta-600">{error}</p>}
     </div>
   )
 }

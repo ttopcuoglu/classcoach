@@ -14,6 +14,7 @@ import {
   MicIcon,
   TargetIcon,
   WaveformIcon,
+  ClipboardIcon,
 } from './icons'
 import { PLUS_MONTHLY_PRICE, PLUS_SUMMARY, INDIVIDUAL_PLAN } from '../lib/pricing'
 import { isAdminPath } from '../lib/adminNav'
@@ -64,6 +65,20 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
 ]
+
+// A supervisor (someone a superadmin assigned to at least one teacher) gets
+// the Self-Evals shared with them under Grow; nobody else sees the link.
+function navGroupsFor(user: UserProfile | null | undefined): NavGroup[] {
+  if (!user?.supervisesCount) return NAV_GROUPS
+  return NAV_GROUPS.map((group) =>
+    group.label === 'Grow'
+      ? {
+          ...group,
+          items: [...group.items, { to: '/shared-self-evals', label: 'Shared Self-Evals', icon: ClipboardIcon, subtitle: 'from your teachers' }],
+        }
+      : group,
+  )
+}
 
 // Profile is not in the nav. It was a group of its own — a "Grow" header over a
 // single link — which spent a section of the sidebar on the one thing every app
@@ -152,7 +167,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             </NavLink>
           </div>
 
-          {NAV_GROUPS.map((group) => (
+          {navGroupsFor(user).map((group) => (
             <div key={group.label}>
               <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-cream/40">{group.label}</p>
               <div className="mt-1.5 flex flex-col gap-1">
@@ -328,7 +343,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             Talk
           </NavLink>
 
-          {NAV_GROUPS.map((group) => {
+          {navGroupsFor(user).map((group) => {
             const GroupIcon = group.icon
             if (group.items.length === 1) {
               const item = group.items[0]

@@ -22,6 +22,7 @@ const Shared = lazy(() => import('./pages/Shared'))
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 const AudioCoaching = lazy(() => import('./pages/AudioCoaching'))
 const AudioCoachingExport = lazy(() => import('./pages/AudioCoachingExport'))
+const SharedSelfEvals = lazy(() => import('./pages/SharedSelfEvals'))
 const LessonPlanning = lazy(() => import('./pages/LessonPlanning'))
 const AssignmentCoachExport = lazy(() => import('./pages/AssignmentCoachExport'))
 const LessonPlanExport = lazy(() => import('./pages/LessonPlanExport'))
@@ -274,6 +275,10 @@ export default function App() {
               <Route path="coach-chat" element={<Practice />} />
               <Route path="communications" element={<Communications />} />
               <Route path="audio-coaching" element={<AudioCoaching />} />
+              {/* Self-Evals teachers shared with this person as their
+                  supervisor; the server decides what each person can see. */}
+              <Route path="shared-self-evals" element={<SharedSelfEvals />} />
+              <Route path="shared-self-evals/:sessionId" element={<SharedSelfEvals />} />
               <Route path="lesson-planning" element={<LessonPlanning />} />
               {/* Assignment Coach is a chip inside Planning Coach now. The
                   route stays as a redirect: it is in the guide, in Home's cards

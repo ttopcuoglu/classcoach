@@ -179,6 +179,12 @@ struct AudioRubricComponent: Decodable, Identifiable {
     static let levelNames = [1: "Unsatisfactory", 2: "Basic", 3: "Proficient", 4: "Distinguished"]
 }
 
+/// Mirrors `web/src/lib/api.ts`'s `SelfEvalShareState`.
+struct SelfEvalShareState: Decodable {
+    let supervisorName: String?
+    let sharedAt: String?
+}
+
 struct AudioRubricNotObservable: Decodable, Identifiable {
     var id: String { code }
     let code: String

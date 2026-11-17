@@ -658,6 +658,9 @@ type EditValues = {
   // assistant and teacher-leader only (see hasLeaderOptions).
   leaderAreas?: LeaderArea[]
   leaderEvaluates?: boolean
+  // Self-Eval supervisor, '' = none. Platform list only, like leaderLevel:
+  // a superadmin assigns it, always someone in the same school.
+  supervisorId?: string
 }
 
 // Opens under the row being edited. School is offered only on the
@@ -668,6 +671,8 @@ function EditUserRow({
   initial,
   roleLocked,
   orgs,
+  supervisorPool,
+  selfId,
   onSave,
   onCancel,
 }: {
@@ -675,6 +680,8 @@ function EditUserRow({
   initial: EditValues
   roleLocked: boolean
   orgs?: Organization[]
+  supervisorPool?: AdminUser[]
+  selfId?: string
   onSave: (values: EditValues) => Promise<void>
   onCancel: () => void
 }) {
@@ -731,7 +738,15 @@ function EditUserRow({
               School
               <select
                 value={values.organizationId}
-                onChange={(e) => setValues({ ...values, organizationId: e.target.value })}
+                // A supervisor belongs to one school, so a new school starts
+                // with none.
+                onChange={(e) =>
+                  setValues({
+                    ...values,
+                    organizationId: e.target.value,
+                    ...(values.supervisorId !== undefined ? { supervisorId: '' } : {}),
+                  })
+                }
                 disabled={roleLocked}
                 className={`${inputClass} w-52`}
               >
@@ -741,6 +756,27 @@ function EditUserRow({
                     {o.name}
                   </option>
                 ))}
+              </select>
+            </label>
+          )}
+          {values.supervisorId !== undefined && supervisorPool && values.organizationId && (
+            <label className="flex flex-col gap-1 text-xs font-semibold text-ink-soft">
+              Supervisor
+              <select
+                value={values.supervisorId}
+                onChange={(e) => setValues({ ...values, supervisorId: e.target.value })}
+                className={`${inputClass} w-56`}
+              >
+                <option value="">None</option>
+                {supervisorPool
+                  .filter((u) => u.organizationId === values.organizationId && u.id !== selfId)
+                  .sort((a, b) => (a.name ?? a.email).localeCompare(b.name ?? b.email))
+                  .map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name ?? u.email}
+                      {u.jobTitle ? ` — ${u.jobTitle}` : ''}
+                    </option>
+                  ))}
               </select>
             </label>
           )}
@@ -3903,6 +3939,7 @@ function UsersPanel({
                   key={u.id}
                   user={u}
                   orgs={orgs}
+                  allUsers={users}
                   selected={selected.has(u.id)}
                   selectable={isSelectable(u) && bulkBusy === null}
                   onToggle={() => toggle(u.id)}
@@ -3923,6 +3960,7 @@ function UsersPanel({
 function UserRow({
   user,
   orgs,
+  allUsers,
   selected,
   selectable,
   onToggle,
@@ -3930,6 +3968,7 @@ function UserRow({
 }: {
   user: AdminUser
   orgs: Organization[]
+  allUsers: AdminUser[]
   selected: boolean
   selectable: boolean
   onToggle: () => void
@@ -3937,6 +3976,7 @@ function UserRow({
 }) {
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
+  const supervisor = user.supervisorId ? allUsers.find((u) => u.id === user.supervisorId) : null
   const [error, setError] = useState<string | null>(null)
 
   async function run(action: () => Promise<unknown>) {
@@ -3993,7 +4033,10 @@ function UserRow({
             </span>
           )}
         </td>
-        <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">{user.organizationName ?? 'Independent'}</td>
+        <td className="whitespace-nowrap px-3.5 py-3 text-sm text-ink-soft">
+          {user.organizationName ?? 'Independent'}
+          {supervisor && <p className="text-xs text-ink-soft/80">Supervisor: {supervisor.name ?? supervisor.email}</p>}
+        </td>
         <td className="whitespace-nowrap px-3.5 py-3">
           {user.suspendedAt ? (
             <span className="rounded-full bg-peach-tint px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-terracotta-600">
@@ -4048,19 +4091,23 @@ function UserRow({
             // Nothing stored means every area, so show it that way.
             leaderAreas: user.leaderAreas?.length ? user.leaderAreas : LEADER_AREA_OPTIONS.map((a) => a.value),
             leaderEvaluates: user.leaderEvaluates ?? false,
+            supervisorId: user.supervisorId ?? '',
           }}
           roleLocked={user.role === 'superadmin'}
           orgs={orgs}
+          supervisorPool={allUsers}
+          selfId={user.id}
           onSave={async (values) => {
             const edits = editsFrom(values)
             const leader = values.leaderLevel
               ? { leaderLevel: values.leaderLevel, leaderAreas: values.leaderAreas ?? [], leaderEvaluates: values.leaderEvaluates ?? false }
               : { leaderLevel: null }
+            const supervisorId = values.organizationId ? values.supervisorId || null : null
             await updateUser(
               user.id,
               user.role === 'superadmin'
-                ? { name: edits.name, jobTitle: edits.jobTitle, ...leader }
-                : { ...edits, organizationId: values.organizationId || null, ...leader },
+                ? { name: edits.name, jobTitle: edits.jobTitle, ...leader, supervisorId }
+                : { ...edits, organizationId: values.organizationId || null, ...leader, supervisorId },
             )
             setEditing(false)
             onChanged()

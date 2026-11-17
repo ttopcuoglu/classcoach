@@ -155,6 +155,9 @@ export type UserProfile = {
   // Leader's Corner level, set only by a superadmin; null = no Leader's Corner.
   // Optional because an older server never sends it.
   leaderLevel?: LeaderLevel | null
+  // How many teachers this person supervises (Self-Eval sharing). Only /me
+  // sends it.
+  supervisesCount?: number
   createdAt: string
   updatedAt: string
 }
@@ -403,6 +406,9 @@ export type AdminUser = {
   leaderEvaluates?: boolean
   organizationId: string | null
   organizationName: string | null
+  // Superadmin-assigned, same school; the person this user can share a
+  // Self-Eval with.
+  supervisorId?: string | null
   suspendedAt: string | null
   createdAt: string
 }
@@ -1526,6 +1532,7 @@ export function updateUser(
     leaderLevel?: LeaderLevel | null
     leaderAreas?: LeaderArea[]
     leaderEvaluates?: boolean
+    supervisorId?: string | null
   },
 ): Promise<AdminUser> {
   return request(`/api/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(edits) })
@@ -3025,6 +3032,35 @@ export function generateContentNotes(id: string): Promise<AudioSession> {
 
 export function generateRubricLens(id: string): Promise<AudioSessionWithSegments> {
   return request(`/api/audio-sessions/${id}/rubric-lens`, { method: 'POST' })
+}
+
+// Self-Eval sharing with the supervisor a superadmin assigned.
+export type SelfEvalShareState = { supervisorName: string | null; sharedAt: string | null }
+
+export function getSelfEvalShare(id: string): Promise<SelfEvalShareState> {
+  return request(`/api/audio-sessions/${id}/self-eval/share`)
+}
+
+export function setSelfEvalShare(id: string, share: boolean): Promise<SelfEvalShareState> {
+  return request(`/api/audio-sessions/${id}/self-eval/share`, { method: 'POST', body: JSON.stringify({ share }) })
+}
+
+export type SharedSelfEvalSummary = {
+  sessionId: string
+  teacherName: string
+  classSubject: string | null
+  period: string | null
+  gradeLevel: string | null
+  sessionDate: string
+  sharedAt: string
+}
+
+export function getSharedSelfEvals(): Promise<SharedSelfEvalSummary[]> {
+  return request('/api/self-eval-shares')
+}
+
+export function getSharedSelfEval(sessionId: string): Promise<SharedSelfEvalSummary & { selfEval: AudioRubricLens }> {
+  return request(`/api/self-eval-shares/${sessionId}`)
 }
 
 export function saveRubricLensNote(id: string, code: string, note: string): Promise<AudioSessionWithSegments> {

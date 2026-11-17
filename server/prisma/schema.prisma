@@ -78,6 +78,12 @@ model User {
   leaderEvaluates       Boolean  @default(false)
   organizationId        String? // null = independent teacher, not part of any district
   organization          Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  // The person a teacher can share their Self-Eval with. Set only by a
+  // superadmin from the platform roster, always someone in the same school;
+  // cleared when the teacher changes school. Null = no supervisor.
+  supervisorId          String?
+  supervisor            User?     @relation("Supervision", fields: [supervisorId], references: [id], onDelete: SetNull)
+  supervisees           User[]    @relation("Supervision")
   // "free" | "plus" — individual self-serve billing. Independent of
   // Organization.plan below; a teacher can be "free" here while still
   // getting Plus-equivalent access through a district (see hasActivePlan
@@ -125,6 +131,7 @@ model User {
   leaderAttempts    LeaderAttempt[]
 
   @@index([passwordResetTokenHash])
+  @@index([supervisorId])
 }
 
 // A school/district that's signed an agreement. joinCode is what its
@@ -837,6 +844,11 @@ model AudioSession {
   // framework's components (see lib/rubricLens.ts's RubricLensResult). Null
   // until the teacher asks for it — never generated automatically.
   rubricLens       Json?
+  // Self-Eval shared by the teacher with their supervisor: who it went to
+  // and when. Only readable while that person is still the teacher's
+  // supervisorId (see routes/selfEvalShares.ts); null = not shared.
+  selfEvalSharedWithId String?
+  selfEvalSharedAt     DateTime?
 
   // The Hard Look: the least generous honest reading of the same evidence
   // (see lib/hardLook.ts's HardLookResult). Null until the teacher asks for
@@ -940,6 +952,8 @@ model AudioSession {
 
   segments         TranscriptSegment[]
   quoteFlags       QuoteFlag[]
+
+  @@index([selfEvalSharedWithId])
 }
 
 model TranscriptSegment {

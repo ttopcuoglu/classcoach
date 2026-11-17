@@ -15,6 +15,9 @@ struct RubricLensTab: View {
     @State private var noteDraft = ""
     @State private var savingNote = false
     @State private var noteError: String?
+    @State private var share: SelfEvalShareState?
+    @State private var sharing = false
+    @State private var shareError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -45,7 +48,7 @@ struct RubricLensTab: View {
                 Text("· Levels come from what audio can show. Anything visual, like room setup, is left out.")
                 Text("· When the recording doesn't show enough, it says so instead of guessing.")
                 Text("· Disagree with a level? Add your own note beside it.")
-                Text("· Only you see it. Levels are not part of the export.")
+                Text("· Only you see it, unless you share it with your supervisor. Levels are not part of the export.")
             }
             .font(.footnote).foregroundStyle(AppTheme.textSecondary)
 
@@ -77,7 +80,7 @@ struct RubricLensTab: View {
     @ViewBuilder
     private func lensView(_ lens: AudioRubricLens) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("\(lens.frameworkName), Domains 2 and 3. Each level is an estimate from this one recording, for you alone. It can't see the room or student work, and \"not enough evidence\" only means audio couldn't show it, not that it didn't happen. Disagree? Add a note beside the level.")
+            Text("\(lens.frameworkName), Domains 2 and 3. Each level is an estimate from this one recording, private to you unless you share it. It can't see the room or student work, and \"not enough evidence\" only means audio couldn't show it, not that it didn't happen. Disagree? Add a note beside the level.")
             if (session.durationSec ?? 0) > 0, (session.durationSec ?? 0) < ReportConfidence.shortSessionThresholdSec {
                 Text("This session is under \(Int(ReportConfidence.shortSessionThresholdSec / 60)) minutes, so there is less evidence to work with.")
                     .fontWeight(.semibold).foregroundStyle(AppTheme.terracotta600)
@@ -87,6 +90,10 @@ struct RubricLensTab: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.goldTint.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
+
+        if lens.scored == true {
+            shareBar
+        }
 
         if lens.scored != true && !locked {
             VStack(alignment: .leading, spacing: 10) {
@@ -119,6 +126,71 @@ struct RubricLensTab: View {
                 }
             }
         }
+    }
+
+    // Share this lesson's Self-Eval with the supervisor a superadmin
+    // assigned — the teacher's choice, and undoable. Mirrors the web's
+    // SelfEvalShareBar.
+    @ViewBuilder
+    private var shareBar: some View {
+        Group {
+            if let share {
+                if let name = share.supervisorName {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(share.sharedAt != nil ? "Shared with \(name)\(sharedDate(share.sharedAt))" : "Share with my supervisor")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                        Text("\(name) \(share.sharedAt != nil ? "can see" : "will see") the levels, the moments behind them, the next steps and your notes. Not the recording, the transcript or the rest of the report.")
+                            .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if share.sharedAt != nil {
+                            Button(sharing ? "Stopping..." : "Stop sharing") { Task { await setShare(false) } }
+                                .font(.footnote.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                                .padding(.horizontal, 14).padding(.vertical, 7)
+                                .overlay(Capsule().strokeBorder(AppTheme.hairline))
+                                .disabled(sharing)
+                        } else {
+                            Button(sharing ? "Sharing..." : "Share with \(name)") { Task { await setShare(true) } }
+                                .font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                                .padding(.horizontal, 14).padding(.vertical, 7)
+                                .background(sharing ? AppTheme.textSecondary : AppTheme.forest, in: Capsule())
+                                .disabled(sharing)
+                        }
+                        if let shareError {
+                            Text(shareError).font(.footnote).foregroundStyle(AppTheme.terracotta600)
+                        }
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
+                    .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
+                } else {
+                    Text("No supervisor is assigned to you yet, so this Self-Eval can't be shared. Your school sets this up.")
+                        .font(.caption).foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+        }
+        .task(id: session.id) {
+            share = try? await AudioCoachingService.fetchSelfEvalShare(sessionId: session.id)
+        }
+    }
+
+    private func sharedDate(_ iso: String?) -> String {
+        guard let iso else { return "" }
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return "" }
+        return " on " + date.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    private func setShare(_ on: Bool) async {
+        sharing = true
+        shareError = nil
+        do {
+            share = try await AudioCoachingService.setSelfEvalShare(sessionId: session.id, share: on)
+        } catch {
+            shareError = error.localizedDescription
+        }
+        sharing = false
     }
 
     private func domains(_ lens: AudioRubricLens) -> [String] {

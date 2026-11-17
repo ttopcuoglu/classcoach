@@ -250,6 +250,23 @@ enum AudioCoachingService {
         let note: String
     }
 
+    /// Self-Eval sharing with the supervisor a superadmin assigned.
+    static func fetchSelfEvalShare(sessionId: String) async throws -> SelfEvalShareState {
+        try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/self-eval/share")
+    }
+
+    static func setSelfEvalShare(sessionId: String, share: Bool) async throws -> SelfEvalShareState {
+        try await APIClient.shared.request(
+            "/api/audio-sessions/\(sessionId)/self-eval/share",
+            method: "POST",
+            body: ShareBody(share: share)
+        )
+    }
+
+    private struct ShareBody: Encodable {
+        let share: Bool
+    }
+
     /// The school focuses the teacher's school shared, with the teacher's own
     /// answer for each. Only the ones they turned on can be asked about.
     static func fetchSchoolFocuses() async throws -> [SchoolFocusChoice] {

@@ -634,7 +634,10 @@ authRouter.get('/me', requireAuth, async (req, res) => {
     res.status(401).json({ error: 'Not signed in' })
     return
   }
-  res.json(await withPlusAccess(user))
+  // How many teachers this person supervises, so the app knows to show the
+  // "Shared with me" page for Self-Evals (routes/selfEvalShares.ts).
+  const supervisesCount = await prisma.user.count({ where: { supervisorId: user.id } })
+  res.json({ ...(await withPlusAccess(user)), supervisesCount })
 })
 
 authRouter.post('/logout', (_req, res) => {
