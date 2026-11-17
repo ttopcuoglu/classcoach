@@ -1,6 +1,6 @@
 import { cloneElement, createContext, isValidElement, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { RubricLevelBadge } from '../components/RubricLevel'
+import { RubricComponentAbout, RubricLevelBadge } from '../components/RubricLevel'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
 import { ClipboardCheck, Gauge, MessageCircle, MessageCircleQuestion, MessagesSquare, Mic, Pause, Route, Sparkles, Target, type LucideIcon } from 'lucide-react'
 import TalkFlowStrip, { FLOW_COLOR, ROOM_COLOR, ROOM_LABEL, type ShareSlice } from '../components/TalkFlowStrip'
@@ -5111,7 +5111,7 @@ function RubricLensTab({
           <ul className="mt-3 flex flex-col gap-1 text-sm text-ink-soft">
             <li>· Levels come from what audio can show. Anything visual, like room setup, is left out.</li>
             <li>· When the recording doesn't show enough, it says so instead of guessing.</li>
-            <li>· Disagree with a level? Add your own note beside it.</li>
+            <li>· Add your own note beside any level.</li>
             <li>· Only you see it, unless you share it with your supervisor. Levels are not part of the export.</li>
           </ul>
           {locked ? (
@@ -5142,7 +5142,7 @@ function RubricLensTab({
       <div className="rounded-xl border border-dashed border-hairline p-4 text-xs text-ink-soft">
         {rubricLens.frameworkName}, Domains 2 and 3. Each level is an estimate from this one recording, private to you unless you share it.
         It can't see the room or student work, and "not enough evidence" only means audio couldn't show it, not that
-        it didn't happen. Disagree? Add a note beside the level.
+        it didn't happen. You can add a note beside any level.
         {isShort && (
           <span className="mt-1 block font-semibold text-terracotta-600">
             This session is under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes, so there is less evidence to
@@ -5193,6 +5193,7 @@ function RubricLensTab({
                     {component.audibility === 'strong' ? 'Audio shows this well' : 'Audio shows part of this'}
                   </span>
                 </div>
+                <RubricComponentAbout code={component.code} />
                 {rubricLens.scored && <RubricLevelBadge level={component.level ?? null} />}
                 <p className="mt-3 text-sm text-ink">{component.summary}</p>
                 {component.evidence.length > 0 && (
@@ -5230,6 +5231,7 @@ function RubricLensTab({
                   <span className="rounded-md bg-hairline px-2 py-0.5 text-xs font-bold text-ink-soft">{c.code}</span>
                   <p className="font-heading text-base font-bold text-ink-soft">{c.name}</p>
                 </div>
+                <RubricComponentAbout code={c.code} />
                 <p className="mt-2 text-sm text-ink-soft">Not in a recording. {c.reason}</p>
               </div>
             ))}
@@ -5358,7 +5360,7 @@ function RubricTeacherNote({
           maxLength={1000}
           rows={3}
           autoFocus
-          placeholder="Why you see this component differently, e.g. what happened that the recording missed."
+          placeholder="Anything you want beside this level, e.g. what happened that the recording missed."
           className="w-full rounded-xl border border-hairline bg-white p-3 text-sm text-ink focus:border-forest focus:outline-none"
         />
         <div className="flex flex-wrap items-center gap-2">
@@ -5431,7 +5433,7 @@ function RubricTeacherNote({
       }}
       className="mt-4 text-xs font-semibold text-forest hover:underline"
     >
-      Disagree? Add a note
+      Add a note
     </button>
   )
 }

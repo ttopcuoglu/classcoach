@@ -79,7 +79,7 @@ const TABS = [
   },
   {
     name: 'Self-Eval',
-    body: 'On request, a level from 1 to 4 for each Danielson component in Domains 2 and 3, with the moments behind it and one next step. Disagree with a level? Add your own note beside it. Only you see it.',
+    body: 'On request, a level from 1 to 4 for each Danielson component in Domains 2 and 3, with the moments behind it and one next step. Add your own note beside any level. Only you see it.',
   },
   {
     name: 'Reflect',

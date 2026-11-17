@@ -931,10 +931,10 @@ export type AudioRubricComponent = {
 }
 
 export const RUBRIC_LEVEL_NAMES: Record<1 | 2 | 3 | 4, string> = {
-  1: 'Unsatisfactory',
-  2: 'Basic',
-  3: 'Proficient',
-  4: 'Distinguished',
+  1: 'Unclear Evidence',
+  2: 'Worth Revisiting',
+  3: 'Meeting Expectations',
+  4: 'Exceeding Expectations',
 }
 export type AudioRubricLens = {
   framework: string

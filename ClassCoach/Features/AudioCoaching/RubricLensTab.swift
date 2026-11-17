@@ -47,7 +47,7 @@ struct RubricLensTab: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("· Levels come from what audio can show. Anything visual, like room setup, is left out.")
                 Text("· When the recording doesn't show enough, it says so instead of guessing.")
-                Text("· Disagree with a level? Add your own note beside it.")
+                Text("· Add your own note beside any level.")
                 Text("· Only you see it, unless you share it with your supervisor. Levels are not part of the export.")
             }
             .font(.footnote).foregroundStyle(AppTheme.textSecondary)
@@ -80,7 +80,7 @@ struct RubricLensTab: View {
     @ViewBuilder
     private func lensView(_ lens: AudioRubricLens) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("\(lens.frameworkName), Domains 2 and 3. Each level is an estimate from this one recording, private to you unless you share it. It can't see the room or student work, and \"not enough evidence\" only means audio couldn't show it, not that it didn't happen. Disagree? Add a note beside the level.")
+            Text("\(lens.frameworkName), Domains 2 and 3. Each level is an estimate from this one recording, private to you unless you share it. It can't see the room or student work, and \"not enough evidence\" only means audio couldn't show it, not that it didn't happen. You can add a note beside any level.")
             if (session.durationSec ?? 0) > 0, (session.durationSec ?? 0) < ReportConfidence.shortSessionThresholdSec {
                 Text("This session is under \(Int(ReportConfidence.shortSessionThresholdSec / 60)) minutes, so there is less evidence to work with.")
                     .fontWeight(.semibold).foregroundStyle(AppTheme.terracotta600)
@@ -211,6 +211,9 @@ struct RubricLensTab: View {
                 Text(component.name)
                     .font(.subheadline.weight(.bold)).foregroundStyle(AppTheme.forest)
             }
+            if let about = AudioRubricComponent.about[component.code] {
+                Text(about).font(.caption.italic()).foregroundStyle(AppTheme.textSecondary)
+            }
             Text(component.audibility == "strong" ? "Audio shows this well" : "Audio shows part of this")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(component.audibility == "strong" ? AppTheme.forest : AppTheme.textSecondary)
@@ -269,7 +272,7 @@ struct RubricLensTab: View {
                     }
                 }
                 .accessibilityHidden(true)
-                Text("\(level) · \(name)")
+                Text("Level \(level) · \(name)")
                     .font(.subheadline.weight(.bold)).foregroundStyle(AppTheme.forest)
             }
             .accessibilityElement(children: .combine)
@@ -309,7 +312,7 @@ struct RubricLensTab: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(AppTheme.hairline))
         } else if !locked {
-            Button("Disagree? Add a note") { openNote(component) }
+            Button("Add a note") { openNote(component) }
                 .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.forest)
         }
     }
@@ -325,7 +328,7 @@ struct RubricLensTab: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("\(component.code) \(component.name)")
                     .font(.subheadline.weight(.bold)).foregroundStyle(AppTheme.forest)
-                Text("Why you see this component differently, e.g. what happened that the recording missed.")
+                Text("Anything you want beside this level, e.g. what happened that the recording missed.")
                     .font(.footnote).foregroundStyle(AppTheme.textSecondary)
                 TextEditor(text: $noteDraft)
                     .frame(minHeight: 140)
@@ -385,6 +388,9 @@ struct RubricLensTab: View {
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(AppTheme.hairline, in: RoundedRectangle(cornerRadius: 5))
                 Text(item.name).font(.subheadline.weight(.bold)).foregroundStyle(AppTheme.textSecondary)
+            }
+            if let about = AudioRubricComponent.about[item.code] {
+                Text(about).font(.caption.italic()).foregroundStyle(AppTheme.textSecondary)
             }
             Text("Not in a recording. \(item.reason)").font(.footnote).foregroundStyle(AppTheme.textSecondary)
         }

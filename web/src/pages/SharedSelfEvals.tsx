@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { RubricLevelBadge } from '../components/RubricLevel'
+import { RubricComponentAbout, RubricLevelBadge } from '../components/RubricLevel'
 import {
   getSharedSelfEval,
   getSharedSelfEvals,
@@ -57,7 +57,7 @@ function SharedSelfEvalList() {
     <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 sm:px-8">
       <PageHeader
         title="Shared Self-Evals"
-        blurb="Danielson Self-Evals your teachers chose to share with you. Each one is the teacher's own estimate from one lesson recording, with their notes where they disagree. A teacher can stop sharing at any time."
+        blurb="Danielson Self-Evals your teachers chose to share with you. Each one is the teacher's own estimate from one lesson recording, with any notes they added. A teacher can stop sharing at any time."
       />
       {error && <p className="text-sm text-terracotta-600">{error}</p>}
       {items === null && !error && <p className="text-sm text-ink-soft">Loading...</p>}
@@ -133,8 +133,8 @@ function SharedSelfEvalDetail({ sessionId }: { sessionId: string }) {
       />
       <div className="rounded-xl border border-dashed border-hairline p-4 text-xs text-ink-soft">
         {lens.frameworkName}, Domains 2 and 3. Each level is an estimate from one lesson's audio. It can't see the room
-        or student work, and "not enough evidence" only means audio couldn't show it, not that it didn't happen. Where
-        the teacher disagrees, their note is shown beside the level.
+        or student work, and "not enough evidence" only means audio couldn't show it, not that it didn't happen. Any
+        note the teacher added is shown with the level.
       </div>
 
       {domains.map((domain) => (
@@ -148,6 +148,7 @@ function SharedSelfEvalDetail({ sessionId }: { sessionId: string }) {
                   <span className="rounded-md bg-gold px-2 py-0.5 text-xs font-bold text-forest">{c.code}</span>
                   <p className="font-heading text-base font-bold text-forest">{c.name}</p>
                 </div>
+                <RubricComponentAbout code={c.code} />
                 <RubricLevelBadge level={c.level ?? null} />
                 <p className="mt-3 text-sm text-ink">{c.summary}</p>
                 {c.evidence.length > 0 && (

@@ -176,7 +176,23 @@ struct AudioRubricComponent: Decodable, Identifiable {
     let evidence: [AudioRubricEvidence]
     let teacherNote: String?
 
-    static let levelNames = [1: "Unsatisfactory", 2: "Basic", 3: "Proficient", 4: "Distinguished"]
+    static let levelNames = [1: "Unclear Evidence", 2: "Worth Revisiting", 3: "Meeting Expectations", 4: "Exceeding Expectations"]
+
+    /// What each Danielson component looks at, in our own plain words (the
+    /// framework's descriptors are licensed). Keyed by code so older lenses
+    /// show it too. Mirrors web/src/components/RubricLevel.tsx.
+    static let about: [String: String] = [
+        "2a": "How the teacher and students treat each other: warmth, respect, and every student feeling they belong.",
+        "2b": "Whether the room treats the work as important and worth the effort: high expectations, persistence, and pride in getting it right.",
+        "2c": "How smoothly routines, transitions and group work run, so little time is lost and students know what to do.",
+        "2d": "Whether expectations for behavior are clear and held consistently, and how respectfully the teacher responds when they are not met.",
+        "2e": "How the room, furniture and materials are arranged so every student can learn safely and reach what they need.",
+        "3a": "How clearly the teacher explains what students are learning and why, gives directions, and presents the content accurately.",
+        "3b": "Whether questions ask students to think and explain, and whether discussion lets students build on each other\u{2019}s ideas.",
+        "3c": "Whether the tasks ask every student to think hard about the content, at a pace that keeps them working.",
+        "3d": "How the teacher checks what students understand during the lesson and gives feedback that helps them improve.",
+        "3e": "How the teacher adjusts in the moment when students are confused, ready for more, or need another way in.",
+    ]
 }
 
 /// Mirrors `web/src/lib/api.ts`'s `SelfEvalShareState`.
