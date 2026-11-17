@@ -1,4 +1,5 @@
-// Supervisors are assigned by a superadmin, always within one school. When a
+// Supervisors are assigned by the school's admin (or a superadmin), always
+// within one school. When a
 // person leaves or changes school, every supervision link through them ends —
 // theirs and anyone they supervised — so a shared Self-Eval can never follow
 // a teacher or a supervisor to another school.

@@ -363,6 +363,8 @@ export type OrgMember = {
   suspendedAt: string | null
   createdAt: string
   lastActiveAt: string | null
+  // Self-Eval supervisor (another member of the same school), or null.
+  supervisorId?: string | null
 }
 
 // sessions/sharePct: the lessons in the snapshot's window and the share of
@@ -1500,7 +1502,12 @@ function memberPath(id: string, organizationId?: string, suffix = ''): string {
   return `/api/admin/members/${id}${suffix}${query}`
 }
 
-export type MemberEdits = { name?: string | null; jobTitle?: JobTitle | null; role?: 'teacher' | 'org_admin' }
+export type MemberEdits = {
+  name?: string | null
+  jobTitle?: JobTitle | null
+  role?: 'teacher' | 'org_admin'
+  supervisorId?: string | null
+}
 
 // Removes a teacher from their org (org_admin's own scoped power, or a
 // superadmin acting within a selected org) — un-enrolls them, no data lost.

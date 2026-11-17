@@ -1079,7 +1079,7 @@ adminRouter.get('/members', async (req, res) => {
 
   const members = await prisma.user.findMany({
     where: { organizationId },
-    select: { id: true, name: true, email: true, jobTitle: true, role: true, suspendedAt: true, createdAt: true },
+    select: { id: true, name: true, email: true, jobTitle: true, role: true, suspendedAt: true, createdAt: true, supervisorId: true },
     orderBy: { createdAt: 'asc' },
   })
 
@@ -1193,10 +1193,23 @@ adminRouter.patch('/members/:id', async (req, res) => {
     res.status(400).json({ error: "You can't change your own role." })
     return
   }
+  // Self-Eval supervisor: a school admin assigns one for their own school's
+  // members, always someone else in that same school (findScopedMember has
+  // already pinned the target to the school in scope).
+  const { supervisorId } = (req.body ?? {}) as { supervisorId?: unknown }
+  const data: UserEdits & { supervisorId?: string | null } = { ...parsed.edits }
+  if (supervisorId !== undefined) {
+    const problem = await supervisorError(target.id, target.organizationId, supervisorId)
+    if (problem) {
+      res.status(400).json({ error: problem })
+      return
+    }
+    data.supervisorId = supervisorId as string | null
+  }
   if (parsed.edits.role !== undefined && parsed.edits.role !== target.role && target.organizationId) {
     await setListedAsAdmin(target.organizationId, target.email, parsed.edits.role === 'org_admin')
   }
-  await prisma.user.update({ where: { id: target.id }, data: parsed.edits })
+  await prisma.user.update({ where: { id: target.id }, data })
   res.json({ status: 'ok' })
 })
 
@@ -1986,8 +1999,8 @@ adminRouter.patch('/users/:id', requireSuperadmin, async (req, res) => {
   }
   const finalOrg = data.organizationId !== undefined ? data.organizationId : target.organizationId
   const schoolChanged = finalOrg !== target.organizationId
-  // Supervisor for Self-Eval sharing: here only, superadmin-set like the
-  // Leader's Corner level, and checked against the school they end up in.
+  // Supervisor for Self-Eval sharing (a school admin can also set it from
+  // their roster), checked against the school they end up in.
   if (supervisorId !== undefined) {
     const problem = await supervisorError(id, finalOrg, supervisorId)
     if (problem) {

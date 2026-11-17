@@ -2,7 +2,7 @@
 //
 // A share is readable only while all three hold: the teacher pressed Share
 // to this person (selfEvalSharedWithId), this person is still the teacher's
-// supervisor (a superadmin can reassign, and the old supervisor loses every
+// supervisor (the school admin or a superadmin can reassign, and the old supervisor loses every
 // share at once), and the lesson still has a Self-Eval. Only the Self-Eval
 // leaves the teacher's account — never the transcript, the rest of the
 // report, Reflect, or anything else on the session.

@@ -2071,7 +2071,19 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
   // than failing one card.
   if (path.startsWith('/api/admin/pd-focus-areas')) return { items: [], themeCounts: {} }
   if (path.startsWith('/api/admin/coaching-priorities')) return previewAdminPriorities(path, method, body)
-  if (path.startsWith('/api/admin/members')) return []
+  // The school roster: the principal's own members, with a supervisor picker.
+  const editMember = path.match(/^\/api\/admin\/members\/([A-Za-z0-9-]+)$/)
+  if (editMember && method === 'PATCH') {
+    const target = PREVIEW_USERS.find((u) => u.id === editMember[1])
+    if (target) Object.assign(target, body)
+    return { status: 'ok' }
+  }
+  if (path.startsWith('/api/admin/members')) {
+    return PREVIEW_USERS.filter((u) => u.organizationId === 'preview-org').map((u) => ({
+      id: u.id, name: u.name, email: u.email, jobTitle: u.jobTitle, role: u.role, suspendedAt: u.suspendedAt,
+      createdAt: u.createdAt, lastActiveAt: '2026-11-14T00:00:00.000Z', supervisorId: u.supervisorId ?? null,
+    }))
+  }
   if (path === '/api/admin/users') return PREVIEW_USERS
   const editUser = path.match(/^\/api\/admin\/users\/([A-Za-z0-9-]+)$/)
   if (editUser && method === 'PATCH') {

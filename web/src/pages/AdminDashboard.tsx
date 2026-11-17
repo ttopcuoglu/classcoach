@@ -646,6 +646,8 @@ const ACTIONS_TH_CLASS =
   'sticky right-0 bg-cream px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-soft shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]'
 const ACTIONS_TD_CLASS = 'sticky right-0 bg-cream-card px-3.5 py-3 shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]'
 
+type SupervisorCandidate = { id: string; name: string | null; email: string; jobTitle: JobTitle | null; organizationId?: string | null }
+
 type EditValues = {
   name: string
   jobTitle: JobTitle | ''
@@ -658,8 +660,9 @@ type EditValues = {
   // assistant and teacher-leader only (see hasLeaderOptions).
   leaderAreas?: LeaderArea[]
   leaderEvaluates?: boolean
-  // Self-Eval supervisor, '' = none. Platform list only, like leaderLevel:
-  // a superadmin assigns it, always someone in the same school.
+  // Self-Eval supervisor, '' = none. Always someone in the same school: set
+  // by a superadmin on the platform list or by the school admin on their
+  // roster.
   supervisorId?: string
 }
 
@@ -672,6 +675,7 @@ function EditUserRow({
   roleLocked,
   orgs,
   supervisorPool,
+  sameSchoolPool = false,
   selfId,
   onSave,
   onCancel,
@@ -680,7 +684,11 @@ function EditUserRow({
   initial: EditValues
   roleLocked: boolean
   orgs?: Organization[]
-  supervisorPool?: AdminUser[]
+  // Candidates for supervisor. On the platform list they span every school
+  // and are filtered to the one picked; a school roster passes only its own
+  // members (sameSchoolPool).
+  supervisorPool?: SupervisorCandidate[]
+  sameSchoolPool?: boolean
   selfId?: string
   onSave: (values: EditValues) => Promise<void>
   onCancel: () => void
@@ -759,7 +767,7 @@ function EditUserRow({
               </select>
             </label>
           )}
-          {values.supervisorId !== undefined && supervisorPool && values.organizationId && (
+          {values.supervisorId !== undefined && supervisorPool && (sameSchoolPool || values.organizationId) && (
             <label className="flex flex-col gap-1 text-xs font-semibold text-ink-soft">
               Supervisor
               <select
@@ -769,7 +777,7 @@ function EditUserRow({
               >
                 <option value="">None</option>
                 {supervisorPool
-                  .filter((u) => u.organizationId === values.organizationId && u.id !== selfId)
+                  .filter((u) => (sameSchoolPool || u.organizationId === values.organizationId) && u.id !== selfId)
                   .sort((a, b) => (a.name ?? a.email).localeCompare(b.name ?? b.email))
                   .map((u) => (
                     <option key={u.id} value={u.id}>
@@ -870,7 +878,12 @@ function EditUserRow({
 }
 
 function editsFrom(values: EditValues): MemberEdits {
-  return { name: values.name.trim() || null, jobTitle: values.jobTitle || null, role: values.role }
+  return {
+    name: values.name.trim() || null,
+    jobTitle: values.jobTitle || null,
+    role: values.role,
+    ...(values.supervisorId !== undefined ? { supervisorId: values.supervisorId || null } : {}),
+  }
 }
 
 // ---- Bulk selection, shared by both rosters ----
@@ -1229,7 +1242,7 @@ function MembersList({
         n={rosterN}
         title="Your staff"
         question={`Everyone at your school with a Wivoza account${members ? ` (${members.length})` : ''}.`}
-        howToRead="Last active is the last time someone used any part of Wivoza. Edit changes a name, job title or role; Suspend stops someone signing in until you unsuspend them; Remove takes them off your school without deleting anything of theirs. Select several people to do the same thing to all of them at once."
+        howToRead="Last active is the last time someone used any part of Wivoza. Edit changes a name, job title, role or Self-Eval supervisor (the colleague a teacher can share a Self-Eval with); Suspend stops someone signing in until you unsuspend them; Remove takes them off your school without deleting anything of theirs. Select several people to do the same thing to all of them at once."
       >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -1307,6 +1320,7 @@ function MembersList({
                 <MemberRow
                   key={m.id}
                   member={m}
+                  members={members}
                   organizationId={organizationId}
                   isSuperadmin={isSuperadmin}
                   selected={selected.has(m.id)}
@@ -1384,6 +1398,7 @@ function NudgeCard({ n, members }: { n: number; members: OrgMember[] }) {
 
 function MemberRow({
   member,
+  members,
   organizationId,
   isSuperadmin,
   selected,
@@ -1392,6 +1407,7 @@ function MemberRow({
   onChanged,
 }: {
   member: OrgMember
+  members: OrgMember[]
   organizationId?: string
   isSuperadmin: boolean
   selected: boolean
@@ -1406,6 +1422,7 @@ function MemberRow({
   // but only the platform-wide list can act on them.
   const actionable = member.role !== 'superadmin'
   const status = memberStatusLabel(member)
+  const supervisor = member.supervisorId ? members.find((m) => m.id === member.supervisorId) : null
 
   async function run(action: () => Promise<unknown>) {
     setBusy(true)
@@ -1461,6 +1478,7 @@ function MemberRow({
             {member.email}
             {member.jobTitle ? ` · ${member.jobTitle}` : ''}
           </p>
+          {supervisor && <p className="text-xs text-ink-soft/80">Supervisor: {supervisor.name ?? supervisor.email}</p>}
         </td>
         <td className="whitespace-nowrap px-3.5 py-3">
           {member.role === 'org_admin' ? (
@@ -1535,7 +1553,11 @@ function MemberRow({
             jobTitle: member.jobTitle ?? '',
             role: member.role === 'org_admin' ? 'org_admin' : 'teacher',
             organizationId: '',
+            supervisorId: member.supervisorId ?? '',
           }}
+          supervisorPool={members}
+          sameSchoolPool
+          selfId={member.id}
           roleLocked={false}
           onSave={async (values) => {
             await updateMember(member.id, editsFrom(values), organizationId)

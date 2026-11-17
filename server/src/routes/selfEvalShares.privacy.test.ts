@@ -137,8 +137,17 @@ test('the whole share lifecycle, and who can read what', async (t) => {
   // No supervisor yet: nothing to share with.
   assert.equal((await call(share, teacher, json({ share: true }))).status, 400)
 
-  // Only a superadmin assigns, and only someone from the same school.
+  // The school admin assigns from their own roster, only within their school.
+  // The platform-wide users route stays superadmin-only.
   assert.equal((await call(`/api/admin/users/${ids.teacher}`, principal, patch({ supervisorId: ids.supervisor }))).status, 403)
+  assert.equal((await call(`/api/admin/members/${ids.teacher}`, principal, patch({ supervisorId: ids.outsider }))).status, 400)
+  assert.equal((await call(`/api/admin/members/${ids.teacher}`, principal, patch({ supervisorId: ids.teacher }))).status, 400)
+  assert.equal((await call(`/api/admin/members/${ids.outsider}`, principal, patch({ supervisorId: ids.supervisor }))).status, 404)
+  assert.equal((await call(`/api/admin/members/${ids.teacher}`, principal, patch({ supervisorId: ids.supervisor }))).status, 200)
+  const roster = JSON.parse((await call('/api/admin/members', principal)).text) as { id: string; supervisorId: string | null }[]
+  assert.equal(roster.find((m) => m.id === ids.teacher)?.supervisorId, ids.supervisor)
+  assert.equal((await call(`/api/admin/members/${ids.teacher}`, principal, patch({ supervisorId: null }))).status, 200)
+  // A superadmin can assign too, and only someone from the same school.
   assert.equal((await call(`/api/admin/users/${ids.teacher}`, superadmin, patch({ supervisorId: ids.outsider }))).status, 400)
   assert.equal((await call(`/api/admin/users/${ids.teacher}`, superadmin, patch({ supervisorId: ids.teacher }))).status, 400)
   assert.equal((await call(`/api/admin/users/${ids.teacher}`, superadmin, patch({ supervisorId: ids.supervisor }))).status, 200)
