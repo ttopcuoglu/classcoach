@@ -1412,7 +1412,7 @@ const REPORT_TABS: { key: ReportTab; label: string }[] = [
   // where a report-scoped thing repeated under all four sections and belonged
   // to none of them, and a teacher who came looking for it had to scroll a
   // section to the end to find it.
-  { key: 'rubric', label: 'Rubric lens' },
+  { key: 'rubric', label: 'Self-Eval' },
   { key: 'reflect', label: 'Reflect' },
   { key: 'growth', label: 'My Growth' },
 ]
@@ -2078,7 +2078,7 @@ function ReportPanel({
       const updated = await generateRubricLens(session.id)
       onUpdate({ ...session, ...updated })
     } catch (err) {
-      setRubricLensError((err as Error).message || 'Could not build the rubric lens. Please try again.')
+      setRubricLensError((err as Error).message || 'Could not build your Self-Eval. Please try again.')
     } finally {
       setRubricLensSending(false)
     }
@@ -2626,7 +2626,7 @@ function ReportPanel({
               encouraged. Never on paper: the export is the page a teacher
               brings to evaluation. A locked report that never had one shows
               nothing. */}
-          {!(locked && !session.hardLook) && (
+          {HARD_LOOK_SHOWN && !(locked && !session.hardLook) && (
             <div className="flex flex-col gap-3 border-t border-dashed border-hairline pt-6">
               <p className="font-heading text-xl font-bold text-forest">The Hard Look</p>
               <p className="-mt-2 text-sm text-ink-soft">The least generous honest reading of the whole lesson. For when you want it straight.</p>
@@ -5065,8 +5065,14 @@ function LessonContentTab({
   )
 }
 
-// On demand only — nothing here is built until the teacher asks, and once
-// built it's kept (see the /:id/rubric-lens route). Each component carries a
+// Hidden from teachers since 2026-11-16 (the user's call). The route, the
+// HardLookTab component and any saved Hard Looks are kept; set this to true
+// to bring it back.
+const HARD_LOOK_SHOWN = false
+
+// Shown to teachers as "Self-Eval" since 2026-11-16 (code still says Rubric
+// Lens). On demand only — nothing here is built until the teacher asks, and
+// once built it's kept (see the /:id/rubric-lens route). Each component carries a
 // Danielson level (since 2026-11-16) for the teacher alone, with room for
 // their own note where they disagree; the export never prints either.
 function RubricLensTab({
@@ -5092,7 +5098,7 @@ function RubricLensTab({
         <div className="rounded-2xl border border-hairline bg-cream-card p-6">
           <p className="font-heading text-lg font-bold text-forest">See this lesson through the Danielson Framework</p>
           <p className="mt-2 text-sm text-ink">
-            Rubric Lens sorts what your recording captured under Danielson's Domain 2 (Learning Environments) and
+            Self-Eval sorts what your recording captured under Danielson's Domain 2 (Learning Environments) and
             Domain 3 (Learning Experiences). For each component you get a level from 1 to 4, the moments behind it, and
             one next step to try.
           </p>
@@ -5103,7 +5109,7 @@ function RubricLensTab({
             <li>· Only you see it. Levels are not part of the export.</li>
           </ul>
           {locked ? (
-            <p className="mt-5 text-sm text-ink-soft">This report is locked, so a rubric lens can't be added to it.</p>
+            <p className="mt-5 text-sm text-ink-soft">This report is locked, so a Self-Eval can't be added to it.</p>
           ) : (
             <div className="mt-5 flex flex-col gap-3">
               <button
@@ -5112,7 +5118,7 @@ function RubricLensTab({
                 disabled={sending}
                 className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
               >
-                {sending ? 'Building your rubric lens...' : 'View through Danielson rubric'}
+                {sending ? 'Building your Self-Eval...' : 'View through Danielson rubric'}
               </button>
               <WorkingRing active={sending} estimatedMs={30000} label="Matching your lesson to the framework" className="text-forest" />
             </div>
@@ -5141,7 +5147,7 @@ function RubricLensTab({
 
       {!rubricLens.scored && !locked && (
         <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-5">
-          <p className="text-sm text-ink">This lens was made before Rubric Lens gave levels. Rebuild it to get a level for each component.</p>
+          <p className="text-sm text-ink">This Self-Eval was made before it gave levels. Rebuild it to get a level for each component.</p>
           <button
             type="button"
             onClick={onGenerate}
@@ -5829,7 +5835,7 @@ function ClimateRoutinesTab({
           </p>
           <p className="text-sm text-ink-soft">
             Tone isn't judged on this page: a transcript can't hear warmth or sarcasm, and a student's line can be filed as
-            yours. The Hard Look, under Rubric lens, is where a stricter reading lives, if you want one.
+            yours.
           </p>
         </>
       }

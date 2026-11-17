@@ -1521,7 +1521,7 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
     // Most of the framework has to come back — a lens missing half its
     // components would look like those parts of teaching were absent.
     if (components.length < Math.ceil(framework.components.length * 0.75)) {
-      res.status(502).json({ error: 'Could not build the rubric lens. Please try again.' })
+      res.status(502).json({ error: 'Could not build your Self-Eval. Please try again.' })
       return
     }
 
@@ -1540,7 +1540,7 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
     })
     res.json(updated)
   } catch (error) {
-    const failure = classifyModelError(error, 'Could not build the rubric lens')
+    const failure = classifyModelError(error, 'Could not build your Self-Eval')
     logModelFailure('[audio-sessions] rubric lens failed:', failure, error)
     res.status(failure.status).json({ error: failure.message })
   }
@@ -1565,7 +1565,7 @@ audioSessionsRouter.put('/:id/rubric-lens/note', async (req, res) => {
   const code = typeof req.body?.code === 'string' ? req.body.code.toLowerCase() : ''
   const component = lens?.components.find((c) => c.code === code)
   if (!lens || !component) {
-    res.status(400).json({ error: 'That component is not in this rubric lens.' })
+    res.status(400).json({ error: 'That component is not in this Self-Eval.' })
     return
   }
   component.teacherNote = cleanTeacherNote(req.body?.note)

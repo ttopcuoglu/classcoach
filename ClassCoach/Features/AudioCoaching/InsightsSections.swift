@@ -1592,7 +1592,7 @@ struct RoutinesSection: View {
             section: .routines, note: session.climateNarrative, keep: keep, tryNext: session.nextSteps?.climate,
             howToRead: [
                 "Everything here is from your own words. Each activity you set up is shown once, with the words you launched it with; anything written on the board or a slide isn\u{2019}t part of the recording.",
-                "Tone isn\u{2019}t judged on this page: a transcript can\u{2019}t hear warmth or sarcasm, and a student\u{2019}s line can be filed as yours. The hard look is where a stricter reading lives, if you want one.",
+                "Tone isn\u{2019}t judged on this page: a transcript can\u{2019}t hear warmth or sarcasm, and a student\u{2019}s line can be filed as yours.",
             ],
             hardLook: hardLook, onDiscuss: onDiscuss
         ) {

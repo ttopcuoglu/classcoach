@@ -78,8 +78,8 @@ const TABS = [
     body: 'How you taught this content, read the way a specialist in the subject would — what worked and why, where it could go further, each tied to a moment you said. Then where students usually get stuck in this topic, and the move that heads it off.',
   },
   {
-    name: 'Rubric lens',
-    body: 'On request, the same lesson sorted under the Danielson rubric, with one next step for each component. Never a level or a score. Below it, the Hard Look, when you want the least generous reading the evidence supports.',
+    name: 'Self-Eval',
+    body: 'On request, a level from 1 to 4 for each Danielson component in Domains 2 and 3, with the moments behind it and one next step. Disagree with a level? Add your own note beside it. Only you see it.',
   },
   {
     name: 'Reflect',

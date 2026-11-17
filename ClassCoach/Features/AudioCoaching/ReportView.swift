@@ -13,7 +13,7 @@ enum ReportTab: String, CaseIterable {
         case .summary: return "Summary"
         case .insights: return "Insights"
         case .specialist: return "Content Specialist"
-        case .rubric: return "Rubric lens"
+        case .rubric: return "Self-Eval"
         case .reflect: return "Reflect"
         case .myGrowth: return "My Growth"
         }
@@ -175,6 +175,9 @@ extension EnvironmentValues {
 /// Summary / Insights / Reflect / My Growth. Metrics are computed once and
 /// threaded down to each tab, matching the single-fetch pattern on web.
 struct ReportView: View {
+    /// Hidden from teachers since 2026-11-16; flip to bring the Hard Look back.
+    static let hardLookShown = false
+
     let session: AudioSessionWithSegments
     let onUpdate: (AudioSessionWithSegments) -> Void
     let onExit: () -> Void
@@ -252,7 +255,9 @@ struct ReportView: View {
                     // lesson, rather than on the Summary and under each
                     // Insights section (as on the web since a7d0b65).
                     RubricLensTab(session: session, locked: locked, onUpdate: onUpdate)
-                    if !(locked && session.hardLook == nil) {
+                    // Hard Look hidden since 2026-11-16 (the user's call);
+                    // HardLookTab and saved Hard Looks are kept.
+                    if Self.hardLookShown && !(locked && session.hardLook == nil) {
                         VStack(alignment: .leading, spacing: 8) {
                             Divider().padding(.vertical, 8)
                             Text("The Hard Look")
