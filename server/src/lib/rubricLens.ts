@@ -5,9 +5,13 @@
 // so adding Marzano or a state rubric later means adding one more entry to
 // RUBRIC_FRAMEWORKS, not a second analysis.
 //
-// Never a rating. Component names are cited so a teacher can find their
-// place in their own evaluation rubric; every description here is our own
-// wording, never the framework's level descriptors.
+// Since 2026-11-16 each component also gets a level (1-4, the framework's
+// level names) — the teacher's own call, for their eyes only: admin and share
+// routes never read this column, and the export leaves levels out. A
+// component with no cited moment gets no level ("not enough evidence"), and a
+// teacher who disagrees with a level can add a note beside it. Every
+// description here is still our own wording, never the framework's licensed
+// level descriptors.
 
 import type {
   CfuLogEntry,
@@ -139,20 +143,39 @@ export type RubricEvidenceItem = {
   text: string
 }
 
+export type RubricLevel = 1 | 2 | 3 | 4
+
+export const RUBRIC_LEVEL_NAMES: Record<RubricLevel, string> = {
+  1: 'Unsatisfactory',
+  2: 'Basic',
+  3: 'Proficient',
+  4: 'Distinguished',
+}
+
 export type RubricLensComponent = {
   code: string
   name: string
   domain: string
   audibility: RubricAudibility
+  /// Null = not enough evidence in the recording to place it. Absent on a
+  /// lens built before scoring existed.
+  level?: RubricLevel | null
   summary: string
   nextStep: string | null
   evidence: RubricEvidenceItem[]
+  /// The teacher's own note, usually where they disagree with the level.
+  teacherNote?: string | null
 }
+
+export const RUBRIC_TEACHER_NOTE_MAX = 1000
 
 export type RubricLensResult = {
   framework: string
   frameworkName: string
   generatedAt: string
+  /// True once the lens carries levels; an older, level-free lens is rebuilt
+  /// the next time the teacher asks for it.
+  scored?: boolean
   components: RubricLensComponent[]
   notObservable: RubricFramework['notObservable']
 }
@@ -331,9 +354,17 @@ export function buildRubricLensSystemPrompt(
     .map((c) => `${c.code} ${c.name}: from audio, look only at ${c.listensFor}.`)
     .join('\n')
 
-  return `You are a warm, practical instructional coach helping a teacher see their own recorded lesson through the ${framework.name}, the framework their school uses for evaluation. This is for the teacher's own reflection only. Nobody else sees it.
+  return `You are a warm, practical instructional coach helping a teacher see their own recorded lesson through the ${framework.name}, the framework their school uses for evaluation. This is for the teacher's own reflection only. Nobody else sees it, and the teacher can add a note wherever they disagree.
 
-You are organizing evidence, not evaluating. Never assign, suggest, or hint at a performance level for any component, and never use the framework's level names (such as unsatisfactory, basic, proficient, distinguished, or effective) in any form.
+The teacher asked for a level on each component, on the framework's four-level scale. Place each component on what this recording shows, judged as one lesson:
+1 Unsatisfactory: what was heard works against this component (for example, demeaning language, no checks at all while students were clearly lost, directions so unclear the lesson stalled).
+2 Basic: the component is attempted, but unevenly or only in part (for example, mostly recall questions with an occasional deeper one, generic praise, a goal mentioned but never returned to).
+3 Proficient: the component is consistently and clearly present across the lesson (for example, several questions that ask students to reason, checks that the teacher acts on, feedback that names what was right or wrong).
+4 Distinguished: everything in 3, and students themselves carry part of it (for example, students build on or question each other's ideas, ask their own questions, or help set or check the work). Only give 4 when a cited student moment shows students doing this.
+Rules for the level:
+- Ground it only in the cited moments and the counts below. Do not reward or penalize what audio cannot show.
+- If you cite no moment for a component, or what was heard is too thin to judge, the level is not_enough. That is better than a guess.
+- Give the level only inside <level>. In <summary> and <next_step>, never name a level or any level word (unsatisfactory, basic, proficient, distinguished, effective); the level is shown to the teacher separately. The summary says what was heard that placed it there.
 
 You only have an automatic audio transcript. You can't see the room, the board, student work, or anything nonverbal, and phrase-based detection misses things. When evidence for a component is thin, say plainly what the recording could and couldn't show, and never treat missing evidence as a sign that something didn't happen.
 
@@ -350,6 +381,7 @@ For every component listed above, in the same order, write exactly one block:
 <component>
 <code>the component code, e.g. 3b</code>
 <evidence>up to 3 moment numbers that best show this component, comma-separated, or none</evidence>
+<level>1, 2, 3, 4, or not_enough</level>
 <summary>1-2 sentences (45 words at most) describing what the recording shows for this component, grounded in the cited moments and counts. If there is little or no evidence, say what audio couldn't capture here.</summary>
 <next_step>One sentence (35 words at most): a concrete, small practice to try in a future lesson that builds on what was heard. Write none if the evidence is too thin to suggest anything specific.</next_step>
 </component>
@@ -376,12 +408,27 @@ export function stripMomentReferences(text: string): string {
     .trim()
 }
 
+// Fail closed: a level with no quote behind it is a guess the teacher has no
+// way to check, so it becomes "not enough evidence" whatever the model said.
+export function parseRubricLevel(raw: string | null | undefined, evidenceCount: number): RubricLevel | null {
+  if (evidenceCount === 0) return null
+  const match = raw?.trim().match(/^[1-4]\b/)
+  return match ? (Number(match[0]) as RubricLevel) : null
+}
+
+// The teacher's note beside a level: trimmed, capped, empty means removed.
+export function cleanTeacherNote(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const note = raw.trim().slice(0, RUBRIC_TEACHER_NOTE_MAX)
+  return note.length > 0 ? note : null
+}
+
 export function parseRubricLens(
   text: string,
   framework: RubricFramework,
   items: RubricEvidenceItem[],
 ): RubricLensComponent[] {
-  const byCode = new Map<string, { summary: string; nextStep: string | null; evidence: RubricEvidenceItem[] }>()
+  const byCode = new Map<string, { level: RubricLevel | null; summary: string; nextStep: string | null; evidence: RubricEvidenceItem[] }>()
   for (const block of text.match(/<component>[\s\S]*?<\/component>/g) ?? []) {
     const code = extractTag(block, 'code')?.toLowerCase()
     const summary = extractTag(block, 'summary')
@@ -398,6 +445,7 @@ export function parseRubricLens(
     }
     const nextStep = extractTag(block, 'next_step')
     byCode.set(code, {
+      level: parseRubricLevel(extractTag(block, 'level'), evidence.length),
       summary: stripMomentReferences(summary),
       nextStep: nextStep && nextStep.toLowerCase() !== 'none' ? stripMomentReferences(nextStep) : null,
       evidence,

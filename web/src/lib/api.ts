@@ -912,14 +912,27 @@ export type AudioRubricComponent = {
   name: string
   domain: string
   audibility: 'strong' | 'partial'
+  /// 1-4 on the framework's scale; null = not enough evidence. Absent on a
+  /// lens built before levels existed.
+  level?: 1 | 2 | 3 | 4 | null
   summary: string
   nextStep: string | null
   evidence: AudioRubricEvidence[]
+  /// The teacher's own note beside the level.
+  teacherNote?: string | null
+}
+
+export const RUBRIC_LEVEL_NAMES: Record<1 | 2 | 3 | 4, string> = {
+  1: 'Unsatisfactory',
+  2: 'Basic',
+  3: 'Proficient',
+  4: 'Distinguished',
 }
 export type AudioRubricLens = {
   framework: string
   frameworkName: string
   generatedAt: string
+  scored?: boolean
   components: AudioRubricComponent[]
   notObservable: { code: string; name: string; domain: string; reason: string }[]
 }
@@ -3012,6 +3025,10 @@ export function generateContentNotes(id: string): Promise<AudioSession> {
 
 export function generateRubricLens(id: string): Promise<AudioSessionWithSegments> {
   return request(`/api/audio-sessions/${id}/rubric-lens`, { method: 'POST' })
+}
+
+export function saveRubricLensNote(id: string, code: string, note: string): Promise<AudioSessionWithSegments> {
+  return request(`/api/audio-sessions/${id}/rubric-lens/note`, { method: 'PUT', body: JSON.stringify({ code, note }) })
 }
 
 export type DebriefSchoolFocusIdea = {

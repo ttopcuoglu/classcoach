@@ -2194,8 +2194,23 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
     }
     return { ...(previewReport() as Record<string, unknown>), schoolFocusIdea: previewDebriefIdea }
   }
+  // Rubric Lens with Danielson levels: built on request (`?rubric=old` starts
+  // from a lens made before levels), and a note can be saved per component.
+  if (path === '/api/audio-sessions/preview-report/rubric-lens' && method === 'POST') {
+    previewRubricLens = previewScoredLens()
+    return { ...(previewReport() as Record<string, unknown>), rubricLens: previewRubricLens, schoolFocusIdea: previewDebriefIdea }
+  }
+  if (path === '/api/audio-sessions/preview-report/rubric-lens/note' && method === 'PUT') {
+    const lens = currentPreviewLens()
+    const target = lens?.components.find((c) => c.code === String(body.code))
+    if (lens && target) {
+      const note = String(body.note ?? '').trim()
+      target.teacherNote = note || null
+    }
+    return { ...(previewReport() as Record<string, unknown>), rubricLens: lens, schoolFocusIdea: previewDebriefIdea }
+  }
   const reportMatch = path.match(/^\/api\/audio-sessions\/(preview-report)$/)
-  if (reportMatch) return withNoStudents(withClimate({ ...(previewReport() as Record<string, unknown>), schoolFocusIdea: previewDebriefIdea }))
+  if (reportMatch) return withNoStudents(withClimate({ ...(previewReport() as Record<string, unknown>), rubricLens: currentPreviewLens(), schoolFocusIdea: previewDebriefIdea }))
   // Any OTHER session id fetched on its own. Without this the request fell
   // through to the list handler below and answered with an ARRAY, so opening
   // any row but the first handed the report page a session with no segments
@@ -2299,6 +2314,60 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
       : []
   }
   return null
+}
+
+type PreviewRubricComponent = {
+  code: string
+  name: string
+  domain: string
+  audibility: 'strong' | 'partial'
+  level?: 1 | 2 | 3 | 4 | null
+  summary: string
+  nextStep: string | null
+  evidence: { kind: string; timestampSec: number; text: string }[]
+  teacherNote?: string | null
+}
+type PreviewRubricLens = {
+  framework: string
+  frameworkName: string
+  generatedAt: string
+  scored?: boolean
+  components: PreviewRubricComponent[]
+  notObservable: { code: string; name: string; domain: string; reason: string }[]
+}
+let previewRubricLens: PreviewRubricLens | null = null
+
+function currentPreviewLens(): PreviewRubricLens | null {
+  if (previewRubricLens) return previewRubricLens
+  if (new URLSearchParams(window.location.search).get('rubric') === 'old') {
+    const old = previewScoredLens()
+    previewRubricLens = { ...old, scored: undefined, components: old.components.map(({ level: _l, ...c }) => c) }
+  }
+  return previewRubricLens
+}
+
+function previewScoredLens(): PreviewRubricLens {
+  const env = 'Domain 2: Learning Environments'
+  const exp = 'Domain 3: Learning Experiences'
+  const q = (t: number, kind: string, text: string) => ({ kind, timestampSec: t, text })
+  return {
+    framework: 'danielson_2022',
+    frameworkName: 'Danielson Framework for Teaching (2022)',
+    generatedAt: new Date().toISOString(),
+    scored: true,
+    components: [
+      { code: '2a', name: 'Cultivating Respectful and Affirming Environments', domain: env, audibility: 'partial', level: 3, summary: 'Your language toward students stayed warm throughout, including when you corrected a wrong answer.', nextStep: 'Name one specific thing a student did well each time you correct someone.', evidence: [q(212, 'Encouraging language', 'I love that you tried that, let\'s look at it together.')] },
+      { code: '2b', name: 'Fostering a Culture for Learning', domain: env, audibility: 'partial', level: 2, summary: 'Praise was mostly general, and expectations about effort were mentioned once at the start.', nextStep: 'Swap one "good job" for a sentence that names the reasoning you liked.', evidence: [q(305, 'General praise', 'Good job, everybody.')] },
+      { code: '2c', name: 'Maintaining Purposeful Environments', domain: env, audibility: 'partial', level: 3, summary: 'Each activity was set up with clear steps and a time limit.', nextStep: null, evidence: [q(140, 'How an activity was set up', 'With your partner, you have four minutes to list three causes.')] },
+      { code: '2d', name: 'Supporting Positive Student Behavior', domain: env, audibility: 'partial', level: null, summary: 'Only a couple of brief redirections were heard, so there is little to go on here.', nextStep: null, evidence: [] },
+      { code: '3a', name: 'Communicating About Purpose and Content', domain: exp, audibility: 'strong', level: 3, summary: 'You stated the goal at the start and linked it to last week\'s reading.', nextStep: 'Return to the goal at the end and ask students how today moved them toward it.', evidence: [q(35, 'Stated learning goal', 'Today we\'re figuring out why the empire fell, not just when.')] },
+      { code: '3b', name: 'Using Questioning and Discussion Techniques', domain: exp, audibility: 'strong', level: 2, summary: 'Most questions asked students to recall facts, with two that asked them to explain.', nextStep: 'Plan two "why do you think" questions and wait before calling on anyone.', evidence: [q(410, 'Recall question', 'What year did Rome fall?'), q(426, 'Question asking students to explain or reason', 'Why might that have mattered more than the invasions?')] },
+      { code: '3c', name: 'Engaging Students in Learning', domain: exp, audibility: 'partial', level: 3, summary: 'Pairs worked on a sorting task and reported back with their reasons.', nextStep: null, evidence: [q(520, 'Student response', 'We put taxes under outside forces because the army needed money.')] },
+      { code: '3d', name: 'Using Assessment for Learning', domain: exp, audibility: 'strong', level: 2, summary: 'There was one whole-class check, and the response was not followed up.', nextStep: 'After the check, ask a student who answered differently to explain their thinking.', evidence: [q(600, 'Check for understanding (key idea)', 'Thumbs up if you can name one cause.')] },
+      { code: '3e', name: 'Responding Flexibly to Student Needs', domain: exp, audibility: 'partial', level: 4, summary: 'When students mixed up two causes, you stopped, re-explained with a new example, and students then corrected each other.', nextStep: null, evidence: [q(640, 'Follow-up after a student answer', 'Okay, let me try it a different way. Think of a family budget.'), q(700, 'Student response', 'No wait, that one is inside the empire, so it goes on the other side.')] },
+    ],
+    notObservable: [{ code: '2e', name: 'Organizing Spaces for Learning', domain: env, reason: "Room arrangement and materials are visual, so a recording can't show them." }],
+  }
 }
 
 export function installPreviewApi() {

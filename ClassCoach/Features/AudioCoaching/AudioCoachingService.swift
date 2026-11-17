@@ -236,6 +236,20 @@ enum AudioCoachingService {
         try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/rubric-lens", method: "POST")
     }
 
+    /// The teacher's note beside a Rubric Lens level. An empty note removes it.
+    static func saveRubricLensNote(sessionId: String, code: String, note: String) async throws -> AudioSessionWithSegments {
+        try await APIClient.shared.request(
+            "/api/audio-sessions/\(sessionId)/rubric-lens/note",
+            method: "PUT",
+            body: RubricNoteBody(code: code, note: note)
+        )
+    }
+
+    private struct RubricNoteBody: Encodable {
+        let code: String
+        let note: String
+    }
+
     /// The school focuses the teacher's school shared, with the teacher's own
     /// answer for each. Only the ones they turned on can be asked about.
     static func fetchSchoolFocuses() async throws -> [SchoolFocusChoice] {

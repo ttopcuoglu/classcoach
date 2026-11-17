@@ -487,7 +487,8 @@ export default function AudioCoachingExport() {
 
         {/* Rubric Lens — only once the teacher has asked for it in the app.
             The page they'd bring to an evaluation conversation, so it prints
-            the same evidence-and-next-step view, never a level. */}
+            the evidence-and-next-step view only: the levels and the
+            teacher's notes beside them stay in the app. */}
         {session.rubricLens && (
           <ReportSection
             n={++n}

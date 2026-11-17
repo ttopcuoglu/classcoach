@@ -34,6 +34,8 @@ import {
   rewriteNextStepWithoutPause,
   writeFocusLine,
   generateRubricLens,
+  saveRubricLensNote,
+  RUBRIC_LEVEL_NAMES,
   getAudioSession,
   getAudioSessions,
   getProfile,
@@ -2082,6 +2084,11 @@ function ReportPanel({
     }
   }
 
+  async function handleSaveRubricNote(code: string, note: string) {
+    const updated = await saveRubricLensNote(session.id, code, note)
+    onUpdate({ ...session, ...updated })
+  }
+
   async function handleGenerateHardLook() {
     setHardLookSending(true)
     setHardLookError(null)
@@ -2611,6 +2618,7 @@ function ReportPanel({
             sending={rubricLensSending}
             error={rubricLensError}
             onGenerate={handleGenerateRubricLens}
+            onSaveNote={handleSaveRubricNote}
           />
           {/* The Hard Look lives here, with the other on-demand reading of
               the whole lesson, rather than on the Summary and under each
@@ -5058,7 +5066,9 @@ function LessonContentTab({
 }
 
 // On demand only — nothing here is built until the teacher asks, and once
-// built it's kept (see the /:id/rubric-lens route). Never shows a level.
+// built it's kept (see the /:id/rubric-lens route). Each component carries a
+// Danielson level (since 2026-11-16) for the teacher alone, with room for
+// their own note where they disagree; the export never prints either.
 function RubricLensTab({
   rubricLens,
   locked,
@@ -5066,6 +5076,7 @@ function RubricLensTab({
   sending,
   error,
   onGenerate,
+  onSaveNote,
 }: {
   rubricLens: AudioRubricLens | null
   locked: boolean
@@ -5073,6 +5084,7 @@ function RubricLensTab({
   sending: boolean
   error: string | null
   onGenerate: () => void
+  onSaveNote: (code: string, note: string) => Promise<void>
 }) {
   if (!rubricLens) {
     return (
@@ -5081,13 +5093,14 @@ function RubricLensTab({
           <p className="font-heading text-lg font-bold text-forest">See this lesson through the Danielson Framework</p>
           <p className="mt-2 text-sm text-ink">
             Rubric Lens sorts what your recording captured under Danielson's Domain 2 (Learning Environments) and
-            Domain 3 (Learning Experiences). For each component you get the moments that show it and one next step to
-            try.
+            Domain 3 (Learning Experiences). For each component you get a level from 1 to 4, the moments behind it, and
+            one next step to try.
           </p>
           <ul className="mt-3 flex flex-col gap-1 text-sm text-ink-soft">
-            <li>· Evidence and next steps only. It never gives a level or a score.</li>
-            <li>· Only what audio can show. Anything visual, like room setup, is left out.</li>
-            <li>· Only you see it.</li>
+            <li>· Levels come from what audio can show. Anything visual, like room setup, is left out.</li>
+            <li>· When the recording doesn't show enough, it says so instead of guessing.</li>
+            <li>· Disagree with a level? Add your own note beside it.</li>
+            <li>· Only you see it. Levels are not part of the export.</li>
           </ul>
           {locked ? (
             <p className="mt-5 text-sm text-ink-soft">This report is locked, so a rubric lens can't be added to it.</p>
@@ -5115,8 +5128,9 @@ function RubricLensTab({
   return (
     <div className="flex flex-col gap-6">
       <div className="rounded-xl border border-dashed border-hairline p-4 text-xs text-ink-soft">
-        {rubricLens.frameworkName}, Domains 2 and 3. This organizes what your recording captured under each component.
-        It isn't a rating, and a thin section only means audio couldn't show much there, not that it didn't happen.
+        {rubricLens.frameworkName}, Domains 2 and 3. Each level is an estimate from this one recording, for you alone.
+        It can't see the room or student work, and "not enough evidence" only means audio couldn't show it, not that
+        it didn't happen. Disagree? Add a note beside the level.
         {isShort && (
           <span className="mt-1 block font-semibold text-terracotta-600">
             This session is under {Math.round(SHORT_SESSION_THRESHOLD_SEC / 60)} minutes, so there is less evidence to
@@ -5125,9 +5139,25 @@ function RubricLensTab({
         )}
       </div>
 
-      {/* A colour band per domain, but no numbers of our own: the framework
-          already numbers its components (2a, 3b...), and a second count
-          beside those could read as a score. */}
+      {!rubricLens.scored && !locked && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-5">
+          <p className="text-sm text-ink">This lens was made before Rubric Lens gave levels. Rebuild it to get a level for each component.</p>
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={sending}
+            className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
+          >
+            {sending ? 'Adding levels...' : 'Add Danielson levels'}
+          </button>
+          <WorkingRing active={sending} estimatedMs={30000} label="Matching your lesson to the framework" className="text-forest" />
+          {error && <p className="text-sm text-terracotta-600">{error}</p>}
+        </div>
+      )}
+
+      {/* A colour band per domain. No domain average: one lesson's audio
+          reaches some components far better than others, so an average
+          would hide exactly the "not enough evidence" that matters. */}
       {domains.map((domain, i) => (
         <section key={domain} className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
@@ -5149,6 +5179,7 @@ function RubricLensTab({
                     {component.audibility === 'strong' ? 'Audio shows this well' : 'Audio shows part of this'}
                   </span>
                 </div>
+                {rubricLens.scored && <RubricLevelBadge level={component.level ?? null} />}
                 <p className="mt-3 text-sm text-ink">{component.summary}</p>
                 {component.evidence.length > 0 && (
                   <div className="mt-3 flex flex-col gap-2">
@@ -5168,6 +5199,13 @@ function RubricLensTab({
                     <p className="mt-1 text-sm text-ink">{component.nextStep}</p>
                   </div>
                 )}
+                {rubricLens.scored && (
+                  <RubricTeacherNote
+                    note={component.teacherNote ?? null}
+                    locked={locked}
+                    onSave={(note) => onSaveNote(component.code, note)}
+                  />
+                )}
               </div>
             ))}
           {rubricLens.notObservable
@@ -5184,6 +5222,155 @@ function RubricLensTab({
         </section>
       ))}
     </div>
+  )
+}
+
+const RUBRIC_LEVEL_FILL: Record<1 | 2 | 3 | 4, string> = {
+  1: 'bg-terracotta',
+  2: 'bg-gold',
+  3: 'bg-brand-400',
+  4: 'bg-forest',
+}
+
+// Four steps, filled up to the level, with the framework's name beside it —
+// or a dashed "not enough evidence" when the recording couldn't place it.
+function RubricLevelBadge({ level }: { level: 1 | 2 | 3 | 4 | null }) {
+  if (level == null) {
+    return (
+      <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-dashed border-hairline px-3 py-1 text-xs font-semibold text-ink-soft">
+        Not enough evidence in this recording
+      </div>
+    )
+  }
+  return (
+    <div className="mt-3 flex items-center gap-3" aria-label={`Level ${level} of 4: ${RUBRIC_LEVEL_NAMES[level]}`}>
+      <div className="flex gap-1" aria-hidden="true">
+        {[1, 2, 3, 4].map((step) => (
+          <span
+            key={step}
+            className={`h-2.5 w-7 rounded-full ${step <= level ? RUBRIC_LEVEL_FILL[level] : 'bg-hairline'}`}
+          />
+        ))}
+      </div>
+      <span className="text-sm font-bold text-forest">
+        {level} · {RUBRIC_LEVEL_NAMES[level]}
+      </span>
+    </div>
+  )
+}
+
+function RubricTeacherNote({
+  note,
+  locked,
+  onSave,
+}: {
+  note: string | null
+  locked: boolean
+  onSave: (note: string) => Promise<void>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(note ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function save(value: string) {
+    setSaving(true)
+    setError(null)
+    try {
+      await onSave(value)
+      setEditing(false)
+    } catch (err) {
+      setError((err as Error).message || 'Could not save your note. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="mt-4 flex flex-col gap-2">
+        <label className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Your note</label>
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          maxLength={1000}
+          rows={3}
+          autoFocus
+          placeholder="Why you see this component differently, e.g. what happened that the recording missed."
+          className="w-full rounded-xl border border-hairline bg-white p-3 text-sm text-ink focus:border-forest focus:outline-none"
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => save(draft)}
+            disabled={saving}
+            className="rounded-full bg-forest px-4 py-2 text-xs font-semibold text-cream disabled:bg-hairline disabled:text-ink-soft"
+          >
+            {saving ? 'Saving...' : 'Save note'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(note ?? '')
+              setEditing(false)
+              setError(null)
+            }}
+            disabled={saving}
+            className="rounded-full px-4 py-2 text-xs font-semibold text-ink-soft hover:text-forest"
+          >
+            Cancel
+          </button>
+          {note && (
+            <button
+              type="button"
+              onClick={() => save('')}
+              disabled={saving}
+              className="ml-auto rounded-full px-4 py-2 text-xs font-semibold text-terracotta-600 hover:underline"
+            >
+              Remove note
+            </button>
+          )}
+        </div>
+        {error && <p className="text-sm text-terracotta-600">{error}</p>}
+      </div>
+    )
+  }
+
+  if (note) {
+    return (
+      <div className="mt-4 rounded-xl border border-hairline bg-white p-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Your note</p>
+          {!locked && (
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(note)
+                setEditing(true)
+              }}
+              className="text-xs font-semibold text-forest hover:underline"
+            >
+              Edit
+            </button>
+          )}
+        </div>
+        <p className="mt-1 whitespace-pre-line text-sm text-ink">{note}</p>
+      </div>
+    )
+  }
+
+  if (locked) return null
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDraft('')
+        setEditing(true)
+      }}
+      className="mt-4 text-xs font-semibold text-forest hover:underline"
+    >
+      Disagree? Add a note
+    </button>
   )
 }
 

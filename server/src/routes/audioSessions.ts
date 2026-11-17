@@ -30,7 +30,13 @@ import {
 } from '../lib/coachMemory.ts'
 import { streamCoachReply } from '../lib/coachStream.ts'
 import { buildExperienceContextBlock } from '../lib/experience.ts'
-import { CORE_COACHING_RULES, firstNameOf, TRANSCRIPT_RELIABILITY_NOTICE } from '../lib/coachPersona.ts'
+import {
+  CORE_COACHING_RULES,
+  firstNameOf,
+  INSTRUCTION_PRIORITY_NOTICE,
+  PRIVACY_NOTICE,
+  TRANSCRIPT_RELIABILITY_NOTICE,
+} from '../lib/coachPersona.ts'
 import { flagIfUnsafe } from '../lib/coachSafetyCheck.ts'
 import { transcribeAudioFile } from '../lib/deepgram.ts'
 import { classifyVoicesInFile, keepVoiceClasses, storedVoices, voiceShares } from '../lib/voiceActivity.ts'
@@ -41,6 +47,7 @@ import { prisma } from '../lib/prisma.ts'
 import {
   buildRubricEvidence,
   buildRubricLensSystemPrompt,
+  cleanTeacherNote,
   DEFAULT_RUBRIC_FRAMEWORK,
   parseRubricLens,
   RUBRIC_FRAMEWORKS,
@@ -1459,8 +1466,10 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
     return
   }
   // Generated once and kept, like Content Notes — a second tap returns the
-  // same lens rather than a second, differently-worded one.
-  if (session.rubricLens) {
+  // same lens rather than a second, differently-worded one. A lens from
+  // before levels existed is rebuilt once, on request, so it gets them.
+  const existingLens = session.rubricLens as RubricLensResult | null
+  if (existingLens?.scored) {
     res.json(await prisma.audioSession.findFirst({
       where: { id: session.id },
       include: { segments: LESSON_LINES },
@@ -1493,10 +1502,12 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 4000,
+      // The one prompt without NO_RATING_NOTICE: the teacher asked for
+      // Danielson levels here (2026-11-16). Everything else keeps it.
       system: buildRubricLensSystemPrompt(
         framework,
         evidence,
-        `${CORE_COACHING_RULES}\n${TRANSCRIPT_RELIABILITY_NOTICE}`,
+        `${INSTRUCTION_PRIORITY_NOTICE}\n${PRIVACY_NOTICE}\n${TRANSCRIPT_RELIABILITY_NOTICE}`,
       ),
       messages: [{ role: 'user', content: 'Write the rubric lens now.' }],
     })
@@ -1504,7 +1515,7 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n')
-    flagIfUnsafe(text, 'audioSessions.rubricLens')
+    // No flagIfUnsafe here: level words are the point of this one.
 
     const components = parseRubricLens(text, framework, evidence.items)
     // Most of the framework has to come back — a lens missing half its
@@ -1518,6 +1529,7 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
       framework: framework.id,
       frameworkName: framework.name,
       generatedAt: new Date().toISOString(),
+      scored: true,
       components,
       notObservable: framework.notObservable,
     }
@@ -1532,6 +1544,37 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
     logModelFailure('[audio-sessions] rubric lens failed:', failure, error)
     res.status(failure.status).json({ error: failure.message })
   }
+})
+
+// The teacher's note beside a Rubric Lens level — usually where they
+// disagree. Theirs alone, like the lens itself; an empty note removes it.
+audioSessionsRouter.put('/:id/rubric-lens/note', async (req, res) => {
+  const session = await prisma.audioSession.findFirst({
+    where: { id: String(req.params.id), userId: req.user!.userId },
+    select: { id: true, status: true, rubricLens: true },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  if (session.status === 'locked') {
+    res.status(403).json({ error: 'This report is locked and can no longer be edited.' })
+    return
+  }
+  const lens = session.rubricLens as RubricLensResult | null
+  const code = typeof req.body?.code === 'string' ? req.body.code.toLowerCase() : ''
+  const component = lens?.components.find((c) => c.code === code)
+  if (!lens || !component) {
+    res.status(400).json({ error: 'That component is not in this rubric lens.' })
+    return
+  }
+  component.teacherNote = cleanTeacherNote(req.body?.note)
+  const updated = await prisma.audioSession.update({
+    where: { id: session.id },
+    data: { rubricLens: lens },
+    include: { segments: LESSON_LINES },
+  })
+  res.json(updated)
 })
 
 // An idea for next time connected to a school focus the teacher chose — on

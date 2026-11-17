@@ -154,7 +154,10 @@ struct AudioContentNotes: Decodable {
 }
 
 /// Mirrors `web/src/lib/api.ts`'s `AudioRubricLens` — a session's evidence
-/// organised under a teaching framework's components. Never a level.
+/// organised under a teaching framework's components, each with a Danielson
+/// level (1-4, nil = not enough evidence) for the teacher alone, and the
+/// teacher's own note beside it. Every new field is optional so a lens built
+/// before levels still decodes.
 struct AudioRubricEvidence: Decodable {
     let kind: String
     let timestampSec: Double
@@ -167,9 +170,13 @@ struct AudioRubricComponent: Decodable, Identifiable {
     let name: String
     let domain: String
     let audibility: String
+    let level: Int?
     let summary: String
     let nextStep: String?
     let evidence: [AudioRubricEvidence]
+    let teacherNote: String?
+
+    static let levelNames = [1: "Unsatisfactory", 2: "Basic", 3: "Proficient", 4: "Distinguished"]
 }
 
 struct AudioRubricNotObservable: Decodable, Identifiable {
@@ -184,6 +191,7 @@ struct AudioRubricLens: Decodable {
     let framework: String
     let frameworkName: String
     let generatedAt: String
+    let scored: Bool?
     let components: [AudioRubricComponent]
     let notObservable: [AudioRubricNotObservable]
 }
