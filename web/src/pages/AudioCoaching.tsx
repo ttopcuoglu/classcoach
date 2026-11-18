@@ -1,6 +1,7 @@
 import { cloneElement, createContext, isValidElement, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { RubricComponentAbout, RubricLevelBadge } from '../components/RubricLevel'
+import { PlanningSection, SelfEvalShareBar } from '../components/SelfEvalSharing'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
 import { ClipboardCheck, Gauge, MessageCircle, MessageCircleQuestion, MessagesSquare, Mic, Pause, Route, Sparkles, Target, type LucideIcon } from 'lucide-react'
 import TalkFlowStrip, { FLOW_COLOR, ROOM_COLOR, ROOM_LABEL, type ShareSlice } from '../components/TalkFlowStrip'
@@ -36,9 +37,6 @@ import {
   writeFocusLine,
   generateRubricLens,
   saveRubricLensNote,
-  getSelfEvalShare,
-  setSelfEvalShare,
-  type SelfEvalShareState,
   getAudioSession,
   getAudioSessions,
   getProfile,
@@ -2623,6 +2621,7 @@ function ReportPanel({
             error={rubricLensError}
             onGenerate={handleGenerateRubricLens}
             onSaveNote={handleSaveRubricNote}
+            onSessionChanged={(updated) => onUpdate({ ...session, ...updated })}
           />
           {/* The Hard Look lives here, with the other on-demand reading of
               the whole lesson, rather than on the Summary and under each
@@ -5088,6 +5087,7 @@ function RubricLensTab({
   error,
   onGenerate,
   onSaveNote,
+  onSessionChanged,
 }: {
   sessionId: string
   rubricLens: AudioRubricLens | null
@@ -5097,6 +5097,7 @@ function RubricLensTab({
   error: string | null
   onGenerate: () => void
   onSaveNote: (code: string, note: string) => Promise<void>
+  onSessionChanged: (updated: AudioSessionWithSegments) => void
 }) {
   if (!rubricLens) {
     return (
@@ -5151,7 +5152,17 @@ function RubricLensTab({
         )}
       </div>
 
-      {rubricLens.scored && <SelfEvalShareBar sessionId={sessionId} />}
+      {rubricLens.scored && <SelfEvalShareBar sessionId={sessionId} hasPlan={!!rubricLens.plan} />}
+
+      {rubricLens.scored && (
+        <PlanningSection
+          sessionId={sessionId}
+          lens={rubricLens}
+          locked={locked}
+          onSessionChanged={onSessionChanged}
+          renderNote={(code, note) => <RubricTeacherNote note={note} locked={locked} onSave={(text) => onSaveNote(code, text)} />}
+        />
+      )}
 
       {!rubricLens.scored && !locked && (
         <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-5">
@@ -5237,107 +5248,6 @@ function RubricLensTab({
             ))}
         </section>
       ))}
-    </div>
-  )
-}
-
-// Share this lesson's Self-Eval with the supervisor a superadmin assigned —
-// the teacher's choice, one lesson at a time, and undoable. What the
-// supervisor can open is only this tab (see server routes/selfEvalShares.ts).
-function SelfEvalShareBar({ sessionId }: { sessionId: string }) {
-  const [state, setState] = useState<SelfEvalShareState | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let live = true
-    getSelfEvalShare(sessionId)
-      .then((s) => live && setState(s))
-      .catch(() => live && setState(null))
-    return () => {
-      live = false
-    }
-  }, [sessionId])
-
-  async function toggle(share: boolean) {
-    setBusy(true)
-    setError(null)
-    try {
-      setState(await setSelfEvalShare(sessionId, share))
-    } catch (err) {
-      setError((err as Error).message || 'Could not update sharing. Please try again.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (!state) return null
-  // The supervisor's feedback stays here even after sharing stops.
-  const feedback = state.feedback ? (
-    <div className="rounded-2xl border border-forest/20 bg-mint-tint/40 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-forest">
-        Feedback from {state.feedback.fromName ?? 'your supervisor'}
-        {state.feedback.at
-          ? ` · ${new Date(state.feedback.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
-          : ''}
-      </p>
-      <p className="mt-1.5 whitespace-pre-line text-sm text-ink">{state.feedback.text}</p>
-    </div>
-  ) : null
-  if (!state.supervisorName) {
-    return (
-      <div className="flex flex-col gap-3">
-        {feedback}
-        <p className="text-xs text-ink-soft">
-          No supervisor is assigned to you yet, so this Self-Eval can't be shared. Your school sets this up.
-        </p>
-      </div>
-    )
-  }
-
-  const shared = state.sharedAt != null
-  return (
-    <div className="flex flex-col gap-3">
-    {feedback}
-    <div className="flex flex-col gap-2 rounded-2xl border border-hairline bg-cream-card p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          {shared ? (
-            <p className="text-sm font-semibold text-forest">
-              Shared with {state.supervisorName} on{' '}
-              {new Date(state.sharedAt!).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-            </p>
-          ) : (
-            <p className="text-sm font-semibold text-forest">Share with my supervisor</p>
-          )}
-          <p className="mt-0.5 text-xs text-ink-soft">
-            {state.supervisorName} {shared ? 'can see' : 'will see'} the lesson&apos;s title, the levels, the moments behind them,
-            the next steps and your notes, and can write feedback back to you. Not the recording, the transcript or the rest of
-            the report.
-          </p>
-        </div>
-        {shared ? (
-          <button
-            type="button"
-            onClick={() => toggle(false)}
-            disabled={busy}
-            className="shrink-0 rounded-full border border-hairline px-4 py-2 text-xs font-semibold text-ink hover:border-forest disabled:opacity-50"
-          >
-            {busy ? 'Stopping...' : 'Stop sharing'}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => toggle(true)}
-            disabled={busy}
-            className="shrink-0 rounded-full bg-forest px-4 py-2 text-xs font-semibold text-cream disabled:bg-hairline disabled:text-ink-soft"
-          >
-            {busy ? 'Sharing...' : `Share with ${state.supervisorName}`}
-          </button>
-        )}
-      </div>
-      {error && <p className="text-sm text-terracotta-600">{error}</p>}
-    </div>
     </div>
   )
 }

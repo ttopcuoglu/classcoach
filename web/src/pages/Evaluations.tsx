@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { RubricComponentAbout, RubricLevelBadge } from '../components/RubricLevel'
+import { SelfEvalReportView } from '../components/SelfEvalReportView'
 import {
   getSelfEvalReport,
   getSharedSelfEval,
@@ -89,12 +89,6 @@ const PRIVACY_LINE = 'Teachers choose which Self-Evals to share. The rest of the
 
 function formatDate(iso: string, withYear = false): string {
   return new Date(iso).toLocaleDateString(undefined, withYear ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' })
-}
-
-function formatTime(sec: number): string {
-  const m = Math.floor(sec / 60)
-  const s = Math.floor(sec % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
 }
 
 function lessonMeta(s: SharedSelfEvalSummary, withTeacher = true): string {
@@ -628,9 +622,6 @@ function EvaluationDetail({ sessionId, school }: { sessionId: string; school: st
     )
   }
 
-  const lens = data.selfEval
-  const domains = [...new Set(lens.components.map((c) => c.domain))]
-
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 sm:px-8">
       {back}
@@ -640,68 +631,15 @@ function EvaluationDetail({ sessionId, school }: { sessionId: string; school: st
         blurb={`${lessonMeta(data)} · ${formatDate(data.sessionDate, true)}. Shared ${formatDate(data.sharedAt, true)}.`}
       />
       <div className="rounded-xl border border-dashed border-hairline p-4 text-xs text-ink-soft">
-        {lens.frameworkName}, Domains 2 and 3. Each level is an estimate from one lesson&rsquo;s audio. It can&rsquo;t see the room
-        or student work, and &ldquo;not enough evidence&rdquo; only means audio couldn&rsquo;t show it, not that it didn&rsquo;t happen. Any
-        note the teacher added is shown with the level.
+        {data.report.frameworkName}. The report as the teacher previewed and sent it. Levels for Domains 2 and 3 are estimates from one
+        lesson&rsquo;s audio, which can&rsquo;t see the room or student work; &ldquo;not enough evidence&rdquo; only means audio couldn&rsquo;t
+        show it, not that it didn&rsquo;t happen.{data.report.planning ? ' Domain 1 levels are suggested from the lesson plan as written.' : ''} The
+        teacher&rsquo;s notes are shown with the levels.
       </div>
 
       <FeedbackCard data={data} onSaved={(feedback, feedbackAt) => setData({ ...data, feedback, feedbackAt, status: feedback ? 'replied' : 'awaiting' })} />
 
-      {domains.map((domain) => (
-        <section key={domain} className="flex flex-col gap-3">
-          <h2 className="font-heading text-lg font-bold text-forest">{domain}</h2>
-          {lens.components
-            .filter((c) => c.domain === domain)
-            .map((c) => (
-              <div key={c.code} className="rounded-2xl border border-hairline bg-cream-card p-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-md bg-gold px-2 py-0.5 text-xs font-bold text-forest">{c.code}</span>
-                  <p className="font-heading text-base font-bold text-forest">{c.name}</p>
-                </div>
-                <RubricComponentAbout code={c.code} />
-                <RubricLevelBadge level={c.level ?? null} />
-                <p className="mt-3 text-sm text-ink">{c.summary}</p>
-                {c.evidence.length > 0 && (
-                  <div className="mt-3 flex flex-col gap-2">
-                    {c.evidence.map((e, i) => (
-                      <div key={i} className="border-l-2 border-gold/60 pl-3">
-                        <p className="text-sm text-ink">&ldquo;{e.text}&rdquo;</p>
-                        <p className="mt-0.5 text-xs text-ink-soft">
-                          {formatTime(e.timestampSec)} · {e.kind}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {c.nextStep && (
-                  <div className="mt-4 rounded-xl bg-gold-tint/50 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">Next step</p>
-                    <p className="mt-1 text-sm text-ink">{c.nextStep}</p>
-                  </div>
-                )}
-                {c.teacherNote && (
-                  <div className="mt-4 rounded-xl border border-hairline bg-white p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Teacher&rsquo;s note</p>
-                    <p className="mt-1 whitespace-pre-line text-sm text-ink">{c.teacherNote}</p>
-                  </div>
-                )}
-              </div>
-            ))}
-          {lens.notObservable
-            .filter((c) => c.domain === domain)
-            .map((c) => (
-              <div key={c.code} className="rounded-2xl border border-dashed border-hairline p-4 text-sm text-ink-soft">
-                <p>
-                  <span className="font-semibold">
-                    {c.code} {c.name}:
-                  </span>{' '}
-                  not in a recording. {c.reason}
-                </p>
-                <RubricComponentAbout code={c.code} />
-              </div>
-            ))}
-        </section>
-      ))}
+      <SelfEvalReportView report={data.report} />
     </div>
   )
 }

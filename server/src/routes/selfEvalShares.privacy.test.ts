@@ -205,7 +205,19 @@ test('the whole share lifecycle, and who can read what', async (t) => {
   assert.equal((await call(`/api/self-eval-shares/${ids.session}`, { id: ids.outsider, role: 'teacher' })).status, 404)
   assert.equal((await call(`/api/audio-sessions/${ids.session}`, supervisor)).status, 404)
 
-  // Stop sharing: gone at once.
+  // The supervisor reads the report as it was sent: a note changed afterwards
+  // reaches them only when the teacher shares again.
+  const note = `/api/audio-sessions/${ids.session}/rubric-lens/note`
+  assert.equal((await call(note, teacher, put({ code: '3b', note: 'Changed after sharing.' }))).status, 200)
+  const frozen = (await call(`/api/self-eval-shares/${ids.session}`, supervisor)).text
+  assert.ok(frozen.includes('My pairs talked off mic.') && !frozen.includes('Changed after sharing.'), 'a later edit is not sent on its own')
+  await call(share, teacher, json({ share: true, previewed: true }))
+  const resent = JSON.parse((await call(`/api/self-eval-shares/${ids.session}`, supervisor)).text)
+  assert.equal(resent.report.components[0].teacherNote, 'Changed after sharing.')
+  assert.equal(resent.status, 'awaiting', 'sharing again asks for feedback again')
+  assert.ok(!JSON.stringify(resent).includes(TRANSCRIPT_MARKER))
+
+  // Stop sharing: gone at once, and the sent copy with it.
   await call(share, teacher, json({ share: false }))
   assert.equal((await call(`/api/self-eval-shares/${ids.session}`, supervisor)).status, 404)
 

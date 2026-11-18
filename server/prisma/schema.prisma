@@ -849,6 +849,12 @@ model AudioSession {
   // supervisorId (see routes/selfEvalShares.ts); null = not shared.
   selfEvalSharedWithId String?
   selfEvalSharedAt     DateTime?
+  // The report the teacher previewed and sent (lib/selfEvalReport.ts's
+  // SharedSelfEvalReport), frozen at share time: later edits reach the
+  // supervisor only when the teacher shares again. Null on shares made
+  // before 2026-11-18, which the supervisor reads from rubricLens as before;
+  // cleared when the teacher stops sharing.
+  selfEvalReport       Json?
   // The supervisor's written feedback on a shared Self-Eval, for the
   // teacher. Kept if the teacher later stops sharing (it is theirs to read);
   // the author is a plain id, shown by name when they still exist.

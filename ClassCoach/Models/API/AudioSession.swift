@@ -176,7 +176,7 @@ struct AudioRubricComponent: Decodable, Identifiable {
     let evidence: [AudioRubricEvidence]
     let teacherNote: String?
 
-    static let levelNames = [1: "Unclear Evidence", 2: "Worth Revisiting", 3: "Meeting Expectations", 4: "Exceeding Expectations"]
+    static let levelNames = [1: "Needs Support", 2: "Worth Revisiting", 3: "Meeting Expectations", 4: "Exceeding Expectations"]
 
     /// What each Danielson component looks at, in our own plain words (the
     /// framework's descriptors are licensed). Keyed by code so older lenses

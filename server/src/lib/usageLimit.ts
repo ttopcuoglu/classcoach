@@ -57,6 +57,8 @@ export type UsageAction =
   | 'reflect_chat'
   | 'content_notes'
   | 'rubric_lens'
+  | 'self_eval_about'
+  | 'self_eval_planning'
   | 'hard_look'
   // Lesson Debrief's on-request idea connected to a school focus the teacher
   // chose (lib/debriefSchoolFocus.ts).

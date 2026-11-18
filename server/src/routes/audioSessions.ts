@@ -85,6 +85,26 @@ const NEXT_STEP_KEYS = ['talk', 'questions', 'climate']
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 import { splitMetricLogs } from '../lib/metricsForClient.ts'
 import { maskStudentNames } from '../lib/studentNames.ts'
+import { extractInChild } from '../lib/extractInChild.ts'
+import { sendExtractionError } from '../lib/extractHttp.ts'
+import { lessonAsText } from '../lib/lessonPlanModel.ts'
+import {
+  ABOUT_TEXT_MAX,
+  aboutHeading,
+  aboutTranscript,
+  buildAboutPrompt,
+  buildPlanningPrompt,
+  buildSupervisorReport,
+  parseAbout,
+  parsePlanning,
+  PLAN_TEXT_MAX,
+  planSections,
+  readChoices,
+  type ContentNoteRef,
+  type ReportChoices,
+  type SelfEvalLens,
+  type SelfEvalPlan,
+} from '../lib/selfEvalReport.ts'
 
 export const audioSessionsRouter = Router()
 
@@ -118,6 +138,9 @@ export const VIDEO_SPEAKER = 'Video'
 const LESSON_LINES = { where: { speakerLabel: { not: VIDEO_SPEAKER } }, orderBy: { startSec: 'asc' as const } }
 
 const upload = multer({ storage: multer.diskStorage({}), limits: { fileSize: 200 * 1024 * 1024 } })
+// A lesson plan attached to a Self-Eval: read in a child process like every
+// other document (lib/extractInChild.ts), then dropped — only its text is kept.
+const planUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } })
 
 /// Best-effort: a scratch file that outlives its request is a privacy problem,
 /// but a failed unlink must never turn a finished transcription into an error.
@@ -1561,9 +1584,10 @@ audioSessionsRouter.put('/:id/rubric-lens/note', async (req, res) => {
     res.status(403).json({ error: 'This report is locked and can no longer be edited.' })
     return
   }
-  const lens = session.rubricLens as RubricLensResult | null
+  const lens = session.rubricLens as SelfEvalLens | null
   const code = typeof req.body?.code === 'string' ? req.body.code.toLowerCase() : ''
-  const component = lens?.components.find((c) => c.code === code)
+  // Domain 2/3 from the recording, or Domain 1 from an attached plan.
+  const component = lens?.components.find((c) => c.code === code) ?? lens?.planning?.components.find((c) => c.code === code)
   if (!lens || !component) {
     res.status(400).json({ error: 'That component is not in this Self-Eval.' })
     return
@@ -1654,14 +1678,266 @@ audioSessionsRouter.post('/:id/self-eval/share', async (req, res) => {
       return
     }
   }
+  // What is sent is what the preview showed: the same builder, the same
+  // choices, from what is stored now. Without the preview (an older iPhone
+  // app) it is only the levels and notes, as sharing always was.
+  let report: Prisma.InputJsonValue | typeof Prisma.DbNull = Prisma.DbNull
+  if (share) {
+    const lesson = await selfEvalLesson(userId, state.session.id)
+    if (!lesson) {
+      res.status(404).json({ error: 'Session not found' })
+      return
+    }
+    report = supervisorReportFor(lesson, readChoices(req.body)) as unknown as Prisma.InputJsonValue
+  }
   await prisma.audioSession.update({
     where: { id: state.session.id },
     data: share
-      ? { selfEvalSharedWithId: state.supervisor!.id, selfEvalSharedAt: new Date() }
-      : { selfEvalSharedWithId: null, selfEvalSharedAt: null },
+      ? { selfEvalSharedWithId: state.supervisor!.id, selfEvalSharedAt: new Date(), selfEvalReport: report }
+      : { selfEvalSharedWithId: null, selfEvalSharedAt: null, selfEvalReport: Prisma.DbNull },
   })
   const after = await selfEvalShareState(userId, state.session.id)
   res.json(after!.body)
+})
+
+// ---------------------------------------------------------------------------
+// The supervisor report: About This Lesson, Domain 1 from a plan, preview.
+// What goes in it and why is in lib/selfEvalReport.ts.
+// ---------------------------------------------------------------------------
+
+const SELF_EVAL_LESSON_SELECT = {
+  id: true,
+  status: true,
+  classSubject: true,
+  gradeLevel: true,
+  rubricLens: true,
+  lessonContent: true,
+  contentNotes: true,
+} as const
+
+async function selfEvalLesson(userId: string, sessionId: string) {
+  return prisma.audioSession.findFirst({ where: { id: sessionId, userId }, select: SELF_EVAL_LESSON_SELECT })
+}
+
+type SelfEvalLesson = NonNullable<Awaited<ReturnType<typeof selfEvalLesson>>>
+
+function supervisorReportFor(lesson: SelfEvalLesson, choices: ReportChoices) {
+  const content = lesson.lessonContent as { connectionIdeas?: string[] } | null
+  const notes = lesson.contentNotes as { notes?: ContentNoteRef[]; connectionIdeas?: string[] } | null
+  const waysIn = content?.connectionIdeas ?? notes?.connectionIdeas ?? []
+  return buildSupervisorReport(lesson.rubricLens as SelfEvalLens, notes, waysIn, choices)
+}
+
+function lessonSubject(lesson: { classSubject: string | null; lessonContent: unknown }): string | null {
+  return lesson.classSubject || (lesson.lessonContent as { subject?: string | null } | null)?.subject || null
+}
+
+async function saveLens(sessionId: string, lens: SelfEvalLens) {
+  await prisma.audioSession.update({ where: { id: sessionId }, data: { rubricLens: lens as unknown as Prisma.InputJsonValue } })
+}
+
+// Writes "About This Lesson" once and keeps it, like the lens itself. The
+// transcript goes through the student-name mask first, because lessons from
+// before 2026-11-04 still hold real names.
+async function ensureAbout(userId: string, lesson: SelfEvalLesson): Promise<SelfEvalLens> {
+  const lens = lesson.rubricLens as SelfEvalLens
+  if (lens.about) return lens
+  const denied = await checkAndLogUsage(userId, 'self_eval_about')
+  if (denied) throw Object.assign(new Error(denied), { status: 429 })
+  const segments = await prisma.transcriptSegment.findMany({
+    where: { sessionId: lesson.id, ...LESSON_LINES.where },
+    orderBy: LESSON_LINES.orderBy,
+    select: { speakerLabel: true, startSec: true, text: true },
+  })
+  const masked = maskStudentNames(segments.map((x) => x.text)).texts
+  const lines = segments.map((x, i) => ({ ...x, text: masked[i] }))
+  const heading = aboutHeading(lesson.gradeLevel, lessonSubject(lesson))
+  const response = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 700,
+    system: buildAboutPrompt({
+      heading,
+      summary: (lesson.lessonContent as { summary?: string | null } | null)?.summary ?? null,
+      transcript: aboutTranscript(lines),
+      plan: lens.plan?.sections ?? null,
+      sharedRules: `${INSTRUCTION_PRIORITY_NOTICE}\n${PRIVACY_NOTICE}\n${TRANSCRIPT_RELIABILITY_NOTICE}`,
+    }),
+    messages: [{ role: 'user', content: 'Write the paragraph now.' }],
+  })
+  const text = parseAbout(response.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n'))
+  if (!text) throw Object.assign(new Error('Could not write About This Lesson. Please try again.'), { status: 502 })
+  flagIfUnsafe(text, 'audioSessions.selfEvalAbout')
+  const next: SelfEvalLens = { ...lens, about: { heading, text, generatedAt: new Date().toISOString(), usedPlan: !!lens.plan } }
+  await saveLens(lesson.id, next)
+  return next
+}
+
+// The preview: the report exactly as it would be sent with these choices,
+// and who it would go to. Writes About This Lesson first if it isn't there.
+audioSessionsRouter.post('/:id/self-eval/preview', async (req, res) => {
+  const userId = req.user!.userId
+  const [lesson, me] = await Promise.all([
+    selfEvalLesson(userId, String(req.params.id)),
+    prisma.user.findUnique({ where: { id: userId }, select: { supervisor: { select: { name: true, email: true } } } }),
+  ])
+  if (!lesson) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  if (!(lesson.rubricLens as RubricLensResult | null)?.scored) {
+    res.status(400).json({ error: 'Build your Self-Eval with levels first.' })
+    return
+  }
+  let aboutError: string | null = null
+  try {
+    lesson.rubricLens = (await ensureAbout(userId, lesson)) as unknown as Prisma.JsonValue
+  } catch (error) {
+    // The preview still opens without it; the teacher can try again.
+    const status = (error as { status?: number }).status
+    aboutError = status ? (error as Error).message : classifyModelError(error, 'Could not write About This Lesson').message
+    if (!status) logModelFailure('[audio-sessions] self-eval about failed:', classifyModelError(error, ''), error)
+  }
+  const supervisor = me?.supervisor ?? null
+  res.json({
+    supervisorName: supervisor ? (supervisor.name ?? supervisor.email) : null,
+    report: supervisorReportFor(lesson, { ...readChoices(req.body), previewed: true }),
+    aboutError,
+  })
+})
+
+// The teacher's own wording for About This Lesson (it goes out under their
+// name), or empty to have it written again.
+audioSessionsRouter.put('/:id/self-eval/about', async (req, res) => {
+  const lesson = await selfEvalLesson(req.user!.userId, String(req.params.id))
+  const lens = lesson?.rubricLens as SelfEvalLens | null
+  if (!lesson || !lens) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  const raw = typeof req.body?.text === 'string' ? req.body.text.trim().replace(/\s+/g, ' ') : null
+  if (raw == null) {
+    res.status(400).json({ error: 'text must be a string' })
+    return
+  }
+  if (raw.length > ABOUT_TEXT_MAX) {
+    res.status(400).json({ error: `About This Lesson must be ${ABOUT_TEXT_MAX} characters or fewer.` })
+    return
+  }
+  await saveLens(
+    lesson.id,
+    raw
+      ? { ...lens, about: { heading: lens.about?.heading ?? aboutHeading(lesson.gradeLevel, lessonSubject(lesson)), text: raw, generatedAt: lens.about?.generatedAt ?? new Date().toISOString(), usedPlan: lens.about?.usedPlan ?? false, editedByTeacher: true } }
+      : { ...lens, about: null },
+  )
+  res.json({ ok: true })
+})
+
+// Attach a lesson plan: an uploaded file, pasted text, or one of the
+// teacher's Planning Coach plans. Domain 1 is read from it straight away, and
+// About This Lesson is written again next time so it can use the plan.
+audioSessionsRouter.post('/:id/self-eval/plan', planUpload.single('file'), async (req, res) => {
+  const userId = req.user!.userId
+  const lesson = await selfEvalLesson(userId, String(req.params.id))
+  const lens = lesson?.rubricLens as SelfEvalLens | null
+  if (!lesson) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  if (lesson.status === 'locked') {
+    res.status(403).json({ error: 'This report is locked and can no longer be edited.' })
+    return
+  }
+  if (!lens?.scored) {
+    res.status(400).json({ error: 'Build your Self-Eval with levels first.' })
+    return
+  }
+
+  let text = ''
+  let label = ''
+  let source = ''
+  let lessonPlanId: string | null = null
+  if (req.file) {
+    try {
+      text = (await extractInChild(req.file.buffer, req.file.originalname)).text
+    } catch (error) {
+      if (sendExtractionError(res, error, 'self-eval-plan', req.file)) return
+      console.error('[audio-sessions] self-eval plan extract failed:', error)
+      res.status(502).json({ error: 'Could not read that file. Please try pasting the plan instead.' })
+      return
+    }
+    label = req.file.originalname
+    source = 'upload'
+  } else if (typeof req.body?.lessonPlanId === 'string') {
+    const plan = await prisma.lessonPlan.findFirst({ where: { id: req.body.lessonPlanId, userId } })
+    if (!plan) {
+      res.status(404).json({ error: 'That plan was not found.' })
+      return
+    }
+    text = lessonAsText(plan)
+    label = plan.objective?.trim() || plan.unitName?.trim() || plan.fileName || 'Planning Coach plan'
+    source = 'planning'
+    lessonPlanId = plan.id
+  } else if (typeof req.body?.text === 'string') {
+    text = req.body.text
+    label = 'Pasted plan'
+    source = 'paste'
+  } else {
+    res.status(400).json({ error: 'Attach a file, paste the plan, or choose one of your plans.' })
+    return
+  }
+  const sections = planSections(text.slice(0, PLAN_TEXT_MAX))
+  if (sections.length === 0 || text.trim().length < 80) {
+    res.status(400).json({ error: 'That plan is too short to read for Domain 1.' })
+    return
+  }
+
+  const denied = await checkAndLogUsage(userId, 'self_eval_planning')
+  if (denied) {
+    res.status(429).json({ error: denied })
+    return
+  }
+  try {
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 3000,
+      system: buildPlanningPrompt(
+        sections,
+        { subject: lessonSubject(lesson), grade: lesson.gradeLevel },
+        `${INSTRUCTION_PRIORITY_NOTICE}\n${PRIVACY_NOTICE}`,
+      ),
+      messages: [{ role: 'user', content: 'Read the plan for Domain 1 now.' }],
+    })
+    const components = parsePlanning(response.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n'), sections)
+    if (components.length < 5) {
+      res.status(502).json({ error: 'Could not read the plan for Domain 1. Please try again.' })
+      return
+    }
+    const plan: SelfEvalPlan = { source, label: label.slice(0, 120), lessonPlanId, sections, attachedAt: new Date().toISOString() }
+    // About is written again with the plan, unless the teacher wrote their own.
+    const about = lens.about?.editedByTeacher ? lens.about : null
+    await saveLens(lesson.id, { ...lens, plan, planning: { generatedAt: new Date().toISOString(), components }, about })
+    res.json(await prisma.audioSession.findFirst({ where: { id: lesson.id }, include: { segments: LESSON_LINES } }))
+  } catch (error) {
+    const failure = classifyModelError(error, 'Could not read the plan for Domain 1')
+    logModelFailure('[audio-sessions] self-eval planning failed:', failure, error)
+    res.status(failure.status).json({ error: failure.message })
+  }
+})
+
+audioSessionsRouter.delete('/:id/self-eval/plan', async (req, res) => {
+  const lesson = await selfEvalLesson(req.user!.userId, String(req.params.id))
+  const lens = lesson?.rubricLens as SelfEvalLens | null
+  if (!lesson || !lens) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+  if (lesson.status === 'locked') {
+    res.status(403).json({ error: 'This report is locked and can no longer be edited.' })
+    return
+  }
+  const about = lens.about?.editedByTeacher || !lens.about?.usedPlan ? lens.about : null
+  await saveLens(lesson.id, { ...lens, plan: null, planning: null, about })
+  res.json(await prisma.audioSession.findFirst({ where: { id: lesson.id }, include: { segments: LESSON_LINES } }))
 })
 
 // An idea for next time connected to a school focus the teacher chose — on

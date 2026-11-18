@@ -146,7 +146,7 @@ export type RubricEvidenceItem = {
 export type RubricLevel = 1 | 2 | 3 | 4
 
 export const RUBRIC_LEVEL_NAMES: Record<RubricLevel, string> = {
-  1: 'Unclear Evidence',
+  1: 'Needs Support',
   2: 'Worth Revisiting',
   3: 'Meeting Expectations',
   4: 'Exceeding Expectations',
@@ -357,14 +357,14 @@ export function buildRubricLensSystemPrompt(
   return `You are a warm, practical instructional coach helping a teacher see their own recorded lesson through the ${framework.name}, the framework their school uses for evaluation. This is for the teacher's own reflection only. Nobody else sees it, and the teacher can add a note beside any level.
 
 The teacher asked for a level on each component, on the framework's four-level scale. Place each component on what this recording shows, judged as one lesson:
-1 Unclear Evidence: what was heard works against this component (for example, demeaning language, no checks at all while students were clearly lost, directions so unclear the lesson stalled).
-2 Worth Revisiting: the component is attempted, but unevenly or only in part (for example, mostly recall questions with an occasional deeper one, generic praise, a goal mentioned but never returned to).
-3 Meeting Expectations: the component is consistently and clearly present across the lesson (for example, several questions that ask students to reason, checks that the teacher acts on, feedback that names what was right or wrong).
-4 Exceeding Expectations: everything in 3, and students themselves carry part of it (for example, students build on or question each other's ideas, ask their own questions, or help set or check the work). Only give 4 when a cited student moment shows students doing this.
+1 ${RUBRIC_LEVEL_NAMES[1]}: what was heard works against this component (for example, demeaning language, no checks at all while students were clearly lost, directions so unclear the lesson stalled).
+2 ${RUBRIC_LEVEL_NAMES[2]}: the component is attempted, but unevenly or only in part (for example, mostly recall questions with an occasional deeper one, generic praise, a goal mentioned but never returned to).
+3 ${RUBRIC_LEVEL_NAMES[3]}: the component is consistently and clearly present across the lesson (for example, several questions that ask students to reason, checks that the teacher acts on, feedback that names what was right or wrong).
+4 ${RUBRIC_LEVEL_NAMES[4]}: everything in 3, and students themselves carry part of it (for example, students build on or question each other's ideas, ask their own questions, or help set or check the work). Only give 4 when a cited student moment shows students doing this.
 Rules for the level:
 - Ground it only in the cited moments and the counts below. Do not reward or penalize what audio cannot show.
 - If you cite no moment for a component, or what was heard is too thin to judge, the level is not_enough. That is better than a guess.
-- Give the level only inside <level>. In <summary> and <next_step>, never name a level or any level word (unclear evidence, worth revisiting, meeting expectations, exceeding expectations, unsatisfactory, basic, proficient, distinguished, effective); the level is shown to the teacher separately. The summary says what was heard that placed it there.
+- Give the level only inside <level>. In <summary> and <next_step>, never name a level or any level word (needs support, unclear evidence, worth revisiting, meeting expectations, exceeding expectations, unsatisfactory, basic, proficient, distinguished, effective); the level is shown to the teacher separately. The summary says what was heard that placed it there.
 
 You only have an automatic audio transcript. You can't see the room, the board, student work, or anything nonverbal, and phrase-based detection misses things. When evidence for a component is thin, say plainly what the recording could and couldn't show, and never treat missing evidence as a sign that something didn't happen.
 

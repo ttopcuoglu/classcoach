@@ -934,7 +934,7 @@ export type AudioRubricComponent = {
 }
 
 export const RUBRIC_LEVEL_NAMES: Record<1 | 2 | 3 | 4, string> = {
-  1: 'Unclear Evidence',
+  1: 'Needs Support',
   2: 'Worth Revisiting',
   3: 'Meeting Expectations',
   4: 'Exceeding Expectations',
@@ -946,6 +946,47 @@ export type AudioRubricLens = {
   scored?: boolean
   components: AudioRubricComponent[]
   notObservable: { code: string; name: string; domain: string; reason: string }[]
+  /** About This Lesson, written once when the teacher first previews the supervisor report. */
+  about?: { heading: string | null; text: string; generatedAt: string; usedPlan: boolean; editedByTeacher?: boolean } | null
+  /** A lesson plan the teacher attached, in referable sections. */
+  plan?: { source: string; label: string; lessonPlanId?: string | null; sections: PlanSection[]; attachedAt: string } | null
+  /** Domain 1, read from the attached plan. */
+  planning?: { generatedAt: string; components: PlanningComponent[] } | null
+}
+
+export type PlanSection = { ref: string; text: string }
+
+export type PlanningComponent = {
+  code: string
+  name: string
+  domain: string
+  /** Null = the plan says too little to place it. */
+  level: 1 | 2 | 3 | 4 | null
+  explanation: string
+  excerpts: { ref: string; text: string }[]
+  teacherNote?: string | null
+}
+
+/** The report a teacher sends their supervisor, exactly as previewed (server lib/selfEvalReport.ts). */
+export type SharedSelfEvalReport = {
+  version: 1
+  builtAt: string
+  frameworkName: string
+  about: { heading: string | null; text: string } | null
+  planning: { label: string; components: PlanningComponent[]; fullPlan: PlanSection[] | null } | null
+  components: (Omit<AudioRubricComponent, 'audibility' | 'level' | 'teacherNote'> & {
+    level: 1 | 2 | 3 | 4 | null
+    teacherNote: string | null
+    contentNotes: AudioContentNote[]
+  })[]
+  notObservable: AudioRubricLens['notObservable']
+  additionalContent: { notes: AudioContentNote[]; waysIn: string[] } | null
+}
+
+export type SelfEvalReportChoices = {
+  includeAdditionalContent: boolean
+  includeFullPlan: boolean
+  removedNoteIds: string[]
 }
 
 // The Hard Look — the least generous honest reading of the same evidence
@@ -3058,8 +3099,43 @@ export function getSelfEvalShare(id: string): Promise<SelfEvalShareState> {
   return request(`/api/audio-sessions/${id}/self-eval/share`)
 }
 
-export function setSelfEvalShare(id: string, share: boolean): Promise<SelfEvalShareState> {
-  return request(`/api/audio-sessions/${id}/self-eval/share`, { method: 'POST', body: JSON.stringify({ share }) })
+/** Sharing sends the report the preview showed: pass the same choices. */
+export function setSelfEvalShare(id: string, share: boolean, choices?: SelfEvalReportChoices): Promise<SelfEvalShareState> {
+  return request(`/api/audio-sessions/${id}/self-eval/share`, {
+    method: 'POST',
+    body: JSON.stringify(share && choices ? { share, previewed: true, ...choices } : { share }),
+  })
+}
+
+export function previewSelfEvalReport(
+  id: string,
+  choices: SelfEvalReportChoices,
+): Promise<{ supervisorName: string | null; report: SharedSelfEvalReport; aboutError: string | null }> {
+  return request(`/api/audio-sessions/${id}/self-eval/preview`, { method: 'POST', body: JSON.stringify(choices) })
+}
+
+/** The teacher's own wording for About This Lesson; empty has it written again. */
+export function saveSelfEvalAbout(id: string, text: string): Promise<{ ok: true }> {
+  return request(`/api/audio-sessions/${id}/self-eval/about`, { method: 'PUT', body: JSON.stringify({ text }) })
+}
+
+export async function attachSelfEvalPlan(
+  id: string,
+  from: { file: File } | { text: string } | { lessonPlanId: string },
+): Promise<AudioSessionWithSegments> {
+  if (!('file' in from)) return request(`/api/audio-sessions/${id}/self-eval/plan`, { method: 'POST', body: JSON.stringify(from) })
+  const formData = new FormData()
+  formData.append('file', from.file)
+  const res = await fetch(`${API_BASE_URL}/api/audio-sessions/${id}/self-eval/plan`, { method: 'POST', credentials: 'include', body: formData })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw apiError(body?.error ?? messageForStatus(res.status), res.status)
+  }
+  return res.json()
+}
+
+export function removeSelfEvalPlan(id: string): Promise<AudioSessionWithSegments> {
+  return request(`/api/audio-sessions/${id}/self-eval/plan`, { method: 'DELETE' })
 }
 
 export type SharedSelfEvalSummary = {
@@ -3077,7 +3153,7 @@ export type SharedSelfEvalSummary = {
 }
 
 export type SharedSelfEvalDetail = SharedSelfEvalSummary & {
-  selfEval: AudioRubricLens
+  report: SharedSelfEvalReport
   feedback: string | null
   feedbackAt: string | null
 }

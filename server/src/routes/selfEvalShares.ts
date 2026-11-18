@@ -6,16 +6,17 @@
 // to this person (selfEvalSharedWithId), this person is still the teacher's
 // supervisor (the school admin or a superadmin can reassign, and the old
 // supervisor loses every share at once), and the lesson still has a
-// Self-Eval. Only the Self-Eval and a short lesson title leave the teacher's
-// account — never the transcript, the rest of the report, Reflect, or
-// anything else on the session. Every route here, reports included, reads
-// only through visibleShareWhere.
+// Self-Eval. What the supervisor reads is the report the teacher previewed
+// and sent (selfEvalReport, see lib/selfEvalReport.ts), or for a share from
+// before that existed, the Self-Eval itself. Never the transcript, the rest
+// of the lesson report, Reflect, or anything else on the session. Every
+// route here, reports included, reads only through visibleShareWhere.
 
 import { Router } from 'express'
 
 import { Prisma } from '../generated/prisma/client.ts'
 import { prisma } from '../lib/prisma.ts'
-import type { RubricLensResult } from '../lib/rubricLens.ts'
+import { reportFromLiveLens, reportLevels, type SelfEvalLens, type SharedSelfEvalReport } from '../lib/selfEvalReport.ts'
 
 export const selfEvalSharesRouter = Router()
 
@@ -120,9 +121,17 @@ export function lessonDateRange(from: unknown, to: unknown): { gte?: Date; lte?:
 async function visibleSharesWithLens(viewerId: string, teacherId?: string, sessionDate?: { gte?: Date; lte?: Date }) {
   return prisma.audioSession.findMany({
     where: { ...visibleShareWhere(viewerId), ...(teacherId ? { userId: teacherId } : {}), ...(sessionDate ? { sessionDate } : {}) },
-    select: { ...SHARE_SELECT, rubricLens: true },
+    select: { ...SHARE_SELECT, rubricLens: true, selfEvalReport: true },
     orderBy: { selfEvalSharedAt: 'desc' },
   })
+}
+
+/// The report as sent, or the live Self-Eval for a share from before
+/// snapshots (2026-11-18).
+function sharedReport(s: { selfEvalReport: unknown; rubricLens: unknown }): SharedSelfEvalReport | null {
+  if (s.selfEvalReport) return s.selfEvalReport as SharedSelfEvalReport
+  const lens = s.rubricLens as SelfEvalLens | null
+  return lens?.scored ? reportFromLiveLens(lens) : null
 }
 
 // The inbox: every Self-Eval shared with me, newest share first.
@@ -167,14 +176,14 @@ selfEvalSharesRouter.get('/report', async (req, res) => {
   const rows = new Map<string, Row>()
   const lessons: { sessionId: string; lessonTitle: string; sessionDate: Date; teacherName: string; levels: Record<string, number | null> }[] = []
   for (const s of shares) {
-    const lens = s.rubricLens as RubricLensResult | null
-    if (!lens?.scored) continue
+    const report = sharedReport(s)
+    if (!report) continue
     const levels: Record<string, number | null> = {}
-    for (const c of lens.components) {
+    for (const c of reportLevels(report)) {
       const row = rows.get(c.code) ?? { code: c.code, name: c.name, domain: c.domain, levels: { '1': 0, '2': 0, '3': 0, '4': 0 }, notEnough: 0, notes: 0 }
       if (c.level == null) row.notEnough += 1
       else row.levels[String(c.level) as '1' | '2' | '3' | '4'] += 1
-      if (c.teacherNote) row.notes += 1
+      if (c.hasNote) row.notes += 1
       rows.set(c.code, row)
       levels[c.code] = c.level ?? null
     }
@@ -200,16 +209,17 @@ selfEvalSharesRouter.get('/:sessionId', async (req, res) => {
   const viewerId = req.user!.userId
   const session = await prisma.audioSession.findFirst({
     where: { id: String(req.params.sessionId), ...visibleShareWhere(viewerId) },
-    select: { ...SHARE_SELECT, rubricLens: true },
+    select: { ...SHARE_SELECT, rubricLens: true, selfEvalReport: true },
   })
-  if (!session) {
+  const report = session ? sharedReport(session) : null
+  if (!session || !report) {
     res.status(404).json({ error: 'This Self-Eval is not shared with you.' })
     return
   }
   const mine = session.selfEvalFeedbackById === viewerId
   res.json({
     ...summaryOf(session, viewerId),
-    selfEval: session.rubricLens as RubricLensResult,
+    report,
     // Only my own feedback: a previous supervisor's words are the teacher's.
     feedback: mine ? session.selfEvalFeedback : null,
     feedbackAt: mine ? session.selfEvalFeedbackAt : null,

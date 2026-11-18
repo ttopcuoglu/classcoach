@@ -2225,7 +2225,10 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
   // Self-Eval sharing: `?nosupervisor=1` for a teacher with none assigned.
   if (path === '/api/audio-sessions/preview-report/self-eval/share') {
     const supervisorName = new URLSearchParams(window.location.search).has('nosupervisor') ? null : 'Preview Dept Head'
-    if (method === 'POST') previewSelfEvalSharedAt = body.share === true && supervisorName ? new Date().toISOString() : null
+    if (method === 'POST') {
+      previewSelfEvalSharedAt = body.share === true && supervisorName ? new Date().toISOString() : null
+      previewSentReport = body.share === true ? previewBuildReport(currentPreviewLens() as PreviewSelfEvalLens, body as never, body.previewed === true) : null
+    }
     return {
       supervisorName,
       sharedAt: supervisorName ? previewSelfEvalSharedAt : null,
@@ -2295,7 +2298,33 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
     lens.components[5].teacherNote = 'Most of my reasoning questions were in pairs, away from the microphone.'
     const summary = previewShareSummaries().find((x) => x.sessionId === sharedOne[1]) ?? previewShareSummaries()[0]
     const fb = previewShareFeedback[summary.sessionId]
-    return { ...summary, selfEval: lens, feedback: fb?.text ?? null, feedbackAt: fb?.at ?? null }
+    const full = { ...lens, about: PREVIEW_ABOUT, plan: previewPlanFixture(), planning: previewPlanningFixture() }
+    const report = previewSentReport ?? previewBuildReport(full, { includeAdditionalContent: summary.sessionId === 'preview-shared-1', includeFullPlan: false, removedNoteIds: [] }, true)
+    return { ...summary, report, feedback: fb?.text ?? null, feedbackAt: fb?.at ?? null }
+  }
+  // The supervisor report preview, About This Lesson and an attached plan.
+  if (path === '/api/audio-sessions/preview-report/self-eval/preview' && method === 'POST') {
+    const lens = currentPreviewLens() as PreviewSelfEvalLens | null
+    if (lens && lens.about === undefined) lens.about = PREVIEW_ABOUT
+    return { supervisorName: 'Preview Dept Head', report: previewBuildReport(lens!, body as never, true), aboutError: lens?.about ? null : 'Could not write About This Lesson. Please try again.' }
+  }
+  if (path === '/api/audio-sessions/preview-report/self-eval/about' && method === 'PUT') {
+    const lens = currentPreviewLens() as PreviewSelfEvalLens | null
+    const text = String(body.text ?? '').trim()
+    if (lens) lens.about = text ? { ...PREVIEW_ABOUT, text, editedByTeacher: true } : undefined
+    return { ok: true }
+  }
+  if (path === '/api/audio-sessions/preview-report/self-eval/plan') {
+    const lens = currentPreviewLens() as PreviewSelfEvalLens | null
+    if (lens && method === 'POST') {
+      lens.plan = previewPlanFixture()
+      lens.planning = previewPlanningFixture()
+    }
+    if (lens && method === 'DELETE') {
+      lens.plan = null
+      lens.planning = null
+    }
+    return { ...(previewReport() as Record<string, unknown>), rubricLens: lens, schoolFocusIdea: previewDebriefIdea }
   }
   // Rubric Lens with Danielson levels: built on request (`?rubric=old` starts
   // from a lens made before levels), and a note can be saved per component.
@@ -2305,7 +2334,7 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
   }
   if (path === '/api/audio-sessions/preview-report/rubric-lens/note' && method === 'PUT') {
     const lens = currentPreviewLens()
-    const target = lens?.components.find((c) => c.code === String(body.code))
+    const target = lens?.components.find((c) => c.code === String(body.code)) ?? (lens as PreviewSelfEvalLens | null)?.planning?.components.find((c) => c.code === String(body.code))
     if (lens && target) {
       const note = String(body.note ?? '').trim()
       target.teacherNote = note || null
@@ -2440,6 +2469,84 @@ type PreviewRubricLens = {
 }
 let previewRubricLens: PreviewRubricLens | null = null
 let previewSelfEvalSharedAt: string | null = null
+let previewSentReport: unknown = null
+
+type PreviewSelfEvalLens = PreviewRubricLens & {
+  about?: { heading: string | null; text: string; generatedAt: string; usedPlan: boolean; editedByTeacher?: boolean }
+  plan?: { source: string; label: string; sections: { ref: string; text: string }[]; attachedAt: string } | null
+  planning?: { generatedAt: string; components: { code: string; name: string; domain: string; level: 1 | 2 | 3 | 4 | null; explanation: string; excerpts: { ref: string; text: string }[]; teacherNote?: string | null }[] } | null
+}
+
+const PREVIEW_ABOUT = {
+  heading: 'Grade 9 World History',
+  text: 'The lesson was about why three ancient Indian empires (the Indus Valley civilization, the Mauryan Empire and the Gupta Empire) declined. After a review of the Gupta golden age, students were asked to sort causes of decline into choices leaders made and forces outside the empire’s control, then worked through a simulation in pairs to work out which empire it described. A student explained one placement: “we put taxes under outside forces because the army needed money.”',
+  generatedAt: new Date().toISOString(),
+  usedPlan: false,
+}
+
+function previewPlanFixture() {
+  return {
+    source: 'upload',
+    label: 'Decline of Indian Empires - lesson plan.docx',
+    attachedAt: new Date().toISOString(),
+    sections: [
+      { ref: 'Objective', text: 'Students will be able to explain the internal and external causes of the decline of the Indus Valley, Mauryan and Gupta empires, using evidence from the readings.' },
+      { ref: 'Materials', text: 'Empire simulation cards, Harappan reading, cause-sorting organizer.' },
+      { ref: 'Sequence', text: 'Do Now (5 min). Review of the Gupta golden age (10 min). Simulation in pairs (20 min). Share out (10 min).' },
+      { ref: 'Exit ticket', text: 'Circle one of the reasons for the decline of the empire and explain it in two sentences.' },
+    ],
+  }
+}
+
+function previewPlanningFixture() {
+  const d = 'Domain 1: Planning and Preparation'
+  return {
+    generatedAt: new Date().toISOString(),
+    components: [
+      { code: '1a', name: 'Applying Knowledge of Content and Pedagogy', domain: d, level: 3 as const, explanation: 'The plan organises the content around causes of decline, a sound frame for comparing empires.', excerpts: [{ ref: 'Objective', text: 'explain the internal and external causes of the decline' }] },
+      { code: '1b', name: 'Knowing and Valuing Students', domain: d, level: null, explanation: 'The plan does not mention these students, their prior knowledge or any supports.', excerpts: [] },
+      { code: '1c', name: 'Setting Instructional Outcomes', domain: d, level: 3 as const, explanation: 'The outcome names what students will be able to do and asks them to use evidence.', excerpts: [{ ref: 'Objective', text: 'Students will be able to explain the internal and external causes' }] },
+      { code: '1d', name: 'Using Resources Effectively', domain: d, level: 2 as const, explanation: 'Materials are listed, but the plan does not say how the reading serves the outcome.', excerpts: [{ ref: 'Materials', text: 'Empire simulation cards, Harappan reading, cause-sorting organizer.' }] },
+      { code: '1e', name: 'Planning Coherent Instruction', domain: d, level: 3 as const, explanation: 'The timed sequence moves from review to an applied task and a share out.', excerpts: [{ ref: 'Sequence', text: 'Simulation in pairs (20 min). Share out (10 min).' }] },
+      { code: '1f', name: 'Designing and Analyzing Assessments', domain: d, level: 2 as const, explanation: 'There is an exit ticket, but the plan does not say what a strong answer looks like or how results will be used.', excerpts: [{ ref: 'Exit ticket', text: 'Circle one of the reasons for the decline of the empire' }] },
+    ],
+  }
+}
+
+/// The preview's copy of server lib/selfEvalReport.ts buildSupervisorReport.
+function previewBuildReport(
+  lens: PreviewSelfEvalLens,
+  choices: { includeAdditionalContent?: boolean; includeFullPlan?: boolean; removedNoteIds?: string[] },
+  previewed: boolean,
+) {
+  const removed = new Set(choices.removedNoteIds ?? [])
+  const all = ((previewReport() as { contentNotes?: { notes?: { id: string; label: string; text: string; excerpt: string; timestampSec: number }[] } }).contentNotes?.notes ?? [])
+  const notes = previewed ? all.filter((n) => !removed.has(n.id)) : []
+  const beside = new Map<string, typeof notes>()
+  for (const n of notes) {
+    if (n.label === 'Worth double-checking') continue
+    let best: { code: string; gap: number } | null = null
+    for (const c of lens.components) {
+      if (c.level == null) continue
+      for (const e of c.evidence) {
+        const gap = Math.abs(e.timestampSec - n.timestampSec)
+        if (gap <= 30 && (!best || gap < best.gap)) best = { code: c.code, gap }
+      }
+    }
+    if (best) beside.set(best.code, [...(beside.get(best.code) ?? []), n])
+  }
+  const attached = new Set([...beside.values()].flat().map((n) => n.id))
+  return {
+    version: 1,
+    builtAt: new Date().toISOString(),
+    frameworkName: lens.frameworkName,
+    about: previewed && lens.about ? { heading: lens.about.heading, text: lens.about.text } : null,
+    planning: previewed && lens.plan && lens.planning ? { label: lens.plan.label, components: lens.planning.components, fullPlan: choices.includeFullPlan ? lens.plan.sections : null } : null,
+    components: lens.components.map((c) => ({ code: c.code, name: c.name, domain: c.domain, level: c.level ?? null, summary: c.summary, evidence: c.evidence, nextStep: c.nextStep, teacherNote: c.teacherNote ?? null, contentNotes: beside.get(c.code) ?? [] })),
+    notObservable: lens.notObservable,
+    additionalContent: previewed && choices.includeAdditionalContent ? { notes: notes.filter((n) => !attached.has(n.id)), waysIn: ['Compare an empire to a sports dynasty that faded: which causes came from inside the team, which from outside?'] } : null,
+  }
+}
 const previewShareFeedback: Record<string, { text: string; at: string } | null> = {
   'preview-shared-2': { text: 'Your source comparison was strong. Let us talk about the discussion piece on Thursday.', at: daysAgo(3) },
 }
