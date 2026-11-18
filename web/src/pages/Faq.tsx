@@ -78,7 +78,7 @@ const CATEGORIES: Category[] = [
       },
       {
         q: 'Does the Self-Eval rate my lesson?',
-        a: 'Yes, for you alone. On request, it places each component of the Danielson rubric’s classroom domains (2a–2d and 3a–3e) at a level from Level 1 (Needs Support) to Level 4 (Exceeding Expectations), with the moments behind it and one next step. Where the recording doesn’t show enough, it says so instead of guessing. You can add a note beside any level. Only you see it, and the levels are not in the PDF.',
+        a: 'Yes, for you alone. On request, it places each component of the Danielson rubric’s classroom domains (2a–2d and 3a–3e) at a level from Level 1 (Emerging) to Level 4 (Exceeding Expectations), with the moments behind it and one next step. Where the recording doesn’t show enough, it says so instead of guessing. You can add a note beside any level. Only you see it, and the levels are not in the PDF.',
       },
       {
         q: 'Can I save or share a Lesson Debrief?',

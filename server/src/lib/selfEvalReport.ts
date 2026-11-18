@@ -383,6 +383,9 @@ export type SharedSelfEvalReport = {
   /// Extra coaching from the Content Specialist, only when the teacher chose
   /// to include it. Never changes a level or its explanation.
   additionalContent: { notes: ContentNoteRef[]; waysIn: string[] } | null
+  /// What the teacher asked the supervisor to give feedback on, if anything.
+  /// Absent on reports sent before 2026-11-19.
+  feedbackRequest?: string | null
 }
 
 export type ReportChoices = {
@@ -390,12 +393,16 @@ export type ReportChoices = {
   includeFullPlan: boolean
   /// Content Specialist note ids the teacher took out of the report.
   removedNoteIds: string[]
+  /// The teacher's one optional question for the supervisor.
+  feedbackRequest: string | null
   /// False for a share made without the preview (an older iPhone app): such
   /// a share carries only what the old share did, the levels and notes.
   previewed: boolean
 }
 
-export const DEFAULT_CHOICES: ReportChoices = { includeAdditionalContent: false, includeFullPlan: false, removedNoteIds: [], previewed: false }
+export const DEFAULT_CHOICES: ReportChoices = { includeAdditionalContent: false, includeFullPlan: false, removedNoteIds: [], feedbackRequest: null, previewed: false }
+
+export const FEEDBACK_REQUEST_MAX = 500
 
 export function readChoices(body: unknown): ReportChoices {
   const b = (body ?? {}) as Record<string, unknown>
@@ -403,6 +410,7 @@ export function readChoices(body: unknown): ReportChoices {
     includeAdditionalContent: b.includeAdditionalContent === true,
     includeFullPlan: b.includeFullPlan === true,
     removedNoteIds: Array.isArray(b.removedNoteIds) ? b.removedNoteIds.filter((x): x is string => typeof x === 'string').slice(0, 50) : [],
+    feedbackRequest: typeof b.feedbackRequest === 'string' && b.feedbackRequest.trim() ? b.feedbackRequest.trim().slice(0, FEEDBACK_REQUEST_MAX) : null,
     previewed: b.previewed === true,
   }
 }
@@ -455,6 +463,7 @@ export function buildSupervisorReport(
       choices.previewed && choices.includeAdditionalContent
         ? { notes: notes.filter((n) => !attached.has(n.id)), waysIn: waysIn.slice(0, 3) }
         : null,
+    feedbackRequest: choices.previewed ? choices.feedbackRequest : null,
   }
 }
 

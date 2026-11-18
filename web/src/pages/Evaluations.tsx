@@ -637,6 +637,13 @@ function EvaluationDetail({ sessionId, school }: { sessionId: string; school: st
         teacher&rsquo;s notes are shown with the levels.
       </div>
 
+      {data.report.feedbackRequest && (
+        <section className="rounded-2xl border border-gold/50 bg-gold-tint/40 p-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-terracotta-600">{data.teacherName} would like feedback on</p>
+          <p className="mt-1.5 whitespace-pre-line text-base text-ink">{data.report.feedbackRequest}</p>
+        </section>
+      )}
+
       <FeedbackCard data={data} onSaved={(feedback, feedbackAt) => setData({ ...data, feedback, feedbackAt, status: feedback ? 'replied' : 'awaiting' })} />
 
       <SelfEvalReportView report={data.report} />

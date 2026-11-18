@@ -369,6 +369,9 @@ function SupervisorReportPreview({
   const [reload, setReload] = useState(0)
   const [editingAbout, setEditingAbout] = useState(false)
   const [aboutDraft, setAboutDraft] = useState('')
+  // Kept apart from choices: it changes nothing in the report body, so
+  // typing it shouldn't rebuild the preview on every key.
+  const [question, setQuestion] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -408,7 +411,7 @@ function SupervisorReportPreview({
     setBusy(true)
     setError(null)
     try {
-      onShared(await setSelfEvalShare(sessionId, true, choices))
+      onShared(await setSelfEvalShare(sessionId, true, { ...choices, feedbackRequest: question.trim() || undefined }))
     } catch (err) {
       setError((err as Error).message || 'Could not share. Please try again.')
       setBusy(false)
@@ -439,6 +442,18 @@ function SupervisorReportPreview({
         </div>
 
         <div className="flex flex-col gap-3 border-b border-hairline bg-cream-card px-5 py-4">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-semibold text-ink">What would you like feedback on? (optional)</span>
+            <textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              maxLength={500}
+              rows={2}
+              placeholder="e.g. I tried more “why” questions this time. Did the discussion part work?"
+              className="w-full rounded-xl border border-hairline bg-white p-3 text-sm text-ink focus:border-forest focus:outline-none"
+            />
+            <span className="text-xs text-ink-soft">{data?.supervisorName ?? 'Your supervisor'} sees this first, above the report.</span>
+          </label>
           <Toggle
             checked={choices.includeAdditionalContent}
             onChange={(v) => setChoices({ ...choices, includeAdditionalContent: v })}

@@ -934,7 +934,7 @@ export type AudioRubricComponent = {
 }
 
 export const RUBRIC_LEVEL_NAMES: Record<1 | 2 | 3 | 4, string> = {
-  1: 'Needs Support',
+  1: 'Emerging',
   2: 'Worth Revisiting',
   3: 'Meeting Expectations',
   4: 'Exceeding Expectations',
@@ -981,12 +981,16 @@ export type SharedSelfEvalReport = {
   })[]
   notObservable: AudioRubricLens['notObservable']
   additionalContent: { notes: AudioContentNote[]; waysIn: string[] } | null
+  /** What the teacher asked the supervisor to give feedback on. */
+  feedbackRequest?: string | null
 }
 
 export type SelfEvalReportChoices = {
   includeAdditionalContent: boolean
   includeFullPlan: boolean
   removedNoteIds: string[]
+  /** One optional question for the supervisor, shown to them first. */
+  feedbackRequest?: string
 }
 
 // The Hard Look — the least generous honest reading of the same evidence

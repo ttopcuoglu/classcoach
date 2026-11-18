@@ -2,6 +2,7 @@ import { cloneElement, createContext, isValidElement, useEffect, useMemo, useRef
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { RubricComponentAbout, RubricLevelBadge } from '../components/RubricLevel'
 import { PlanningSection, SelfEvalShareBar } from '../components/SelfEvalSharing'
+import { StrengthsCard, strengthsOf } from '../components/SelfEvalReportView'
 import { ArrowUpIcon, ChatBubbleIcon, ChecklistIcon, HeartIcon, KebabIcon, MicIcon, PlayIcon } from '../components/icons'
 import { ClipboardCheck, Gauge, MessageCircle, MessageCircleQuestion, MessagesSquare, Mic, Pause, Route, Sparkles, Target, type LucideIcon } from 'lucide-react'
 import TalkFlowStrip, { FLOW_COLOR, ROOM_COLOR, ROOM_LABEL, type ShareSlice } from '../components/TalkFlowStrip'
@@ -5151,6 +5152,8 @@ function RubricLensTab({
           </span>
         )}
       </div>
+
+      {rubricLens.scored && <StrengthsCard strengths={strengthsOf(rubricLens.components, rubricLens.planning?.components ?? [])} />}
 
       {rubricLens.scored && <SelfEvalShareBar sessionId={sessionId} hasPlan={!!rubricLens.plan} />}
 

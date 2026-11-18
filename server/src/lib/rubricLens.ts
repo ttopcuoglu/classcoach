@@ -146,7 +146,7 @@ export type RubricEvidenceItem = {
 export type RubricLevel = 1 | 2 | 3 | 4
 
 export const RUBRIC_LEVEL_NAMES: Record<RubricLevel, string> = {
-  1: 'Needs Support',
+  1: 'Emerging',
   2: 'Worth Revisiting',
   3: 'Meeting Expectations',
   4: 'Exceeding Expectations',
@@ -364,7 +364,7 @@ The teacher asked for a level on each component, on the framework's four-level s
 Rules for the level:
 - Ground it only in the cited moments and the counts below. Do not reward or penalize what audio cannot show.
 - If you cite no moment for a component, or what was heard is too thin to judge, the level is not_enough. That is better than a guess.
-- Give the level only inside <level>. In <summary> and <next_step>, never name a level or any level word (needs support, unclear evidence, worth revisiting, meeting expectations, exceeding expectations, unsatisfactory, basic, proficient, distinguished, effective); the level is shown to the teacher separately. The summary says what was heard that placed it there.
+- Give the level only inside <level>. In <summary> and <next_step>, never name a level or any level word (emerging, needs support, unclear evidence, worth revisiting, meeting expectations, exceeding expectations, unsatisfactory, basic, proficient, distinguished, effective); the level is shown to the teacher separately. The summary says what was heard that placed it there.
 
 You only have an automatic audio transcript. You can't see the room, the board, student work, or anything nonverbal, and phrase-based detection misses things. When evidence for a component is thin, say plainly what the recording could and couldn't show, and never treat missing evidence as a sign that something didn't happen.
 

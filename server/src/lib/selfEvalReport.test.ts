@@ -117,8 +117,16 @@ test('the report holds exactly the teacher’s choices', () => {
   )
 })
 
+test('the teacher’s question goes with a previewed share, trimmed and capped', () => {
+  const report = buildSupervisorReport(LENS, null, [], readChoices({ previewed: true, feedbackRequest: '  Was my 3b pacing right?  ' }))
+  assert.equal(report.feedbackRequest, 'Was my 3b pacing right?')
+  assert.equal(readChoices({ feedbackRequest: 'x'.repeat(900) }).feedbackRequest?.length, 500)
+  assert.equal(readChoices({ feedbackRequest: '   ' }).feedbackRequest, null)
+})
+
 test('a share made without the preview carries only levels and notes', () => {
-  const report = buildSupervisorReport(LENS, { notes: NOTES }, ['A way in.'], readChoices({ share: true }))
+  const report = buildSupervisorReport(LENS, { notes: NOTES }, ['A way in.'], readChoices({ share: true, feedbackRequest: 'q' }))
+  assert.equal(report.feedbackRequest, null)
   assert.equal(report.about, null)
   assert.equal(report.planning, null)
   assert.equal(report.additionalContent, null)
