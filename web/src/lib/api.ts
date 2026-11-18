@@ -985,10 +985,8 @@ export type SharedSelfEvalReport = {
   feedbackRequest?: string | null
 }
 
+/** The plan and every Content Specialist note always go in; the question is the teacher's only choice. */
 export type SelfEvalReportChoices = {
-  includeAdditionalContent: boolean
-  includeFullPlan: boolean
-  removedNoteIds: string[]
   /** One optional question for the supervisor, shown to them first. */
   feedbackRequest?: string
 }
@@ -3113,9 +3111,8 @@ export function setSelfEvalShare(id: string, share: boolean, choices?: SelfEvalR
 
 export function previewSelfEvalReport(
   id: string,
-  choices: SelfEvalReportChoices,
 ): Promise<{ supervisorName: string | null; report: SharedSelfEvalReport; aboutError: string | null }> {
-  return request(`/api/audio-sessions/${id}/self-eval/preview`, { method: 'POST', body: JSON.stringify(choices) })
+  return request(`/api/audio-sessions/${id}/self-eval/preview`, { method: 'POST', body: '{}' })
 }
 
 /** The teacher's own wording for About This Lesson; empty has it written again. */

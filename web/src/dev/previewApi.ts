@@ -2299,7 +2299,7 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
     const summary = previewShareSummaries().find((x) => x.sessionId === sharedOne[1]) ?? previewShareSummaries()[0]
     const fb = previewShareFeedback[summary.sessionId]
     const full = { ...lens, about: PREVIEW_ABOUT, plan: previewPlanFixture(), planning: previewPlanningFixture() }
-    const report = previewSentReport ?? previewBuildReport(full, { includeAdditionalContent: summary.sessionId === 'preview-shared-1', includeFullPlan: false, removedNoteIds: [], feedbackRequest: summary.sessionId === 'preview-shared-1' ? 'I tried pairs reporting back this time. Did the share out move their thinking, or just repeat it?' : undefined } as never, true)
+    const report = previewSentReport ?? previewBuildReport(full, { feedbackRequest: summary.sessionId === 'preview-shared-1' ? 'I tried pairs reporting back this time. Did the share out move their thinking, or just repeat it?' : undefined } as never, true)
     return { ...summary, report, feedback: fb?.text ?? null, feedbackAt: fb?.at ?? null }
   }
   // The supervisor report preview, About This Lesson and an attached plan.
@@ -2516,12 +2516,11 @@ function previewPlanningFixture() {
 /// The preview's copy of server lib/selfEvalReport.ts buildSupervisorReport.
 function previewBuildReport(
   lens: PreviewSelfEvalLens,
-  choices: { includeAdditionalContent?: boolean; includeFullPlan?: boolean; removedNoteIds?: string[] },
+  choices: { feedbackRequest?: string },
   previewed: boolean,
 ) {
-  const removed = new Set(choices.removedNoteIds ?? [])
   const all = ((previewReport() as { contentNotes?: { notes?: { id: string; label: string; text: string; excerpt: string; timestampSec: number }[] } }).contentNotes?.notes ?? [])
-  const notes = previewed ? all.filter((n) => !removed.has(n.id)) : []
+  const notes = previewed ? all : []
   const beside = new Map<string, typeof notes>()
   for (const n of notes) {
     if (n.label === 'Worth double-checking') continue
@@ -2541,11 +2540,11 @@ function previewBuildReport(
     builtAt: new Date().toISOString(),
     frameworkName: lens.frameworkName,
     about: previewed && lens.about ? { heading: lens.about.heading, text: lens.about.text } : null,
-    planning: previewed && lens.plan && lens.planning ? { label: lens.plan.label, components: lens.planning.components, fullPlan: choices.includeFullPlan ? lens.plan.sections : null } : null,
+    planning: previewed && lens.plan && lens.planning ? { label: lens.plan.label, components: lens.planning.components, fullPlan: lens.plan.sections } : null,
     components: lens.components.map((c) => ({ code: c.code, name: c.name, domain: c.domain, level: c.level ?? null, summary: c.summary, evidence: c.evidence, nextStep: c.nextStep, teacherNote: c.teacherNote ?? null, contentNotes: beside.get(c.code) ?? [] })),
     notObservable: lens.notObservable,
     feedbackRequest: previewed ? (choices as { feedbackRequest?: string }).feedbackRequest ?? null : null,
-    additionalContent: previewed && choices.includeAdditionalContent ? { notes: notes.filter((n) => !attached.has(n.id)), waysIn: ['Compare an empire to a sports dynasty that faded: which causes came from inside the team, which from outside?'] } : null,
+    additionalContent: previewed ? { notes: notes.filter((n) => !attached.has(n.id)), waysIn: ['Compare an empire to a sports dynasty that faded: which causes came from inside the team, which from outside?'] } : null,
   }
 }
 const previewShareFeedback: Record<string, { text: string; at: string } | null> = {

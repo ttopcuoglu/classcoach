@@ -96,24 +96,20 @@ test('a note sits beside a level only when it is about one of its moments, and n
   assert.equal(beside.get('3b'), undefined, 'a component with no level gets no notes')
 })
 
-test('the report holds exactly the teacher’s choices', () => {
-  const choices = readChoices({ previewed: true, removedNoteIds: ['n1'] })
-  const report = buildSupervisorReport(LENS, { notes: NOTES }, ['A way in.'], choices)
+test('a previewed share carries the whole plan and every Content Specialist note', () => {
+  // Old clients may still send the retired switches; they change nothing.
+  const report = buildSupervisorReport(LENS, { notes: NOTES }, ['A way in.'], readChoices({ previewed: true, removedNoteIds: ['n1'], includeAdditionalContent: false, includeFullPlan: false }))
   assert.equal(report.about?.text, 'About the lesson.')
-  assert.equal(report.components[0].contentNotes.length, 0, 'a note the teacher removed is not sent')
-  assert.equal(report.additionalContent, null, 'extra feedback is off by default')
-  assert.equal(report.planning?.fullPlan, null, 'only the cited excerpts, unless the teacher adds the plan')
+  assert.deepEqual(report.components[0].contentNotes.map((n) => n.id), ['n1'], 'the note beside its level')
+  assert.deepEqual(report.additionalContent?.notes.map((n) => n.id), ['n2', 'n3', 'n4'], 'every other note, double-checks included')
+  assert.deepEqual(report.additionalContent?.waysIn, ['A way in.'])
+  assert.equal(report.planning?.fullPlan?.length, 1, 'the whole plan')
   assert.equal(report.components[0].level, 3)
-
-  const withExtras = buildSupervisorReport(LENS, { notes: NOTES }, ['A way in.'], readChoices({ previewed: true, includeAdditionalContent: true, includeFullPlan: true }))
-  assert.deepEqual(withExtras.components[0].contentNotes.map((n) => n.id), ['n1'])
-  assert.deepEqual(withExtras.additionalContent?.notes.map((n) => n.id), ['n2', 'n3', 'n4'])
-  assert.deepEqual(withExtras.additionalContent?.waysIn, ['A way in.'])
-  assert.equal(withExtras.planning?.fullPlan?.length, 1)
+  const without = buildSupervisorReport(LENS, null, [], readChoices({ previewed: true }))
   assert.deepEqual(
-    withExtras.components.map((c) => [c.code, c.level, c.summary]),
+    without.components.map((c) => [c.code, c.level, c.summary]),
     report.components.map((c) => [c.code, c.level, c.summary]),
-    'what is included never changes a level or its explanation',
+    'notes never change a level or its explanation',
   )
 })
 

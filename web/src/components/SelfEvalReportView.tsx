@@ -14,7 +14,7 @@ function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-function SpecialistNote({ note, onRemove }: { note: AudioContentNote; onRemove?: () => void }) {
+function SpecialistNote({ note }: { note: AudioContentNote }) {
   return (
     <div className="flex items-start gap-3 rounded-xl border border-hairline bg-white p-3">
       <div className="min-w-0 flex-1">
@@ -24,17 +24,6 @@ function SpecialistNote({ note, onRemove }: { note: AudioContentNote; onRemove?:
           &ldquo;{note.excerpt}&rdquo; · {formatTime(note.timestampSec)}
         </p>
       </div>
-      {onRemove && (
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label="Leave this note out of the report"
-          title="Leave this note out of the report"
-          className="shrink-0 rounded-full px-2 py-0.5 text-base leading-none text-ink-soft hover:bg-cream hover:text-terracotta-600"
-        >
-          ×
-        </button>
-      )}
     </div>
   )
 }
@@ -95,7 +84,6 @@ export function SelfEvalReportView({
   aboutBody,
   aboutActions,
   aboutMissing,
-  onRemoveNote,
 }: {
   report: SharedSelfEvalReport
   /** Replaces the About paragraph (the teacher's editor, in the preview). */
@@ -103,8 +91,6 @@ export function SelfEvalReportView({
   aboutActions?: ReactNode
   /** Shown in place of About when there is none (preview only). */
   aboutMissing?: ReactNode
-  /** Preview only: take one Content Specialist note out of the report. */
-  onRemoveNote?: (id: string) => void
 }) {
   const domains = [...new Set(report.components.map((c) => c.domain))]
   const about = report.about
@@ -198,7 +184,7 @@ export function SelfEvalReportView({
                   <div className="mt-4 flex flex-col gap-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">From the Content Specialist</p>
                     {c.contentNotes.map((n) => (
-                      <SpecialistNote key={n.id} note={n} onRemove={onRemoveNote ? () => onRemoveNote(n.id) : undefined} />
+                      <SpecialistNote key={n.id} note={n} />
                     ))}
                   </div>
                 )}
@@ -231,10 +217,10 @@ export function SelfEvalReportView({
         <section className="flex flex-col gap-3">
           <div>
             <h2 className="font-heading text-lg font-bold text-forest">More from the Content Specialist</h2>
-            <p className="text-xs text-ink-soft">Coaching suggestions the teacher chose to include. They don&rsquo;t change any level above.</p>
+            <p className="text-xs text-ink-soft">Other coaching suggestions on this lesson&rsquo;s content. They don&rsquo;t change any level above.</p>
           </div>
           {report.additionalContent.notes.map((n) => (
-            <SpecialistNote key={n.id} note={n} onRemove={onRemoveNote ? () => onRemoveNote(n.id) : undefined} />
+            <SpecialistNote key={n.id} note={n} />
           ))}
           {report.additionalContent.waysIn.length > 0 && (
             <div className="rounded-xl border border-hairline bg-white p-3">

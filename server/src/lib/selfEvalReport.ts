@@ -380,19 +380,19 @@ export type SharedSelfEvalReport = {
   } | null
   components: SelfEvalReportComponent[]
   notObservable: RubricLensResult['notObservable']
-  /// Extra coaching from the Content Specialist, only when the teacher chose
-  /// to include it. Never changes a level or its explanation.
+  /// The rest of the Content Specialist's coaching (notes not beside a level,
+  /// and ways in). Always sent with a previewed share since 2026-11-19 (the
+  /// user's call); never changes a level or its explanation.
   additionalContent: { notes: ContentNoteRef[]; waysIn: string[] } | null
   /// What the teacher asked the supervisor to give feedback on, if anything.
   /// Absent on reports sent before 2026-11-19.
   feedbackRequest?: string | null
 }
 
+// Since 2026-11-19 the teacher no longer chooses what goes in (the user's
+// call): a previewed share always carries the whole attached plan and every
+// Content Specialist note. The only choice left is their question.
 export type ReportChoices = {
-  includeAdditionalContent: boolean
-  includeFullPlan: boolean
-  /// Content Specialist note ids the teacher took out of the report.
-  removedNoteIds: string[]
   /// The teacher's one optional question for the supervisor.
   feedbackRequest: string | null
   /// False for a share made without the preview (an older iPhone app): such
@@ -400,16 +400,13 @@ export type ReportChoices = {
   previewed: boolean
 }
 
-export const DEFAULT_CHOICES: ReportChoices = { includeAdditionalContent: false, includeFullPlan: false, removedNoteIds: [], feedbackRequest: null, previewed: false }
+export const DEFAULT_CHOICES: ReportChoices = { feedbackRequest: null, previewed: false }
 
 export const FEEDBACK_REQUEST_MAX = 500
 
 export function readChoices(body: unknown): ReportChoices {
   const b = (body ?? {}) as Record<string, unknown>
   return {
-    includeAdditionalContent: b.includeAdditionalContent === true,
-    includeFullPlan: b.includeFullPlan === true,
-    removedNoteIds: Array.isArray(b.removedNoteIds) ? b.removedNoteIds.filter((x): x is string => typeof x === 'string').slice(0, 50) : [],
     feedbackRequest: typeof b.feedbackRequest === 'string' && b.feedbackRequest.trim() ? b.feedbackRequest.trim().slice(0, FEEDBACK_REQUEST_MAX) : null,
     previewed: b.previewed === true,
   }
@@ -428,8 +425,7 @@ export function buildSupervisorReport(
   choices: ReportChoices,
   now = new Date(),
 ): SharedSelfEvalReport {
-  const removed = new Set(choices.removedNoteIds)
-  const notes = choices.previewed ? (contentNotes?.notes ?? []).filter((n) => !removed.has(n.id)) : []
+  const notes = choices.previewed ? (contentNotes?.notes ?? []) : []
   const beside = notesByComponent(lens.components, notes)
   const attached = new Set([...beside.values()].flat().map((n) => n.id))
   const plan = choices.previewed ? lens.plan : null
@@ -444,7 +440,7 @@ export function buildSupervisorReport(
         ? {
             label: plan.label,
             components: planning.components,
-            fullPlan: choices.includeFullPlan ? plan.sections : null,
+            fullPlan: plan.sections,
           }
         : null,
     components: lens.components.map((c) => ({
@@ -460,7 +456,7 @@ export function buildSupervisorReport(
     })),
     notObservable: lens.notObservable,
     additionalContent:
-      choices.previewed && choices.includeAdditionalContent
+      choices.previewed
         ? { notes: notes.filter((n) => !attached.has(n.id)), waysIn: waysIn.slice(0, 3) }
         : null,
     feedbackRequest: choices.previewed ? choices.feedbackRequest : null,

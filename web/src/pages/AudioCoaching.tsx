@@ -5155,7 +5155,7 @@ function RubricLensTab({
 
       {rubricLens.scored && <StrengthsCard strengths={strengthsOf(rubricLens.components, rubricLens.planning?.components ?? [])} />}
 
-      {rubricLens.scored && <SelfEvalShareBar sessionId={sessionId} hasPlan={!!rubricLens.plan} />}
+      {rubricLens.scored && <SelfEvalShareBar sessionId={sessionId} />}
 
       {rubricLens.scored && (
         <PlanningSection

@@ -10,7 +10,6 @@ import {
   type AudioRubricLens,
   type AudioSessionWithSegments,
   type LessonPlan,
-  type SelfEvalReportChoices,
   type SelfEvalShareState,
   type SharedSelfEvalReport,
 } from '../lib/api'
@@ -186,7 +185,7 @@ export function PlanningSection({
             plan behind each one. Where the plan says too little, it says so instead of guessing.
           </p>
           <p className="mt-1.5 text-xs text-ink-soft">
-            Only you see it. If you share with your supervisor, they get the quoted lines, and the whole plan only if you choose.
+            Only you see it unless you share this Self-Eval with your supervisor; the plan then goes with it.
           </p>
           {locked ? <p className="mt-3 text-sm text-ink-soft">This report is locked, so a plan can&rsquo;t be attached.</p> : picker}
         </div>
@@ -237,7 +236,7 @@ export function PlanningSection({
 // Share bar and preview
 // ---------------------------------------------------------------------------
 
-export function SelfEvalShareBar({ sessionId, hasPlan }: { sessionId: string; hasPlan: boolean }) {
+export function SelfEvalShareBar({ sessionId }: { sessionId: string }) {
   const [state, setState] = useState<SelfEvalShareState | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -300,7 +299,7 @@ export function SelfEvalShareBar({ sessionId, hasPlan }: { sessionId: string; ha
             <p className="mt-0.5 text-xs text-ink-soft">
               {shared
                 ? `${state.supervisorName} has the report as you sent it. Changes you make now reach them only if you share again.`
-                : `Preview the exact report ${state.supervisorName} will receive, choose what goes in it, then share. Never the recording or the transcript.`}
+                : `Preview the exact report ${state.supervisorName} will receive, then share. It includes your lesson plan and the Content Specialist's notes, never the recording or the transcript.`}
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
@@ -328,7 +327,6 @@ export function SelfEvalShareBar({ sessionId, hasPlan }: { sessionId: string; ha
       {previewing && (
         <SupervisorReportPreview
           sessionId={sessionId}
-          hasPlan={hasPlan}
           onClose={() => setPreviewing(false)}
           onShared={(s) => {
             setState(s)
@@ -340,37 +338,22 @@ export function SelfEvalShareBar({ sessionId, hasPlan }: { sessionId: string; ha
   )
 }
 
-function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint: string }) {
-  return (
-    <label className="flex cursor-pointer items-start gap-3">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 accent-forest" />
-      <span>
-        <span className="block text-sm font-semibold text-ink">{label}</span>
-        <span className="block text-xs text-ink-soft">{hint}</span>
-      </span>
-    </label>
-  )
-}
-
 function SupervisorReportPreview({
   sessionId,
-  hasPlan,
   onClose,
   onShared,
 }: {
   sessionId: string
-  hasPlan: boolean
   onClose: () => void
   onShared: (s: SelfEvalShareState) => void
 }) {
-  const [choices, setChoices] = useState<SelfEvalReportChoices>({ includeAdditionalContent: false, includeFullPlan: false, removedNoteIds: [] })
   const [data, setData] = useState<{ supervisorName: string | null; report: SharedSelfEvalReport; aboutError: string | null } | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reload, setReload] = useState(0)
   const [editingAbout, setEditingAbout] = useState(false)
   const [aboutDraft, setAboutDraft] = useState('')
-  // Kept apart from choices: it changes nothing in the report body, so
-  // typing it shouldn't rebuild the preview on every key.
+  // Not sent with the preview request: it changes nothing in the report
+  // body, so typing it shouldn't rebuild the preview on every key.
   const [question, setQuestion] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -378,13 +361,13 @@ function SupervisorReportPreview({
   useEffect(() => {
     let live = true
     setLoadError(null)
-    previewSelfEvalReport(sessionId, choices)
+    previewSelfEvalReport(sessionId)
       .then((d) => live && setData(d))
       .catch((err: Error) => live && setLoadError(err.message || 'Could not build the preview.'))
     return () => {
       live = false
     }
-  }, [sessionId, choices, reload])
+  }, [sessionId, reload])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -411,7 +394,7 @@ function SupervisorReportPreview({
     setBusy(true)
     setError(null)
     try {
-      onShared(await setSelfEvalShare(sessionId, true, { ...choices, feedbackRequest: question.trim() || undefined }))
+      onShared(await setSelfEvalShare(sessionId, true, { feedbackRequest: question.trim() || undefined }))
     } catch (err) {
       setError((err as Error).message || 'Could not share. Please try again.')
       setBusy(false)
@@ -419,7 +402,6 @@ function SupervisorReportPreview({
   }
 
   const report = data?.report
-  const removed = choices.removedNoteIds.length
   return (
     <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-ink/30 px-2 pt-2 sm:px-6 sm:pt-6" onClick={onClose}>
       <div
@@ -454,28 +436,6 @@ function SupervisorReportPreview({
             />
             <span className="text-xs text-ink-soft">{data?.supervisorName ?? 'Your supervisor'} sees this first, above the report.</span>
           </label>
-          <Toggle
-            checked={choices.includeAdditionalContent}
-            onChange={(v) => setChoices({ ...choices, includeAdditionalContent: v })}
-            label="Include additional Content Specialist feedback"
-            hint="Extra coaching suggestions from the Content Specialist. Levels and their reasons stay the same either way."
-          />
-          {hasPlan && (
-            <Toggle
-              checked={choices.includeFullPlan}
-              onChange={(v) => setChoices({ ...choices, includeFullPlan: v })}
-              label="Include my full lesson plan"
-              hint="Otherwise only the lines quoted for Domain 1 are sent."
-            />
-          )}
-          {removed > 0 && (
-            <p className="text-xs text-ink-soft">
-              {removed} Content Specialist {removed === 1 ? 'note' : 'notes'} left out.{' '}
-              <button type="button" onClick={() => setChoices({ ...choices, removedNoteIds: [] })} className="font-semibold text-forest hover:underline">
-                Put {removed === 1 ? 'it' : 'them'} back
-              </button>
-            </p>
-          )}
         </div>
 
         <div className="px-5 py-5">
@@ -484,7 +444,6 @@ function SupervisorReportPreview({
           {report && (
             <SelfEvalReportView
               report={report}
-              onRemoveNote={(id) => setChoices({ ...choices, removedNoteIds: [...choices.removedNoteIds, id] })}
               aboutMissing={
                 <div className="mt-2 flex flex-col gap-2 text-sm text-ink-soft">
                   <p>{data?.aboutError ?? 'About This Lesson could not be written.'} The report can be shared without it.</p>
