@@ -3114,8 +3114,14 @@ export function getSupervisedTeachers(): Promise<SupervisedTeacher[]> {
   return request('/api/self-eval-shares/teachers')
 }
 
-export function getSelfEvalReport(teacherId?: string): Promise<SelfEvalReport> {
-  return request(`/api/self-eval-shares/report${teacherId ? `?teacherId=${encodeURIComponent(teacherId)}` : ''}`)
+/** from/to bound the lesson date (inclusive); either may be left open. */
+export function getSelfEvalReport(teacherId?: string, range?: { from: Date | null; to: Date | null }): Promise<SelfEvalReport> {
+  const q = new URLSearchParams()
+  if (teacherId) q.set('teacherId', teacherId)
+  if (range?.from) q.set('from', range.from.toISOString())
+  if (range?.to) q.set('to', range.to.toISOString())
+  const qs = q.toString()
+  return request(`/api/self-eval-shares/report${qs ? `?${qs}` : ''}`)
 }
 
 export function getSharedSelfEval(sessionId: string): Promise<SharedSelfEvalDetail> {

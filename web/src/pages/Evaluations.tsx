@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { RubricComponentAbout, RubricLevelBadge } from '../components/RubricLevel'
 import {
@@ -29,6 +29,61 @@ const VIEWS: { key: View; label: string }[] = [
   { key: 'teachers', label: 'My Teachers' },
   { key: 'reports', label: 'Reports' },
 ]
+
+// The lesson-date window every view shares, kept in the address (?term=, and
+// ?from=&to= for custom dates). A school year runs August to July; Semester 1
+// is August–January and Semester 2 February–July of the current year.
+type Term = 'all' | 'year' | 's1' | 's2' | 'custom'
+type DateRange = { from: Date | null; to: Date | null }
+
+function schoolYearStart(now = new Date()): number {
+  return now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1
+}
+
+function termOptions(now = new Date()): { key: Term; label: string }[] {
+  const y = schoolYearStart(now)
+  const span = `${y}–${String(y + 1).slice(2)}`
+  return [
+    { key: 'all', label: 'All time' },
+    { key: 'year', label: `This school year (${span})` },
+    { key: 's1', label: `Semester 1, ${span} (Aug–Jan)` },
+    { key: 's2', label: `Semester 2, ${span} (Feb–Jul)` },
+    { key: 'custom', label: 'Custom dates' },
+  ]
+}
+
+function dayStart(ymd: string | null): Date | null {
+  if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null
+  const [y, m, d] = ymd.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+function dayEnd(ymd: string | null): Date | null {
+  const d = dayStart(ymd)
+  return d ? new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999) : null
+}
+
+function rangeFor(term: Term, from: string | null, to: string | null, now = new Date()): DateRange {
+  const y = schoolYearStart(now)
+  const end = (year: number, month: number) => new Date(year, month + 1, 0, 23, 59, 59, 999)
+  switch (term) {
+    case 'year':
+      return { from: new Date(y, 7, 1), to: end(y + 1, 6) }
+    case 's1':
+      return { from: new Date(y, 7, 1), to: end(y + 1, 0) }
+    case 's2':
+      return { from: new Date(y + 1, 1, 1), to: end(y + 1, 6) }
+    case 'custom':
+      return { from: dayStart(from), to: dayEnd(to) }
+    default:
+      return { from: null, to: null }
+  }
+}
+
+function inRange(iso: string, range: DateRange): boolean {
+  const t = new Date(iso).getTime()
+  return (!range.from || t >= range.from.getTime()) && (!range.to || t <= range.to.getTime())
+}
 
 const PRIVACY_LINE = 'Teachers choose which Self-Evals to share. The rest of their coaching stays private.'
 
@@ -95,6 +150,19 @@ export default function Evaluations({ user }: { user: UserProfile | null }) {
 function EvaluationsHome({ school }: { school: string | null }) {
   const [params, setParams] = useSearchParams()
   const view: View = (VIEWS.find((v) => v.key === params.get('view'))?.key ?? 'inbox') as View
+  const terms = termOptions()
+  const term: Term = terms.find((t) => t.key === params.get('term'))?.key ?? 'all'
+  const fromParam = params.get('from')
+  const toParam = params.get('to')
+  const range = useMemo(() => rangeFor(term, fromParam, toParam), [term, fromParam, toParam])
+  const setParam = (changes: Record<string, string | null>) => {
+    const next = new URLSearchParams(params)
+    for (const [k, v] of Object.entries(changes)) {
+      if (v) next.set(k, v)
+      else next.delete(k)
+    }
+    setParams(next, { replace: true })
+  }
   const [inbox, setInbox] = useState<SharedSelfEvalSummary[] | null>(null)
   const [teachers, setTeachers] = useState<SupervisedTeacher[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -147,19 +215,64 @@ function EvaluationsHome({ school }: { school: string | null }) {
         ))}
       </div>
 
+      <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-ink-soft">
+        <label className="flex flex-wrap items-center gap-3">
+          Lessons taught
+          <select
+            value={term}
+            onChange={(e) => setParam({ term: e.target.value === 'all' ? null : e.target.value })}
+            className="rounded-xl border border-hairline bg-white px-3 py-2 text-sm font-medium text-ink focus:border-forest focus:outline-none"
+          >
+            {terms.map((t) => (
+              <option key={t.key} value={t.key}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {term === 'custom' && (
+          <span className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              aria-label="From"
+              value={fromParam ?? ''}
+              onChange={(e) => setParam({ from: e.target.value || null })}
+              className="rounded-xl border border-hairline bg-white px-3 py-2 text-sm font-medium text-ink focus:border-forest focus:outline-none"
+            />
+            to
+            <input
+              type="date"
+              aria-label="To"
+              value={toParam ?? ''}
+              onChange={(e) => setParam({ to: e.target.value || null })}
+              className="rounded-xl border border-hairline bg-white px-3 py-2 text-sm font-medium text-ink focus:border-forest focus:outline-none"
+            />
+          </span>
+        )}
+      </div>
+
       {error && <p className="text-sm text-terracotta-600">{error}</p>}
       {!error && (!inbox || !teachers) && <p className="text-sm text-ink-soft">Loading...</p>}
 
-      {inbox && teachers && view === 'inbox' && <InboxView inbox={inbox} />}
-      {inbox && teachers && view === 'teachers' && <TeachersView teachers={teachers} />}
-      {inbox && teachers && view === 'reports' && <ReportsView teachers={teachers} />}
+      {inbox && teachers && view === 'inbox' && <InboxView inbox={inbox.filter((s) => inRange(s.sessionDate, range))} filtered={term !== 'all'} />}
+      {inbox && teachers && view === 'teachers' && (
+        <TeachersView teachers={teachers.map((t) => ({ ...t, shares: t.shares.filter((s) => inRange(s.sessionDate, range)) }))} filtered={term !== 'all'} />
+      )}
+      {inbox && teachers && view === 'reports' && <ReportsView teachers={teachers} range={range} />}
 
       <p className="text-xs text-ink-soft">{PRIVACY_LINE}</p>
     </div>
   )
 }
 
-function InboxView({ inbox }: { inbox: SharedSelfEvalSummary[] }) {
+function InboxView({ inbox, filtered }: { inbox: SharedSelfEvalSummary[]; filtered: boolean }) {
+  if (inbox.length === 0 && filtered) {
+    return (
+      <div className="rounded-2xl border border-dashed border-hairline p-6 text-sm text-ink-soft">
+        No shared lessons were taught in these dates. Choose &ldquo;All time&rdquo; to see everything shared with you.
+      </div>
+    )
+  }
   if (inbox.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-hairline p-6 text-sm text-ink-soft">
@@ -186,7 +299,7 @@ function InboxView({ inbox }: { inbox: SharedSelfEvalSummary[] }) {
   )
 }
 
-function TeachersView({ teachers }: { teachers: SupervisedTeacher[] }) {
+function TeachersView({ teachers, filtered }: { teachers: SupervisedTeacher[]; filtered: boolean }) {
   if (teachers.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-hairline p-6 text-sm text-ink-soft">
@@ -201,7 +314,7 @@ function TeachersView({ teachers }: { teachers: SupervisedTeacher[] }) {
           <p className="font-heading text-base font-bold text-forest">{t.teacherName}</p>
           {teacherMeta(t) && <p className="text-sm text-ink-soft">{teacherMeta(t)}</p>}
           {t.shares.length === 0 ? (
-            <p className="mt-3 text-sm text-ink-soft">Nothing shared yet.</p>
+            <p className="mt-3 text-sm text-ink-soft">{filtered ? 'Nothing shared from these dates.' : 'Nothing shared yet.'}</p>
           ) : (
             <div className="mt-3 flex flex-col gap-3">
               {t.shares.map((s) => (
@@ -238,7 +351,7 @@ const LEVEL_CELL: Record<number, string> = {
   4: 'bg-forest text-cream',
 }
 
-function ReportsView({ teachers }: { teachers: SupervisedTeacher[] }) {
+function ReportsView({ teachers, range }: { teachers: SupervisedTeacher[]; range: DateRange }) {
   const [teacherId, setTeacherId] = useState('')
   const [report, setReport] = useState<SelfEvalReport | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -246,10 +359,10 @@ function ReportsView({ teachers }: { teachers: SupervisedTeacher[] }) {
   useEffect(() => {
     setReport(null)
     setError(null)
-    getSelfEvalReport(teacherId || undefined)
+    getSelfEvalReport(teacherId || undefined, range)
       .then(setReport)
       .catch((err: Error) => setError(err.message || 'Could not load the report.'))
-  }, [teacherId])
+  }, [teacherId, range])
 
   const single = teacherId !== ''
   const domains = report ? [...new Set(report.components.map((c) => c.domain))] : []
@@ -282,7 +395,20 @@ function ReportsView({ teachers }: { teachers: SupervisedTeacher[] }) {
             <p className="mt-1 text-sm text-ink">
               {report.activity.shared} shared · {report.activity.awaiting} awaiting feedback · {report.activity.replied} replied
             </p>
+            <p className="mt-1 text-xs text-ink-soft">
+              Teachers choose which lessons to share, so this describes the lessons they picked, not every class they taught.
+            </p>
           </section>
+
+          {single ? (
+            report.lessons.length > 0 && <GrowthView report={report} />
+          ) : (
+            report.lessons.length > 0 && (
+              <section className="border-b border-hairline/70 px-5 py-4 text-sm text-ink-soft">
+                Pick a teacher above to see how each component changed across their lessons.
+              </section>
+            )
+          )}
 
           <section className="px-5 py-5">
             <h2 className="font-heading text-lg font-bold text-forest">Danielson levels by component</h2>
@@ -291,7 +417,11 @@ function ReportsView({ teachers }: { teachers: SupervisedTeacher[] }) {
               audio; &ldquo;not enough evidence&rdquo; means the recording couldn&rsquo;t show it, not that it didn&rsquo;t happen.
             </p>
             {report.components.length === 0 ? (
-              <p className="mt-4 text-sm text-ink-soft">No shared Self-Evals {single ? 'from this teacher' : ''} yet.</p>
+              <p className="mt-4 text-sm text-ink-soft">
+                {range.from || range.to
+                  ? `No shared Self-Evals ${single ? 'from this teacher ' : ''}for lessons taught in these dates.`
+                  : `No shared Self-Evals ${single ? 'from this teacher ' : ''}yet.`}
+              </p>
             ) : (
               domains.map((domain) => (
                 <div key={domain} className="mt-4">
@@ -328,8 +458,8 @@ function ReportsView({ teachers }: { teachers: SupervisedTeacher[] }) {
           </section>
 
           {single && report.lessons.length > 0 && (
-            <section className="border-t border-hairline/70 px-5 py-5">
-              <h2 className="font-heading text-lg font-bold text-forest">Lesson by lesson</h2>
+            <details className="border-t border-hairline/70 px-5 py-5">
+              <summary className="cursor-pointer font-heading text-lg font-bold text-forest">Lesson-by-lesson table</summary>
               <p className="mt-1 text-xs text-ink-soft">Each shared lesson&rsquo;s level per component, oldest first. A dash is not enough evidence.</p>
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full min-w-[28rem] border-collapse text-sm">
@@ -368,11 +498,101 @@ function ReportsView({ teachers }: { teachers: SupervisedTeacher[] }) {
                   </tbody>
                 </table>
               </div>
-            </section>
+            </details>
           )}
         </div>
       )}
     </div>
+  )
+}
+
+// One teacher's levels in lesson order, per component: a dot per lesson and a
+// plain-words comparison of the earlier lessons with the later ones. It
+// compares typical (median) levels, never an average, and says nothing until
+// at least four lessons gave the component a level.
+const GROWTH_MIN = 4
+
+function typicalLevel(levels: number[]): number {
+  const sorted = [...levels].sort((a, b) => a - b)
+  return sorted[Math.floor((sorted.length - 1) / 2)]
+}
+
+function growthFor(levels: (number | null)[]): { early: number; late: number; half: number } | null {
+  const leveled = levels.filter((l): l is number => l != null)
+  if (leveled.length < GROWTH_MIN) return null
+  const half = Math.floor(leveled.length / 2)
+  return { early: typicalLevel(leveled.slice(0, half)), late: typicalLevel(leveled.slice(leveled.length - half)), half }
+}
+
+function GrowthView({ report }: { report: SelfEvalReport }) {
+  const domains = [...new Set(report.components.map((c) => c.domain))]
+  return (
+    <section className="border-b border-hairline/70 px-5 py-5">
+      <h2 className="font-heading text-lg font-bold text-forest">Growth across lessons</h2>
+      <p className="mt-1 text-xs text-ink-soft">
+        One dot per shared lesson, oldest on the left; an empty dot is not enough evidence. The line compares the typical level in the
+        earlier lessons with the later ones, once at least {GROWTH_MIN} lessons gave that component a level. It is a starting point
+        for a conversation, not a rating.
+      </p>
+      {domains.map((domain) => (
+        <div key={domain} className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{domain}</p>
+          <div className="mt-2 flex flex-col">
+            {report.components
+              .filter((c) => c.domain === domain)
+              .map((c) => {
+                const levels = report.lessons.map((l) => l.levels[c.code] ?? null)
+                const growth = growthFor(levels)
+                const counted = levels.filter((l) => l != null).length
+                return (
+                  <div key={c.code} className="flex flex-col gap-2 border-b border-hairline/50 py-3 last:border-0">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                      <p className="text-sm text-ink">
+                      <span className="font-semibold">{c.code}</span> · {c.name}
+                    </p>
+                      <p className="text-xs text-ink-soft sm:text-right">
+                      {growth ? (
+                        <>
+                          <span
+                            className={`mr-1.5 rounded-full px-2 py-0.5 font-semibold ${
+                              growth.late > growth.early ? 'bg-mint-tint/70 text-forest' : growth.late < growth.early ? 'bg-gold-tint text-terracotta-600' : 'bg-cream text-ink'
+                            }`}
+                          >
+                            {growth.late > growth.early ? 'Higher lately' : growth.late < growth.early ? 'Lower lately' : 'Steady'}
+                          </span>
+                          Level {growth.early} in the first {growth.half}, Level {growth.late} in the last {growth.half}
+                        </>
+                      ) : (
+                        `Too few lessons with a level to compare (${counted} of ${GROWTH_MIN})`
+                      )}
+                    </p>
+                    </div>
+                    <div className="flex gap-1 overflow-x-auto pb-0.5">
+                      {report.lessons.map((l, i) => {
+                        const level = levels[i]
+                        const label = `${formatDate(l.sessionDate, true)} · ${l.lessonTitle} · ${level == null ? 'not enough evidence' : `Level ${level}`}`
+                        return (
+                          <Link
+                            key={l.sessionId}
+                            to={`/admin/evaluations/${l.sessionId}`}
+                            title={label}
+                            aria-label={label}
+                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                              level == null ? 'border border-dashed border-hairline text-ink-soft' : LEVEL_CELL[level]
+                            }`}
+                          >
+                            {level ?? ''}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+          </div>
+        </div>
+      ))}
+    </section>
   )
 }
 

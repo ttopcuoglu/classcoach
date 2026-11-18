@@ -2244,15 +2244,27 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
     ]
   }
   if (path.startsWith('/api/self-eval-shares/report')) {
-    const teacherId = new URLSearchParams(path.split('?')[1] ?? '').get('teacherId')
-    const shares = previewShareSummaries().filter((x) => !teacherId || x.teacherId === teacherId)
+    const q = new URLSearchParams(path.split('?')[1] ?? '')
+    const teacherId = q.get('teacherId')
+    const from = q.get('from') ? new Date(q.get('from')!).getTime() : -Infinity
+    const to = q.get('to') ? new Date(q.get('to')!).getTime() : Infinity
+    const shares = previewShareSummaries().filter((x) => (!teacherId || x.teacherId === teacherId) && new Date(x.sessionDate).getTime() >= from && new Date(x.sessionDate).getTime() <= to)
     const lens = previewScoredLens()
+    // Oldest lessons a level lower on some components, so the growth view
+    // has something to show; every fourth cell has no level.
     const lessons = shares.map((x, i) => ({
       sessionId: x.sessionId,
       lessonTitle: x.lessonTitle,
       sessionDate: x.sessionDate,
       teacherName: x.teacherName,
-      levels: Object.fromEntries(lens.components.map((c, j) => [c.code, (j + i) % 4 === 3 ? null : c.level ?? null])),
+      levels: Object.fromEntries(
+        lens.components.map((c, j) => {
+          if ((j + i) % 4 === 3 || c.level == null) return [c.code, null]
+          const older = i >= shares.length / 2
+          const shift = older && j % 3 !== 2 ? -1 : j % 3 === 2 && !older ? -1 : 0
+          return [c.code, Math.max(1, Math.min(4, c.level + shift))]
+        }),
+      ),
     }))
     const components = lens.components.map((c) => {
       const levels: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0 }
@@ -2437,10 +2449,22 @@ function previewShareSummaries() {
     { sessionId: 'preview-shared-1', teacherId: 'u4', teacherName: 'Maya Chen', lessonTitle: 'Salt, sugar, and conductivity', classSubject: 'Science', period: '3', gradeLevel: '8th', sessionDate: daysAgo(2), sharedAt: daysAgo(1) },
     { sessionId: 'preview-shared-2', teacherId: 'u8', teacherName: 'Jordan Ellis', lessonTitle: 'Comparing primary sources', classSubject: 'Social Studies', period: '5', gradeLevel: '9th', sessionDate: daysAgo(5), sharedAt: daysAgo(4) },
     { sessionId: 'preview-shared-3', teacherId: 'u4', teacherName: 'Maya Chen', lessonTitle: 'Density and floating objects', classSubject: 'Science', period: '3', gradeLevel: '8th', sessionDate: daysAgo(12), sharedAt: daysAgo(11) },
+    // Earlier in the semester, so a full term of one teacher can be previewed.
+    ...['Mixtures and solutions', 'Measuring mass and volume', 'States of matter lab', 'Particle model of heat', 'Lab safety and the scientific method', 'Graphing temperature change', 'Chemical vs physical change'].map((title, i) => ({
+      sessionId: `preview-shared-m${i + 1}`,
+      teacherId: 'u4',
+      teacherName: 'Maya Chen',
+      lessonTitle: title,
+      classSubject: 'Science',
+      period: '3',
+      gradeLevel: '8th',
+      sessionDate: daysAgo(20 + i * 11),
+      sharedAt: daysAgo(19 + i * 11),
+    })),
   ]
   return base.map((x) => ({
     ...x,
-    status: previewShareFeedback[x.sessionId] || x.sessionId === 'preview-shared-3' ? ('replied' as const) : ('awaiting' as const),
+    status: previewShareFeedback[x.sessionId] || x.sessionId === 'preview-shared-3' || x.sessionId.startsWith('preview-shared-m') ? ('replied' as const) : ('awaiting' as const),
   }))
 }
 

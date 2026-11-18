@@ -103,9 +103,23 @@ async function visibleShares(viewerId: string, teacherId?: string) {
   })
 }
 
-async function visibleSharesWithLens(viewerId: string, teacherId?: string) {
+// A lesson-date window from ?from=&to= (any date the client parses, sent as
+// ISO timestamps so the school's own day boundaries hold). Either end is
+// optional; one that doesn't parse is ignored rather than refused.
+export function lessonDateRange(from: unknown, to: unknown): { gte?: Date; lte?: Date } | undefined {
+  const parse = (v: unknown) => {
+    if (typeof v !== 'string' || !v) return undefined
+    const d = new Date(v)
+    return Number.isNaN(d.getTime()) ? undefined : d
+  }
+  const gte = parse(from)
+  const lte = parse(to)
+  return gte || lte ? { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) } : undefined
+}
+
+async function visibleSharesWithLens(viewerId: string, teacherId?: string, sessionDate?: { gte?: Date; lte?: Date }) {
   return prisma.audioSession.findMany({
-    where: { ...visibleShareWhere(viewerId), ...(teacherId ? { userId: teacherId } : {}) },
+    where: { ...visibleShareWhere(viewerId), ...(teacherId ? { userId: teacherId } : {}), ...(sessionDate ? { sessionDate } : {}) },
     select: { ...SHARE_SELECT, rubricLens: true },
     orderBy: { selfEvalSharedAt: 'desc' },
   })
@@ -141,13 +155,13 @@ selfEvalSharesRouter.get('/teachers', async (req, res) => {
   )
 })
 
-// Reports over what has been shared with me, for all my teachers or one.
-// Counts only: how many shared lessons placed each component at each level,
+// Reports over what has been shared with me, for all my teachers or one,
+// optionally only lessons taught between ?from= and ?to=. Counts only: how many shared lessons placed each component at each level,
 // and how many had no level. Nothing a teacher did not share is counted.
 selfEvalSharesRouter.get('/report', async (req, res) => {
   const viewerId = req.user!.userId
   const teacherId = typeof req.query.teacherId === 'string' && req.query.teacherId ? req.query.teacherId : undefined
-  const shares = await visibleSharesWithLens(viewerId, teacherId)
+  const shares = await visibleSharesWithLens(viewerId, teacherId, lessonDateRange(req.query.from, req.query.to))
 
   type Row = { code: string; name: string; domain: string; levels: Record<'1' | '2' | '3' | '4', number>; notEnough: number; notes: number }
   const rows = new Map<string, Row>()
