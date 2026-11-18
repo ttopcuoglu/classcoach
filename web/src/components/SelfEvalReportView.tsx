@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { RUBRIC_LEVEL_NAMES, type AudioContentNote, type SharedSelfEvalReport } from '../lib/api'
+import { type AudioContentNote, type SharedSelfEvalReport } from '../lib/api'
 import { RubricComponentAbout, RubricLevelBadge } from './RubricLevel'
 
 // The Self Evaluation report a teacher sends their supervisor, drawn the same way in
@@ -28,47 +28,6 @@ function SpecialistNote({ note }: { note: AudioContentNote }) {
   )
 }
 
-export type Strength = { code: string; name: string; level: 3 | 4; quote: string | null; from: 'recording' | 'plan' }
-
-/// The components placed at Level 3 or 4, highest first, each with the
-/// moment (or plan line) behind it. Shown before anything else is rated, so
-/// a Self Evaluation opens on what went well rather than on Danielson's order.
-export function strengthsOf(
-  recording: { code: string; name: string; level?: number | null; evidence: { text: string }[] }[],
-  plan: { code: string; name: string; level: number | null; excerpts: { text: string }[] }[] = [],
-): Strength[] {
-  const out: Strength[] = []
-  for (const c of plan) if (c.level != null && c.level >= 3) out.push({ code: c.code, name: c.name, level: c.level as 3 | 4, quote: c.excerpts[0]?.text ?? null, from: 'plan' })
-  for (const c of recording) if (c.level != null && c.level >= 3) out.push({ code: c.code, name: c.name, level: c.level as 3 | 4, quote: c.evidence[0]?.text ?? null, from: 'recording' })
-  return out.sort((a, b) => b.level - a.level)
-}
-
-export function StrengthsCard({ strengths, title = 'Strengths in this lesson' }: { strengths: Strength[]; title?: string }) {
-  if (strengths.length === 0) return null
-  return (
-    <section className="rounded-2xl border border-forest/20 bg-white p-5">
-      <h2 className="font-heading text-lg font-bold text-forest">{title}</h2>
-      <ul className="mt-3 flex flex-col gap-3">
-        {strengths.map((s) => (
-          <li key={s.code} className="flex gap-3">
-            <span className="mt-0.5 shrink-0 rounded-md bg-mint-tint px-2 py-0.5 text-xs font-bold text-forest">{s.code}</span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-ink">
-                {s.name} <span className="font-normal text-ink-soft">· Level {s.level} · {RUBRIC_LEVEL_NAMES[s.level]}</span>
-              </p>
-              {s.quote && (
-                <p className="mt-0.5 text-sm text-ink-soft">
-                  &ldquo;{s.quote}&rdquo;{s.from === 'plan' ? ' (from the plan)' : ''}
-                </p>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
-}
-
 function TeacherNote({ note }: { note: string | null | undefined }) {
   if (!note) return null
   return (
@@ -92,7 +51,7 @@ export function SelfEvalReportView({
   aboutActions?: ReactNode
   /** Shown in place of About when there is none (preview only). */
   aboutMissing?: ReactNode
-  /** The teacher's preview: Strengths and the Content Specialist's notes are
+  /** The teacher's preview: the Content Specialist's notes are
    *  left off the screen (the user's call, 2026-11-19), though the
    *  supervisor's copy still has them. */
   teacherPreview?: boolean
@@ -113,8 +72,6 @@ export function SelfEvalReportView({
         </section>
       )}
 
-      {!teacherPreview && <StrengthsCard strengths={strengthsOf(report.components, report.planning?.components ?? [])} />}
-
       {report.planning && (
         <section className="flex flex-col gap-3">
           <div>
@@ -128,7 +85,7 @@ export function SelfEvalReportView({
                 <p className="font-heading text-base font-bold text-forest">{c.name}</p>
               </div>
               <RubricComponentAbout code={c.code} />
-              <RubricLevelBadge level={c.level} source="plan" />
+              <RubricLevelBadge level={c.level} source="plan" code={c.code} />
               {c.excerpts.length > 0 && (
                 <div className="mt-3 flex flex-col gap-2">
                   {c.excerpts.map((e, i) => (
@@ -171,7 +128,7 @@ export function SelfEvalReportView({
                   <p className="font-heading text-base font-bold text-forest">{c.name}</p>
                 </div>
                 <RubricComponentAbout code={c.code} />
-                <RubricLevelBadge level={c.level} />
+                <RubricLevelBadge level={c.level} code={c.code} />
                 <p className="mt-3 text-sm text-ink">{c.summary}</p>
                 {c.evidence.length > 0 && (
                   <div className="mt-3 flex flex-col gap-2">

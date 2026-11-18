@@ -209,7 +209,7 @@ export function PlanningSection({
                 <p className="font-heading text-base font-bold text-forest">{c.name}</p>
               </div>
               <RubricComponentAbout code={c.code} />
-              <RubricLevelBadge level={c.level} source="plan" />
+              <RubricLevelBadge level={c.level} source="plan" code={c.code} />
               {c.excerpts.length > 0 && (
                 <div className="mt-3 flex flex-col gap-2">
                   {c.excerpts.map((e, i) => (
@@ -416,7 +416,7 @@ function SupervisorReportPreview({
             <h2 className="font-heading text-xl font-bold text-forest">Preview Supervisor Report</h2>
             <p className="mt-0.5 text-sm text-ink-soft">
               To: <span className="font-semibold text-ink">{data?.supervisorName ?? '...'}</span> · the report they&rsquo;ll receive. Their copy also lists
-              the lesson&rsquo;s strengths and the Content Specialist&rsquo;s notes.
+              the Content Specialist&rsquo;s notes.
             </p>
           </div>
           <button type="button" onClick={onClose} className="shrink-0 rounded-full px-3 py-1 text-sm font-semibold text-ink-soft hover:text-forest">

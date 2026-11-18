@@ -234,6 +234,7 @@ struct RubricLensTab: View {
 
             if scored {
                 levelBadge(component.level)
+                levelGuide(code: component.code, level: component.level)
             }
 
             Text(component.summary).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
@@ -294,6 +295,36 @@ struct RubricLensTab: View {
                 .font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
                 .padding(.horizontal, 10).padding(.vertical, 4)
                 .overlay(Capsule().strokeBorder(AppTheme.hairline, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+        }
+    }
+
+    // A closed "What this level looks like": the level given and the next one up.
+    @ViewBuilder
+    private func levelGuide(code: String, level: Int?) -> some View {
+        if let level, let looks = AudioRubricComponent.levelLooksLike[code], looks.count == 4,
+           let name = AudioRubricComponent.levelNames[level] {
+            DisclosureGroup {
+                VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Level \(level) · \(name)").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+                        Text(looks[level - 1]).font(.footnote).foregroundStyle(AppTheme.textPrimary)
+                    }
+                    if level < 4, let nextName = AudioRubricComponent.levelNames[level + 1] {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Next step up: Level \(level + 1) · \(nextName)").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.textSecondary)
+                            Text(looks[level]).font(.footnote).foregroundStyle(AppTheme.textPrimary)
+                        }
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(AppTheme.hairline))
+                .padding(.top, 4)
+            } label: {
+                Text("What this level looks like").font(.caption.weight(.semibold)).foregroundStyle(AppTheme.forest)
+            }
+            .tint(AppTheme.forest)
         }
     }
 
