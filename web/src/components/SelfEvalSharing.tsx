@@ -411,14 +411,15 @@ function SupervisorReportPreview({
         className="mb-2 flex h-fit w-full max-w-3xl flex-col rounded-2xl bg-cream shadow-lg sm:mb-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-hairline px-5 py-4">
-          <div>
+        <div className="flex items-start justify-between gap-3 border-b border-hairline px-5 py-4">
+          <div className="min-w-0 flex-1">
             <h2 className="font-heading text-xl font-bold text-forest">Preview Supervisor Report</h2>
             <p className="mt-0.5 text-sm text-ink-soft">
-              To: <span className="font-semibold text-ink">{data?.supervisorName ?? '...'}</span> · this is exactly what they&rsquo;ll receive.
+              To: <span className="font-semibold text-ink">{data?.supervisorName ?? '...'}</span> · the report they&rsquo;ll receive. Their copy also lists
+              the lesson&rsquo;s strengths and the Content Specialist&rsquo;s notes.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-full px-3 py-1 text-sm font-semibold text-ink-soft hover:text-forest">
+          <button type="button" onClick={onClose} className="shrink-0 rounded-full px-3 py-1 text-sm font-semibold text-ink-soft hover:text-forest">
             Close
           </button>
         </div>
@@ -444,6 +445,7 @@ function SupervisorReportPreview({
           {report && (
             <SelfEvalReportView
               report={report}
+              teacherPreview
               aboutMissing={
                 <div className="mt-2 flex flex-col gap-2 text-sm text-ink-soft">
                   <p>{data?.aboutError ?? 'About This Lesson could not be written.'} The report can be shared without it.</p>

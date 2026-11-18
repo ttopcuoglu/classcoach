@@ -84,6 +84,7 @@ export function SelfEvalReportView({
   aboutBody,
   aboutActions,
   aboutMissing,
+  teacherPreview = false,
 }: {
   report: SharedSelfEvalReport
   /** Replaces the About paragraph (the teacher's editor, in the preview). */
@@ -91,6 +92,10 @@ export function SelfEvalReportView({
   aboutActions?: ReactNode
   /** Shown in place of About when there is none (preview only). */
   aboutMissing?: ReactNode
+  /** The teacher's preview: Strengths and the Content Specialist's notes are
+   *  left off the screen (the user's call, 2026-11-19), though the
+   *  supervisor's copy still has them. */
+  teacherPreview?: boolean
 }) {
   const domains = [...new Set(report.components.map((c) => c.domain))]
   const about = report.about
@@ -108,7 +113,7 @@ export function SelfEvalReportView({
         </section>
       )}
 
-      <StrengthsCard strengths={strengthsOf(report.components, report.planning?.components ?? [])} />
+      {!teacherPreview && <StrengthsCard strengths={strengthsOf(report.components, report.planning?.components ?? [])} />}
 
       {report.planning && (
         <section className="flex flex-col gap-3">
@@ -180,7 +185,7 @@ export function SelfEvalReportView({
                     ))}
                   </div>
                 )}
-                {c.contentNotes.length > 0 && (
+                {!teacherPreview && c.contentNotes.length > 0 && (
                   <div className="mt-4 flex flex-col gap-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">From the Content Specialist</p>
                     {c.contentNotes.map((n) => (
@@ -213,7 +218,7 @@ export function SelfEvalReportView({
         </section>
       ))}
 
-      {report.additionalContent && (report.additionalContent.notes.length > 0 || report.additionalContent.waysIn.length > 0) && (
+      {!teacherPreview && report.additionalContent && (report.additionalContent.notes.length > 0 || report.additionalContent.waysIn.length > 0) && (
         <section className="flex flex-col gap-3">
           <div>
             <h2 className="font-heading text-lg font-bold text-forest">More from the Content Specialist</h2>
