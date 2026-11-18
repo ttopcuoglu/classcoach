@@ -1759,7 +1759,12 @@ const PREVIEW_USERS: Json[] = [
   { id: 'preview', name: 'Preview Teacher', email: 'preview.teacher@wivoza.com', role: 'superadmin', jobTitle: 'Teacher', leaderLevel: null, leaderAreas: [], leaderEvaluates: false, organizationId: null, organizationName: null, suspendedAt: null, createdAt: '2026-01-01T00:00:00.000Z' },
   { id: 'u1', name: 'Preview Principal', email: 'principal@maple.example', role: 'org_admin', jobTitle: 'Principal', leaderLevel: 'building', leaderAreas: [], leaderEvaluates: false, organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', suspendedAt: null, createdAt: '2026-09-01T00:00:00.000Z' },
   { id: 'u2', name: 'Preview Dept Head', email: 'dept@maple.example', role: 'teacher', jobTitle: 'Instructional Coach', leaderLevel: null, leaderAreas: [], leaderEvaluates: false, organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', suspendedAt: null, createdAt: '2026-09-02T00:00:00.000Z' },
-  { id: 'u3', name: 'Preview Science Teacher', email: 'science@maple.example', role: 'teacher', jobTitle: 'Teacher', leaderLevel: null, leaderAreas: [], leaderEvaluates: false, organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', supervisorId: 'u2', suspendedAt: null, createdAt: '2026-09-03T00:00:00.000Z' },
+  { id: 'u3', name: 'Preview Science Teacher', email: 'science@maple.example', role: 'teacher', jobTitle: 'Teacher', leaderLevel: null, leaderAreas: [], leaderEvaluates: false, organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', supervisorId: 'u2', subjects: 'Science', gradeLevels: '7th', suspendedAt: null, createdAt: '2026-09-03T00:00:00.000Z' },
+  // Supervisor Assignments: a few more teachers, two without a supervisor.
+  { id: 'u4', name: 'Maya Chen', email: 'maya@maple.example', role: 'teacher', jobTitle: 'Teacher', leaderLevel: null, leaderAreas: [], leaderEvaluates: false, organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', supervisorId: 'u2', subjects: 'Science', gradeLevels: '8th', suspendedAt: null, createdAt: '2026-09-04T00:00:00.000Z' },
+  { id: 'u5', name: 'Daniel Brooks', email: 'daniel@maple.example', role: 'teacher', jobTitle: 'Teacher', leaderLevel: null, leaderAreas: [], leaderEvaluates: false, organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', supervisorId: 'u1', subjects: 'Math', gradeLevels: '10th', suspendedAt: null, createdAt: '2026-09-05T00:00:00.000Z' },
+  { id: 'u6', name: 'Aisha Patel', email: 'aisha@maple.example', role: 'teacher', jobTitle: 'Teacher', leaderLevel: null, leaderAreas: [], leaderEvaluates: false, organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', supervisorId: null, subjects: 'ELA', gradeLevels: '7th', suspendedAt: null, createdAt: '2026-09-06T00:00:00.000Z' },
+  { id: 'u7', name: 'Elena Ruiz', email: 'elena@maple.example', role: 'teacher', jobTitle: 'Teacher', leaderLevel: null, leaderAreas: [], leaderEvaluates: false, organizationId: 'preview-org', organizationName: 'Maple Ridge Academy', supervisorId: null, subjects: 'Math', gradeLevels: '6th', suspendedAt: null, createdAt: '2026-09-07T00:00:00.000Z' },
 ]
 
 function previewLeaders(path: string, method: string, body: Json): Json | Json[] | null {
@@ -2082,6 +2087,7 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
     return PREVIEW_USERS.filter((u) => u.organizationId === 'preview-org').map((u) => ({
       id: u.id, name: u.name, email: u.email, jobTitle: u.jobTitle, role: u.role, suspendedAt: u.suspendedAt,
       createdAt: u.createdAt, lastActiveAt: '2026-11-14T00:00:00.000Z', supervisorId: u.supervisorId ?? null,
+      subjects: u.subjects ?? null, gradeLevels: u.gradeLevels ?? null,
     }))
   }
   if (path === '/api/admin/users') return PREVIEW_USERS
@@ -2220,19 +2226,64 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
   if (path === '/api/audio-sessions/preview-report/self-eval/share') {
     const supervisorName = new URLSearchParams(window.location.search).has('nosupervisor') ? null : 'Preview Dept Head'
     if (method === 'POST') previewSelfEvalSharedAt = body.share === true && supervisorName ? new Date().toISOString() : null
-    return { supervisorName, sharedAt: supervisorName ? previewSelfEvalSharedAt : null }
+    return {
+      supervisorName,
+      sharedAt: supervisorName ? previewSelfEvalSharedAt : null,
+      feedback: { text: 'The way you came back to the pairs after the simulation was exactly what 3b asks for. Next time, try asking one pair to respond to another before you sum up.', fromName: 'Preview Dept Head', at: daysAgo(1) },
+    }
   }
-  if (path === '/api/self-eval-shares') {
+  // The supervisor's Evaluations page (`?supervisor=1`): an inbox, the
+  // teachers they supervise, reports, and feedback written back.
+  if (path === '/api/self-eval-shares') return previewShareSummaries()
+  if (path === '/api/self-eval-shares/teachers') {
+    const shares = previewShareSummaries()
     return [
-      { sessionId: 'preview-shared-1', teacherName: 'Preview Science Teacher', classSubject: 'Science', period: '3', gradeLevel: '7th', sessionDate: daysAgo(2), sharedAt: daysAgo(1) },
-      { sessionId: 'preview-shared-2', teacherName: 'Ms. Okafor', classSubject: 'World history', period: '5', gradeLevel: '8th', sessionDate: daysAgo(9), sharedAt: daysAgo(8) },
+      { teacherId: 'u4', teacherName: 'Maya Chen', subjects: ['Science'], gradeLevels: ['8th'], shares: shares.filter((x) => x.teacherId === 'u4') },
+      { teacherId: 'u8', teacherName: 'Jordan Ellis', subjects: ['Social Studies'], gradeLevels: ['9th'], shares: shares.filter((x) => x.teacherId === 'u8') },
+      { teacherId: 'u3', teacherName: 'Preview Science Teacher', subjects: ['Science'], gradeLevels: ['7th'], shares: [] },
     ]
+  }
+  if (path.startsWith('/api/self-eval-shares/report')) {
+    const teacherId = new URLSearchParams(path.split('?')[1] ?? '').get('teacherId')
+    const shares = previewShareSummaries().filter((x) => !teacherId || x.teacherId === teacherId)
+    const lens = previewScoredLens()
+    const lessons = shares.map((x, i) => ({
+      sessionId: x.sessionId,
+      lessonTitle: x.lessonTitle,
+      sessionDate: x.sessionDate,
+      teacherName: x.teacherName,
+      levels: Object.fromEntries(lens.components.map((c, j) => [c.code, (j + i) % 4 === 3 ? null : c.level ?? null])),
+    }))
+    const components = lens.components.map((c) => {
+      const levels: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0 }
+      let notEnough = 0
+      for (const l of lessons) {
+        const v = l.levels[c.code]
+        if (v == null) notEnough += 1
+        else levels[String(v)] += 1
+      }
+      return { code: c.code, name: c.name, domain: c.domain, levels, notEnough, notes: c.code === '3b' ? 1 : 0 }
+    })
+    return {
+      teacherId,
+      activity: { shared: shares.length, awaiting: shares.filter((x) => x.status === 'awaiting').length, replied: shares.filter((x) => x.status === 'replied').length },
+      components: shares.length ? components : [],
+      lessons: [...lessons].reverse(),
+    }
+  }
+  const sharedFeedback = path.match(/^\/api\/self-eval-shares\/([A-Za-z0-9-]+)\/feedback$/)
+  if (sharedFeedback && method === 'PUT') {
+    const text = String(body.feedback ?? '').trim()
+    previewShareFeedback[sharedFeedback[1]] = text ? { text, at: new Date().toISOString() } : null
+    return { feedback: text || null, feedbackAt: text ? previewShareFeedback[sharedFeedback[1]]!.at : null }
   }
   const sharedOne = path.match(/^\/api\/self-eval-shares\/([A-Za-z0-9-]+)$/)
   if (sharedOne) {
     const lens = previewScoredLens()
     lens.components[5].teacherNote = 'Most of my reasoning questions were in pairs, away from the microphone.'
-    return { sessionId: sharedOne[1], teacherName: 'Preview Science Teacher', classSubject: 'Science', period: '3', gradeLevel: '7th', sessionDate: daysAgo(2), sharedAt: daysAgo(1), selfEval: lens }
+    const summary = previewShareSummaries().find((x) => x.sessionId === sharedOne[1]) ?? previewShareSummaries()[0]
+    const fb = previewShareFeedback[summary.sessionId]
+    return { ...summary, selfEval: lens, feedback: fb?.text ?? null, feedbackAt: fb?.at ?? null }
   }
   // Rubric Lens with Danielson levels: built on request (`?rubric=old` starts
   // from a lens made before levels), and a note can be saved per component.
@@ -2377,6 +2428,21 @@ type PreviewRubricLens = {
 }
 let previewRubricLens: PreviewRubricLens | null = null
 let previewSelfEvalSharedAt: string | null = null
+const previewShareFeedback: Record<string, { text: string; at: string } | null> = {
+  'preview-shared-2': { text: 'Your source comparison was strong. Let us talk about the discussion piece on Thursday.', at: daysAgo(3) },
+}
+
+function previewShareSummaries() {
+  const base = [
+    { sessionId: 'preview-shared-1', teacherId: 'u4', teacherName: 'Maya Chen', lessonTitle: 'Salt, sugar, and conductivity', classSubject: 'Science', period: '3', gradeLevel: '8th', sessionDate: daysAgo(2), sharedAt: daysAgo(1) },
+    { sessionId: 'preview-shared-2', teacherId: 'u8', teacherName: 'Jordan Ellis', lessonTitle: 'Comparing primary sources', classSubject: 'Social Studies', period: '5', gradeLevel: '9th', sessionDate: daysAgo(5), sharedAt: daysAgo(4) },
+    { sessionId: 'preview-shared-3', teacherId: 'u4', teacherName: 'Maya Chen', lessonTitle: 'Density and floating objects', classSubject: 'Science', period: '3', gradeLevel: '8th', sessionDate: daysAgo(12), sharedAt: daysAgo(11) },
+  ]
+  return base.map((x) => ({
+    ...x,
+    status: previewShareFeedback[x.sessionId] || x.sessionId === 'preview-shared-3' ? ('replied' as const) : ('awaiting' as const),
+  }))
+}
 
 function currentPreviewLens(): PreviewRubricLens | null {
   if (previewRubricLens) return previewRubricLens

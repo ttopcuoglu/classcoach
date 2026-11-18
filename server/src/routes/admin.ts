@@ -1079,7 +1079,7 @@ adminRouter.get('/members', async (req, res) => {
 
   const members = await prisma.user.findMany({
     where: { organizationId },
-    select: { id: true, name: true, email: true, jobTitle: true, role: true, suspendedAt: true, createdAt: true, supervisorId: true },
+    select: { id: true, name: true, email: true, jobTitle: true, role: true, suspendedAt: true, createdAt: true, supervisorId: true, subjects: true, gradeLevels: true },
     orderBy: { createdAt: 'asc' },
   })
 

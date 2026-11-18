@@ -16,8 +16,10 @@ export type AdminPage =
   | 'platformUsers'
   | 'schoolInquiries'
   | 'leadersCorner'
+  | 'evaluations'
+  | 'supervisorAssignments'
 
-export type AdminGroup = 'leader' | 'overview' | 'insights' | 'coaching' | 'manage' | 'settings' | 'internal'
+export type AdminGroup = 'leader' | 'overview' | 'instruction' | 'insights' | 'coaching' | 'manage' | 'settings' | 'internal'
 
 export type AdminNavItem = { page: AdminPage; slug: string; label: string; group: AdminGroup; superadminOnly?: boolean }
 
@@ -27,11 +29,15 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // can open it, and the dashboard's school data would refuse them.
   { page: 'leadersCorner', slug: 'leaders-corner', label: 'Leader’s Corner', group: 'leader' },
   { page: 'dashboard', slug: '', label: 'Dashboard', group: 'overview' },
+  // Self-Evals teachers shared with this person as their supervisor. Its own
+  // route in App, like Leader's Corner: a supervisor need not be an admin.
+  { page: 'evaluations', slug: 'evaluations', label: 'Evaluations', group: 'instruction' },
   { page: 'engagement', slug: 'usage', label: 'Usage & Engagement', group: 'insights' },
   { page: 'insights', slug: 'insights', label: 'Coaching Insights', group: 'insights' },
   { page: 'professionalLearning', slug: 'professional-learning', label: 'Professional Learning', group: 'insights' },
   { page: 'coachingPriorities', slug: 'coaching-priorities', label: 'Coaching Priorities', group: 'coaching' },
   { page: 'people', slug: 'people', label: 'People', group: 'manage' },
+  { page: 'supervisorAssignments', slug: 'supervisors', label: 'Supervisor Assignments', group: 'manage' },
   { page: 'lessonFormat', slug: 'lesson-format', label: 'Lesson Plan Format', group: 'settings' },
   { page: 'canvas', slug: 'lms', label: 'LMS Connections', group: 'settings' },
   { page: 'organizations', slug: 'organizations', label: 'Organizations', group: 'internal', superadminOnly: true },
@@ -42,6 +48,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
 export const ADMIN_GROUP_LABEL: Record<AdminGroup, string> = {
   leader: 'For you',
   overview: 'Overview',
+  instruction: 'Instruction',
   insights: 'Insights',
   coaching: 'Coaching',
   manage: 'Manage',

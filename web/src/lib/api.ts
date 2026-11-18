@@ -365,6 +365,9 @@ export type OrgMember = {
   lastActiveAt: string | null
   // Self-Eval supervisor (another member of the same school), or null.
   supervisorId?: string | null
+  // From their profile, comma-separated; the Department column.
+  subjects?: string | null
+  gradeLevels?: string | null
 }
 
 // sessions/sharePct: the lessons in the snapshot's window and the share of
@@ -3042,7 +3045,14 @@ export function generateRubricLens(id: string): Promise<AudioSessionWithSegments
 }
 
 // Self-Eval sharing with the supervisor a superadmin assigned.
-export type SelfEvalShareState = { supervisorName: string | null; sharedAt: string | null }
+export type SelfEvalFeedback = { text: string; fromName: string | null; at: string | null }
+
+export type SelfEvalShareState = {
+  supervisorName: string | null
+  sharedAt: string | null
+  /** The supervisor's written feedback; stays the teacher's after sharing stops. */
+  feedback?: SelfEvalFeedback | null
+}
 
 export function getSelfEvalShare(id: string): Promise<SelfEvalShareState> {
   return request(`/api/audio-sessions/${id}/self-eval/share`)
@@ -3054,20 +3064,66 @@ export function setSelfEvalShare(id: string, share: boolean): Promise<SelfEvalSh
 
 export type SharedSelfEvalSummary = {
   sessionId: string
+  teacherId: string
   teacherName: string
+  lessonTitle: string
   classSubject: string | null
   period: string | null
   gradeLevel: string | null
   sessionDate: string
   sharedAt: string
+  /** awaiting = no feedback from me since the teacher last shared it. */
+  status: 'awaiting' | 'replied'
+}
+
+export type SharedSelfEvalDetail = SharedSelfEvalSummary & {
+  selfEval: AudioRubricLens
+  feedback: string | null
+  feedbackAt: string | null
+}
+
+export type SupervisedTeacher = {
+  teacherId: string
+  teacherName: string
+  subjects: string[]
+  gradeLevels: string[]
+  shares: SharedSelfEvalSummary[]
+}
+
+export type SelfEvalReportComponent = {
+  code: string
+  name: string
+  domain: string
+  levels: Record<'1' | '2' | '3' | '4', number>
+  notEnough: number
+  notes: number
+}
+
+export type SelfEvalReport = {
+  teacherId: string | null
+  activity: { shared: number; awaiting: number; replied: number }
+  components: SelfEvalReportComponent[]
+  lessons: { sessionId: string; lessonTitle: string; sessionDate: string; teacherName: string; levels: Record<string, number | null> }[]
 }
 
 export function getSharedSelfEvals(): Promise<SharedSelfEvalSummary[]> {
   return request('/api/self-eval-shares')
 }
 
-export function getSharedSelfEval(sessionId: string): Promise<SharedSelfEvalSummary & { selfEval: AudioRubricLens }> {
+export function getSupervisedTeachers(): Promise<SupervisedTeacher[]> {
+  return request('/api/self-eval-shares/teachers')
+}
+
+export function getSelfEvalReport(teacherId?: string): Promise<SelfEvalReport> {
+  return request(`/api/self-eval-shares/report${teacherId ? `?teacherId=${encodeURIComponent(teacherId)}` : ''}`)
+}
+
+export function getSharedSelfEval(sessionId: string): Promise<SharedSelfEvalDetail> {
   return request(`/api/self-eval-shares/${sessionId}`)
+}
+
+export function saveSelfEvalFeedback(sessionId: string, feedback: string): Promise<{ feedback: string | null; feedbackAt: string | null }> {
+  return request(`/api/self-eval-shares/${sessionId}/feedback`, { method: 'PUT', body: JSON.stringify({ feedback }) })
 }
 
 export function saveRubricLensNote(id: string, code: string, note: string): Promise<AudioSessionWithSegments> {

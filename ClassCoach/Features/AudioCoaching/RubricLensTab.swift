@@ -133,13 +133,25 @@ struct RubricLensTab: View {
     // SelfEvalShareBar.
     @ViewBuilder
     private var shareBar: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 10) {
+            if let feedback = share?.feedback {
+                // Stays the teacher's to read even after sharing stops.
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Feedback from \(feedback.fromName ?? "your supervisor")\(sharedDate(feedback.at).replacingOccurrences(of: " on ", with: " · "))".uppercased())
+                        .font(.caption2.weight(.semibold)).foregroundStyle(AppTheme.forest)
+                    Text(feedback.text).font(.subheadline).foregroundStyle(AppTheme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.mintTint.opacity(0.5), in: RoundedRectangle(cornerRadius: 18))
+            }
             if let share {
                 if let name = share.supervisorName {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(share.sharedAt != nil ? "Shared with \(name)\(sharedDate(share.sharedAt))" : "Share with my supervisor")
                             .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.forest)
-                        Text("\(name) \(share.sharedAt != nil ? "can see" : "will see") the levels, the moments behind them, the next steps and your notes. Not the recording, the transcript or the rest of the report.")
+                        Text("\(name) \(share.sharedAt != nil ? "can see" : "will see") the lesson's title, the levels, the moments behind them, the next steps and your notes, and can write feedback back to you. Not the recording, the transcript or the rest of the report.")
                             .font(.caption).foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                         if share.sharedAt != nil {

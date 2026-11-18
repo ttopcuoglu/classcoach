@@ -169,6 +169,30 @@ test('the whole share lifecycle, and who can read what', async (t) => {
   assert.ok(!detail.text.includes(TRANSCRIPT_MARKER), 'the transcript never leaves the teacher')
   assert.equal((await call(`/api/self-eval-shares/${ids.unshared}`, supervisor)).status, 404)
 
+  // Inbox status, feedback, my teachers and reports — all only from shares.
+  const put = (body: unknown): RequestInit => ({ method: 'PUT', body: JSON.stringify(body) })
+  const inbox = JSON.parse((await call('/api/self-eval-shares', supervisor)).text) as { status: string; lessonTitle: string }[]
+  assert.equal(inbox[0].status, 'awaiting')
+  assert.ok(!JSON.stringify(inbox).includes(TRANSCRIPT_MARKER))
+  assert.equal((await call(`/api/self-eval-shares/${ids.unshared}/feedback`, supervisor, put({ feedback: 'x' }))).status, 404)
+  assert.equal((await call(`/api/self-eval-shares/${ids.session}/feedback`, principal, put({ feedback: 'x' }))).status, 404)
+  assert.equal((await call(`/api/self-eval-shares/${ids.session}/feedback`, supervisor, put({ feedback: 'Strong pairs work.' }))).status, 200)
+  assert.equal(JSON.parse((await call('/api/self-eval-shares', supervisor)).text)[0].status, 'replied')
+  const mine = JSON.parse((await call(share, teacher)).text)
+  assert.equal(mine.feedback.text, 'Strong pairs work.')
+  assert.equal(mine.feedback.fromName, 'Assistant Principal')
+  const myTeachers = JSON.parse((await call('/api/self-eval-shares/teachers', supervisor)).text) as { teacherId: string; shares: unknown[] }[]
+  assert.deepEqual(myTeachers.map((t) => t.teacherId), [ids.teacher])
+  assert.equal(myTeachers[0].shares.length, 1)
+  assert.equal(JSON.parse((await call('/api/self-eval-shares/teachers', principal)).text).length, 0)
+  const report = JSON.parse((await call(`/api/self-eval-shares/report?teacherId=${ids.teacher}`, supervisor)).text)
+  assert.equal(report.activity.shared, 1)
+  assert.equal(report.components[0].levels['2'], 1, 'the shared lesson only; the unshared one is not counted')
+  assert.equal(report.components[0].notes, 1)
+  const principalReport = JSON.parse((await call(`/api/self-eval-shares/report?teacherId=${ids.teacher}`, principal)).text)
+  assert.equal(principalReport.activity.shared, 0)
+  assert.equal(principalReport.components.length, 0)
+
   // Nobody else: not the school admin, not someone at another school, and the
   // supervisor still cannot open the lesson itself.
   assert.equal(JSON.parse((await call('/api/self-eval-shares', principal)).text).length, 0)

@@ -14,11 +14,10 @@ import {
   MicIcon,
   TargetIcon,
   WaveformIcon,
-  ClipboardIcon,
 } from './icons'
 import { PLUS_MONTHLY_PRICE, PLUS_SUMMARY, INDIVIDUAL_PLAN } from '../lib/pricing'
 import { isAdminPath } from '../lib/adminNav'
-import { AdminNav, isAdminRole, isLeader, WorkspaceSwitch } from './AdminSidebar'
+import { AdminNav, isAdminRole, isLeader, isSupervisor, WorkspaceSwitch } from './AdminSidebar'
 
 type IconComponent = (props: { className?: string }) => React.ReactElement
 type NavItem = { to: string; label: string; icon: IconComponent; subtitle?: string }
@@ -66,20 +65,6 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ]
 
-// A supervisor (someone a superadmin assigned to at least one teacher) gets
-// the Self-Evals shared with them under Grow; nobody else sees the link.
-function navGroupsFor(user: UserProfile | null | undefined): NavGroup[] {
-  if (!user?.supervisesCount) return NAV_GROUPS
-  return NAV_GROUPS.map((group) =>
-    group.label === 'Grow'
-      ? {
-          ...group,
-          items: [...group.items, { to: '/shared-self-evals', label: 'Shared Self-Evals', icon: ClipboardIcon, subtitle: 'from your teachers' }],
-        }
-      : group,
-  )
-}
-
 // Profile is not in the nav. It was a group of its own — a "Grow" header over a
 // single link — which spent a section of the sidebar on the one thing every app
 // puts in the same corner. It lives in the footer block below instead, on the
@@ -115,7 +100,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
   // Two workspaces in one sidebar: My Coaching (the teacher's own tools, as
   // they always were) and School Admin. Which one is showing follows the
   // address, so back, forward and a shared /admin link all keep it right.
-  const canAdmin = isAdminRole(user) || isLeader(user)
+  const canAdmin = isAdminRole(user) || isLeader(user) || isSupervisor(user)
   const admin = canAdmin && isAdminPath(location.pathname)
 
   async function handleLogout() {
@@ -148,7 +133,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           </div>
         )}
         {admin ? (
-          <nav aria-label="School Admin" className="flex flex-1 flex-col overflow-y-auto px-3 pb-4">
+          <nav aria-label="School Workspace" className="flex flex-1 flex-col overflow-y-auto px-3 pb-4">
             <AdminNav user={user} />
           </nav>
         ) : (
@@ -167,7 +152,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             </NavLink>
           </div>
 
-          {navGroupsFor(user).map((group) => (
+          {NAV_GROUPS.map((group) => (
             <div key={group.label}>
               <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-cream/40">{group.label}</p>
               <div className="mt-1.5 flex flex-col gap-1">
@@ -252,7 +237,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             {admin && (
               <button
                 type="button"
-                aria-label="Open the School Admin menu"
+                aria-label="Open the School Workspace menu"
                 onClick={() => setDrawerOpen(true)}
                 className="-ml-1 flex h-10 w-10 items-center justify-center rounded-lg text-forest hover:bg-cream"
               >
@@ -264,7 +249,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           <div className="flex items-center gap-4">
             {canAdmin && !admin && (
               <Link to="/admin" className="text-sm font-semibold text-forest">
-                School Admin
+                School Workspace
               </Link>
             )}
             <button type="button" onClick={handleLogout} className="text-sm font-medium text-ink-soft">
@@ -276,7 +261,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
         {/* School Admin on a phone: the same menu as the sidebar, in a drawer,
             with the switch back to My Coaching at the top. */}
         {admin && drawerOpen && (
-          <div className="fixed inset-0 z-30 md:hidden print:!hidden" role="dialog" aria-modal="true" aria-label="School Admin menu">
+          <div className="fixed inset-0 z-30 md:hidden print:!hidden" role="dialog" aria-modal="true" aria-label="School Workspace menu">
             <button type="button" aria-label="Close the menu" className="absolute inset-0 bg-black/40" onClick={() => setDrawerOpen(false)} />
             <div className="absolute inset-y-0 left-0 flex w-[280px] max-w-[85vw] flex-col overflow-y-auto bg-forest px-3 py-4 shadow-xl">
               <div className="mb-4 flex items-center justify-between px-3">
@@ -343,7 +328,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             Talk
           </NavLink>
 
-          {navGroupsFor(user).map((group) => {
+          {NAV_GROUPS.map((group) => {
             const GroupIcon = group.icon
             if (group.items.length === 1) {
               const item = group.items[0]

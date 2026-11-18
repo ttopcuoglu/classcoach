@@ -1,8 +1,8 @@
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import Layout from './components/Layout'
-import { isLeader } from './components/AdminSidebar'
+import { isLeader, isSupervisor } from './components/AdminSidebar'
 import Landing from './pages/Landing'
 import { getMe, type UserProfile } from './lib/api'
 import { applyPageMeta } from './lib/pageMeta'
@@ -22,7 +22,7 @@ const Shared = lazy(() => import('./pages/Shared'))
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 const AudioCoaching = lazy(() => import('./pages/AudioCoaching'))
 const AudioCoachingExport = lazy(() => import('./pages/AudioCoachingExport'))
-const SharedSelfEvals = lazy(() => import('./pages/SharedSelfEvals'))
+const Evaluations = lazy(() => import('./pages/Evaluations'))
 const LessonPlanning = lazy(() => import('./pages/LessonPlanning'))
 const AssignmentCoachExport = lazy(() => import('./pages/AssignmentCoachExport'))
 const LessonPlanExport = lazy(() => import('./pages/LessonPlanExport'))
@@ -277,8 +277,9 @@ export default function App() {
               <Route path="audio-coaching" element={<AudioCoaching />} />
               {/* Self-Evals teachers shared with this person as their
                   supervisor; the server decides what each person can see. */}
-              <Route path="shared-self-evals" element={<SharedSelfEvals />} />
-              <Route path="shared-self-evals/:sessionId" element={<SharedSelfEvals />} />
+              {/* The supervisor's old page, now Evaluations in the School Workspace. */}
+              <Route path="shared-self-evals" element={<Navigate to="/admin/evaluations" replace />} />
+              <Route path="shared-self-evals/:sessionId" element={<SharedSelfEvalRedirect />} />
               <Route path="lesson-planning" element={<LessonPlanning />} />
               {/* Assignment Coach is a chip inside Planning Coach now. The
                   route stays as a redirect: it is in the guide, in Home's cards
@@ -293,6 +294,16 @@ export default function App() {
                 path="admin/leaders-corner"
                 element={isLeader(user) ? <LeadersCorner /> : <Navigate to={user != null && user.role !== 'teacher' ? '/admin' : '/'} replace />}
               />
+              {/* Evaluations: anyone the school made a supervisor, admin role or
+                  not. The server reads only what was shared with them. */}
+              <Route
+                path="admin/evaluations"
+                element={isSupervisor(user) ? <Evaluations user={user} /> : <Navigate to={user != null && user.role !== 'teacher' ? '/admin' : '/'} replace />}
+              />
+              <Route
+                path="admin/evaluations/:sessionId"
+                element={isSupervisor(user) ? <Evaluations user={user} /> : <Navigate to={user != null && user.role !== 'teacher' ? '/admin' : '/'} replace />}
+              />
               <Route
                 path="admin/*"
                 element={
@@ -301,6 +312,8 @@ export default function App() {
                   ) : isLeader(user) ? (
                     // A leader without an admin role has one page on this side.
                     <Navigate to="/admin/leaders-corner" replace />
+                  ) : isSupervisor(user) ? (
+                    <Navigate to="/admin/evaluations" replace />
                   ) : (
                     <Navigate to="/" replace />
                   )
@@ -313,4 +326,9 @@ export default function App() {
       </BrowserRouter>
     </GoogleOAuthProvider>
   )
+}
+
+function SharedSelfEvalRedirect() {
+  const { sessionId } = useParams()
+  return <Navigate to={`/admin/evaluations/${sessionId ?? ''}`} replace />
 }

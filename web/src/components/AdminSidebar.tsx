@@ -5,6 +5,7 @@ import { ADMIN_GROUP_LABEL, ADMIN_NAV, adminPageFor, adminPath, type AdminGroup,
 import {
   ChartBarIcon,
   ChatBubbleIcon,
+  ClipboardIcon,
   GearIcon,
   GraduationCapIcon,
   GridIcon,
@@ -35,9 +36,11 @@ const ICON: Record<AdminPage, IconComponent> = {
   platformUsers: ShieldIcon,
   schoolInquiries: ShieldIcon,
   leadersCorner: ChatBubbleIcon,
+  evaluations: ClipboardIcon,
+  supervisorAssignments: UserIcon,
 }
 
-const MAIN_GROUPS: AdminGroup[] = ['overview', 'insights', 'coaching', 'manage']
+const MAIN_GROUPS: AdminGroup[] = ['overview', 'instruction', 'insights', 'coaching', 'manage']
 
 export function adminNavLinkClasses(isActive: boolean) {
   return [
@@ -62,7 +65,13 @@ export function isLeader(user: UserProfile | null): boolean {
   return LEADERS_CORNER_ON && user?.leaderLevel != null
 }
 
-/// My Coaching | School Admin. Only for someone who can open School Admin;
+/// Someone the school assigned as a supervisor to at least one teacher. That
+/// alone opens the School Workspace, showing their Evaluations page.
+export function isSupervisor(user: UserProfile | null): boolean {
+  return (user?.supervisesCount ?? 0) > 0
+}
+
+/// My Coaching | School Workspace. Only for someone who can open School Admin;
 /// each half opens its own home page, and which half is lit follows the
 /// address, so back and forward keep it right.
 export function WorkspaceSwitch({ admin, onPick }: { admin: boolean; onPick?: () => void }) {
@@ -93,7 +102,7 @@ export function WorkspaceSwitch({ admin, onPick }: { admin: boolean; onPick?: ()
           onPick?.()
         }}
       >
-        School Admin
+        School Workspace
       </button>
     </div>
   )
@@ -151,17 +160,38 @@ export function AdminNav({ user, onPick }: { user: UserProfile | null; onPick?: 
       </div>
     </div>
   )
-  // A leader without an admin role (a department head, a coach) gets their
-  // own corner and none of the school's pages, which would refuse them.
+  const supervisor = isSupervisor(user)
+  const instructionGroup = supervisor && (
+    <div>
+      <GroupHeading group="instruction" />
+      <div className="mt-1.5 flex flex-col gap-1">
+        {ADMIN_NAV.filter((i) => i.group === 'instruction').map((i) => (
+          <AdminLink key={i.page} page={i.page} label={i.label} onPick={onPick} />
+        ))}
+      </div>
+    </div>
+  )
+  // A leader or supervisor without an admin role (a department head, a
+  // coach, an assistant principal) gets their own pages and none of the
+  // school's, which would refuse them.
   if (!isAdminRole(user)) {
-    return <div className="flex flex-1 flex-col gap-5">{leaderGroup}</div>
+    return (
+      <div className="flex flex-1 flex-col gap-5">
+        {supervisor && <SchoolBlock user={user} />}
+        {leaderGroup}
+        {instructionGroup}
+      </div>
+    )
   }
 
   return (
     <div className="flex flex-1 flex-col gap-5">
       <SchoolBlock user={user} />
       {leaderGroup}
-      {MAIN_GROUPS.map((group) => (
+      {MAIN_GROUPS.map((group) =>
+        group === 'instruction' ? (
+          <div key={group} className="contents">{instructionGroup}</div>
+        ) : (
         <div key={group}>
           <GroupHeading group={group} />
           <div className="mt-1.5 flex flex-col gap-1">
@@ -194,7 +224,8 @@ export function AdminNav({ user, onPick }: { user: UserProfile | null; onPick?: 
             )}
           </div>
         </div>
-      ))}
+        ),
+      )}
       {isSuperadmin && (
         <div>
           <GroupHeading group="internal" />

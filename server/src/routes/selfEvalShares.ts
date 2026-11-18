@@ -1,11 +1,15 @@
-// Self-Evals shared WITH the signed-in person, as someone's supervisor.
+// Self-Evals shared WITH the signed-in person, as someone's supervisor: the
+// supervisor's Evaluations page (inbox, my teachers, reports) and the
+// feedback they write back to the teacher.
 //
 // A share is readable only while all three hold: the teacher pressed Share
 // to this person (selfEvalSharedWithId), this person is still the teacher's
-// supervisor (the school admin or a superadmin can reassign, and the old supervisor loses every
-// share at once), and the lesson still has a Self-Eval. Only the Self-Eval
-// leaves the teacher's account — never the transcript, the rest of the
-// report, Reflect, or anything else on the session.
+// supervisor (the school admin or a superadmin can reassign, and the old
+// supervisor loses every share at once), and the lesson still has a
+// Self-Eval. Only the Self-Eval and a short lesson title leave the teacher's
+// account — never the transcript, the rest of the report, Reflect, or
+// anything else on the session. Every route here, reports included, reads
+// only through visibleShareWhere.
 
 import { Router } from 'express'
 
@@ -15,6 +19,8 @@ import type { RubricLensResult } from '../lib/rubricLens.ts'
 
 export const selfEvalSharesRouter = Router()
 
+export const SELF_EVAL_FEEDBACK_MAX = 2000
+
 export function visibleShareWhere(viewerId: string) {
   return {
     selfEvalSharedWithId: viewerId,
@@ -23,55 +29,204 @@ export function visibleShareWhere(viewerId: string) {
   }
 }
 
-const SHARE_LIST_SELECT = {
+// The lesson's headline, from the first sentence of the lesson summary — the
+// same idea as the teacher's report title, without sending the summary.
+const TITLE_OPENER = /^(?:this|the|in this|today'?s?)\s+(?:lesson|class|session)\s+(?:was\s+)?(?:about|on|covered|focused on|explored|introduced|reviewed)\s+/i
+export function lessonTitleFrom(summary: string | null | undefined, fallback: string | null): string {
+  const text = summary?.trim()
+  if (text) {
+    const match = /^.{20,}?[.!?](?=\s|$)/.exec(text)
+    let out = (match ? match[0] : text).replace(TITLE_OPENER, '')
+    out = out.charAt(0).toUpperCase() + out.slice(1)
+    if (out.length > 60) {
+      const clipped = out.slice(0, 60)
+      out = clipped.slice(0, clipped.lastIndexOf(' ') > 0 ? clipped.lastIndexOf(' ') : 60) + '…'
+    }
+    out = out.replace(/[\s.]+$/, '')
+    if (out) return out
+  }
+  return fallback || 'Untitled lesson'
+}
+
+function splitList(value: string | null): string[] {
+  return (value ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+}
+
+const SHARE_SELECT = {
   id: true,
   classSubject: true,
   period: true,
   gradeLevel: true,
   sessionDate: true,
   selfEvalSharedAt: true,
-  user: { select: { id: true, name: true, email: true } },
+  selfEvalFeedback: true,
+  selfEvalFeedbackById: true,
+  selfEvalFeedbackAt: true,
+  lessonContent: true,
+  user: { select: { id: true, name: true, email: true, subjects: true, gradeLevels: true } },
 } as const
 
-selfEvalSharesRouter.get('/', async (req, res) => {
-  const viewerId = req.user!.userId
-  const sessions = await prisma.audioSession.findMany({
-    where: visibleShareWhere(viewerId),
-    select: SHARE_LIST_SELECT,
+type ShareRow = Prisma.AudioSessionGetPayload<{ select: typeof SHARE_SELECT }>
+
+// Replied = this supervisor wrote feedback after the teacher last shared it.
+// A teacher who shares again (after more notes, say) is waiting again.
+function statusFor(s: ShareRow, viewerId: string): 'awaiting' | 'replied' {
+  const replied =
+    s.selfEvalFeedback != null &&
+    s.selfEvalFeedbackById === viewerId &&
+    s.selfEvalFeedbackAt != null &&
+    (s.selfEvalSharedAt == null || s.selfEvalFeedbackAt >= s.selfEvalSharedAt)
+  return replied ? 'replied' : 'awaiting'
+}
+
+function summaryOf(s: ShareRow, viewerId: string) {
+  const content = s.lessonContent as { summary?: string | null; subject?: string | null } | null
+  return {
+    sessionId: s.id,
+    teacherId: s.user.id,
+    teacherName: s.user.name ?? s.user.email,
+    lessonTitle: lessonTitleFrom(content?.summary, s.classSubject || content?.subject || null),
+    classSubject: s.classSubject,
+    period: s.period,
+    gradeLevel: s.gradeLevel,
+    sessionDate: s.sessionDate,
+    sharedAt: s.selfEvalSharedAt,
+    status: statusFor(s, viewerId),
+  }
+}
+
+async function visibleShares(viewerId: string, teacherId?: string) {
+  return prisma.audioSession.findMany({
+    where: { ...visibleShareWhere(viewerId), ...(teacherId ? { userId: teacherId } : {}) },
+    select: SHARE_SELECT,
     orderBy: { selfEvalSharedAt: 'desc' },
   })
+}
+
+async function visibleSharesWithLens(viewerId: string, teacherId?: string) {
+  return prisma.audioSession.findMany({
+    where: { ...visibleShareWhere(viewerId), ...(teacherId ? { userId: teacherId } : {}) },
+    select: { ...SHARE_SELECT, rubricLens: true },
+    orderBy: { selfEvalSharedAt: 'desc' },
+  })
+}
+
+// The inbox: every Self-Eval shared with me, newest share first.
+selfEvalSharesRouter.get('/', async (req, res) => {
+  const viewerId = req.user!.userId
+  const shares = await visibleShares(viewerId)
+  res.json(shares.map((s) => summaryOf(s, viewerId)))
+})
+
+// Everyone I supervise, including those who have shared nothing yet, each
+// with what they have shared.
+selfEvalSharesRouter.get('/teachers', async (req, res) => {
+  const viewerId = req.user!.userId
+  const [teachers, shares] = await Promise.all([
+    prisma.user.findMany({
+      where: { supervisorId: viewerId },
+      select: { id: true, name: true, email: true, subjects: true, gradeLevels: true },
+      orderBy: [{ name: 'asc' }, { email: 'asc' }],
+    }),
+    visibleShares(viewerId),
+  ])
   res.json(
-    sessions.map((s) => ({
-      sessionId: s.id,
-      teacherName: s.user.name ?? s.user.email,
-      classSubject: s.classSubject,
-      period: s.period,
-      gradeLevel: s.gradeLevel,
-      sessionDate: s.sessionDate,
-      sharedAt: s.selfEvalSharedAt,
+    teachers.map((t) => ({
+      teacherId: t.id,
+      teacherName: t.name ?? t.email,
+      subjects: splitList(t.subjects),
+      gradeLevels: splitList(t.gradeLevels),
+      shares: shares.filter((s) => s.user.id === t.id).map((s) => summaryOf(s, viewerId)),
     })),
   )
+})
+
+// Reports over what has been shared with me, for all my teachers or one.
+// Counts only: how many shared lessons placed each component at each level,
+// and how many had no level. Nothing a teacher did not share is counted.
+selfEvalSharesRouter.get('/report', async (req, res) => {
+  const viewerId = req.user!.userId
+  const teacherId = typeof req.query.teacherId === 'string' && req.query.teacherId ? req.query.teacherId : undefined
+  const shares = await visibleSharesWithLens(viewerId, teacherId)
+
+  type Row = { code: string; name: string; domain: string; levels: Record<'1' | '2' | '3' | '4', number>; notEnough: number; notes: number }
+  const rows = new Map<string, Row>()
+  const lessons: { sessionId: string; lessonTitle: string; sessionDate: Date; teacherName: string; levels: Record<string, number | null> }[] = []
+  for (const s of shares) {
+    const lens = s.rubricLens as RubricLensResult | null
+    if (!lens?.scored) continue
+    const levels: Record<string, number | null> = {}
+    for (const c of lens.components) {
+      const row = rows.get(c.code) ?? { code: c.code, name: c.name, domain: c.domain, levels: { '1': 0, '2': 0, '3': 0, '4': 0 }, notEnough: 0, notes: 0 }
+      if (c.level == null) row.notEnough += 1
+      else row.levels[String(c.level) as '1' | '2' | '3' | '4'] += 1
+      if (c.teacherNote) row.notes += 1
+      rows.set(c.code, row)
+      levels[c.code] = c.level ?? null
+    }
+    const summary = summaryOf(s, viewerId)
+    lessons.push({ sessionId: s.id, lessonTitle: summary.lessonTitle, sessionDate: s.sessionDate, teacherName: summary.teacherName, levels })
+  }
+
+  const statuses = shares.map((s) => statusFor(s, viewerId))
+  res.json({
+    teacherId: teacherId ?? null,
+    activity: {
+      shared: shares.length,
+      awaiting: statuses.filter((x) => x === 'awaiting').length,
+      replied: statuses.filter((x) => x === 'replied').length,
+    },
+    components: [...rows.values()].sort((a, b) => a.code.localeCompare(b.code)),
+    // Oldest first, so a teacher's row reads left to right in time.
+    lessons: lessons.sort((a, b) => a.sessionDate.getTime() - b.sessionDate.getTime()),
+  })
 })
 
 selfEvalSharesRouter.get('/:sessionId', async (req, res) => {
   const viewerId = req.user!.userId
   const session = await prisma.audioSession.findFirst({
     where: { id: String(req.params.sessionId), ...visibleShareWhere(viewerId) },
-    select: { ...SHARE_LIST_SELECT, rubricLens: true },
+    select: { ...SHARE_SELECT, rubricLens: true },
   })
   if (!session) {
     res.status(404).json({ error: 'This Self-Eval is not shared with you.' })
     return
   }
-  const lens = session.rubricLens as RubricLensResult
+  const mine = session.selfEvalFeedbackById === viewerId
   res.json({
-    sessionId: session.id,
-    teacherName: session.user.name ?? session.user.email,
-    classSubject: session.classSubject,
-    period: session.period,
-    gradeLevel: session.gradeLevel,
-    sessionDate: session.sessionDate,
-    sharedAt: session.selfEvalSharedAt,
-    selfEval: lens,
+    ...summaryOf(session, viewerId),
+    selfEval: session.rubricLens as RubricLensResult,
+    // Only my own feedback: a previous supervisor's words are the teacher's.
+    feedback: mine ? session.selfEvalFeedback : null,
+    feedbackAt: mine ? session.selfEvalFeedbackAt : null,
   })
+})
+
+// Write (or clear, with an empty string) my feedback for the teacher.
+selfEvalSharesRouter.put('/:sessionId/feedback', async (req, res) => {
+  const viewerId = req.user!.userId
+  const raw = req.body?.feedback
+  if (typeof raw !== 'string') {
+    res.status(400).json({ error: 'feedback must be a string' })
+    return
+  }
+  const text = raw.trim()
+  if (text.length > SELF_EVAL_FEEDBACK_MAX) {
+    res.status(400).json({ error: `Feedback must be ${SELF_EVAL_FEEDBACK_MAX} characters or fewer.` })
+    return
+  }
+  const session = await prisma.audioSession.findFirst({
+    where: { id: String(req.params.sessionId), ...visibleShareWhere(viewerId) },
+    select: { id: true },
+  })
+  if (!session) {
+    res.status(404).json({ error: 'This Self-Eval is not shared with you.' })
+    return
+  }
+  const at = text ? new Date() : null
+  await prisma.audioSession.update({
+    where: { id: session.id },
+    data: { selfEvalFeedback: text || null, selfEvalFeedbackById: text ? viewerId : null, selfEvalFeedbackAt: at },
+  })
+  res.json({ feedback: text || null, feedbackAt: at })
 })

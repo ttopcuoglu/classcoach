@@ -5272,16 +5272,33 @@ function SelfEvalShareBar({ sessionId }: { sessionId: string }) {
   }
 
   if (!state) return null
+  // The supervisor's feedback stays here even after sharing stops.
+  const feedback = state.feedback ? (
+    <div className="rounded-2xl border border-forest/20 bg-mint-tint/40 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-forest">
+        Feedback from {state.feedback.fromName ?? 'your supervisor'}
+        {state.feedback.at
+          ? ` · ${new Date(state.feedback.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+          : ''}
+      </p>
+      <p className="mt-1.5 whitespace-pre-line text-sm text-ink">{state.feedback.text}</p>
+    </div>
+  ) : null
   if (!state.supervisorName) {
     return (
-      <p className="text-xs text-ink-soft">
-        No supervisor is assigned to you yet, so this Self-Eval can't be shared. Your school sets this up.
-      </p>
+      <div className="flex flex-col gap-3">
+        {feedback}
+        <p className="text-xs text-ink-soft">
+          No supervisor is assigned to you yet, so this Self-Eval can't be shared. Your school sets this up.
+        </p>
+      </div>
     )
   }
 
   const shared = state.sharedAt != null
   return (
+    <div className="flex flex-col gap-3">
+    {feedback}
     <div className="flex flex-col gap-2 rounded-2xl border border-hairline bg-cream-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
@@ -5294,8 +5311,9 @@ function SelfEvalShareBar({ sessionId }: { sessionId: string }) {
             <p className="text-sm font-semibold text-forest">Share with my supervisor</p>
           )}
           <p className="mt-0.5 text-xs text-ink-soft">
-            {state.supervisorName} {shared ? 'can see' : 'will see'} the levels, the moments behind them, the next steps and
-            your notes. Not the recording, the transcript or the rest of the report.
+            {state.supervisorName} {shared ? 'can see' : 'will see'} the lesson&apos;s title, the levels, the moments behind them,
+            the next steps and your notes, and can write feedback back to you. Not the recording, the transcript or the rest of
+            the report.
           </p>
         </div>
         {shared ? (
@@ -5319,6 +5337,7 @@ function SelfEvalShareBar({ sessionId }: { sessionId: string }) {
         )}
       </div>
       {error && <p className="text-sm text-terracotta-600">{error}</p>}
+    </div>
     </div>
   )
 }

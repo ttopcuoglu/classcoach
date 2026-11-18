@@ -285,6 +285,19 @@ export default function AdminDashboard({ onOwnAccountChanged }: { onOwnAccountCh
             />
           </CardBoundary>
         )}
+        {tab === 'supervisorAssignments' && (
+          <CardBoundary key="supervisorAssignments" title="Supervisor Assignments">
+            <SupervisorAssignmentsPanel
+              selectedOrgId={selectedOrgId}
+              onOrgChange={handleOrgChange}
+              orgs={orgs}
+              isSuperadmin={isSuperadmin}
+              overview={overview}
+              schoolName={me?.organization?.name ?? null}
+              onAssignmentsChanged={onOwnAccountChanged}
+            />
+          </CardBoundary>
+        )}
         {tab === 'lessonFormat' && (
           <CardBoundary key="lessonFormat" title="Lesson Plan Format">
             <LessonFormatPanel />
@@ -3042,6 +3055,294 @@ function PeoplePanel({
         />
       ) : (
         <p className="text-sm text-ink-soft">Select an organization above to view its staff roster.</p>
+      )}
+    </div>
+  )
+}
+
+// Who supervises whom, for Self-Eval sharing. The school admin (or a
+// superadmin with a school selected) gives each teacher a supervisor from the
+// same school, one at a time from the row or several at once. Assigning shares
+// nothing: a teacher still chooses, lesson by lesson, what their supervisor
+// sees. Every change goes through PATCH /api/admin/members/:id, which checks
+// the school on the server.
+function departmentOf(m: OrgMember): string {
+  const subjects = (m.subjects ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+  const grades = (m.gradeLevels ?? '').split(',').map((x) => x.trim().replace(/(st|nd|rd|th)$/i, '')).filter(Boolean)
+  return [subjects.join(', '), grades.length ? `Grade ${grades.join(', ')}` : ''].filter(Boolean).join(' · ')
+}
+
+function initialsOf(m: OrgMember): string {
+  const source = (m.name ?? m.email).trim()
+  const parts = source.split(/[\s@.]+/).filter(Boolean)
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?'
+}
+
+const AVATAR_TINTS = ['bg-mint-tint/70 text-forest', 'bg-gold-tint text-terracotta-600']
+
+function SupervisorAssignmentsPanel({
+  selectedOrgId,
+  onOrgChange,
+  orgs,
+  isSuperadmin,
+  overview,
+  schoolName,
+  onAssignmentsChanged,
+}: {
+  selectedOrgId: string
+  onOrgChange: (id: string) => void
+  orgs: Organization[]
+  isSuperadmin: boolean
+  overview: AdminOverview | null
+  schoolName: string | null
+  onAssignmentsChanged?: () => void
+}) {
+  const organizationId = selectedOrgId || undefined
+  const scoped = overview?.scope === 'organization'
+  const [members, setMembers] = useState<OrgMember[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [unassignedOnly, setUnassignedOnly] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkSupervisor, setBulkSupervisor] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [rowBusy, setRowBusy] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+
+  function load() {
+    getOrganizationMembers(organizationId)
+      .then((list) => {
+        setMembers(list)
+        setError(null)
+      })
+      .catch((err: Error) => setError(err.message || 'Could not load your staff.'))
+  }
+
+  useEffect(() => {
+    setMembers(null)
+    setSelected(new Set())
+    if (scoped) load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedOrgId, scoped])
+
+  const pickerTitle = isSuperadmin && orgs.length > 0 && (
+    <select
+      value={selectedOrgId}
+      onChange={(e) => onOrgChange(e.target.value)}
+      className="rounded-xl border border-hairline bg-cream px-3 py-1.5 text-sm text-ink focus:border-terracotta focus:outline-none"
+    >
+      <option value="">Select an organization</option>
+      {orgs.map((org) => (
+        <option key={org.id} value={org.id}>
+          {org.name}
+        </option>
+      ))}
+    </select>
+  )
+
+  const teachers = (members ?? []).filter((m) => m.role === 'teacher')
+  const candidates = (members ?? [])
+    .filter((m) => m.role !== 'superadmin' && !m.suspendedAt)
+    .sort((a, b) => (a.name ?? a.email).localeCompare(b.name ?? b.email))
+  const nameOf = (id: string | null | undefined) => {
+    const m = (members ?? []).find((x) => x.id === id)
+    return m ? m.name ?? m.email : null
+  }
+  const assigned = teachers.filter((t) => t.supervisorId).length
+  const shown = teachers
+    .filter((t) => !unassignedOnly || !t.supervisorId)
+    .sort((a, b) => (a.name ?? a.email).localeCompare(b.name ?? b.email))
+  const picked = shown.filter((t) => selected.has(t.id))
+  const allPicked = shown.length > 0 && picked.length === shown.length
+
+  async function assignOne(teacher: OrgMember, supervisorId: string) {
+    setRowBusy(teacher.id)
+    setMessage(null)
+    try {
+      await updateMember(teacher.id, { supervisorId: supervisorId || null }, organizationId)
+      setMembers((list) => (list ?? []).map((m) => (m.id === teacher.id ? { ...m, supervisorId: supervisorId || null } : m)))
+      onAssignmentsChanged?.()
+    } catch (err) {
+      setMessage((err as Error).message)
+    } finally {
+      setRowBusy(null)
+    }
+  }
+
+  async function assignPicked() {
+    if (!bulkSupervisor) return
+    setBusy(true)
+    setMessage(null)
+    // Nobody supervises themselves: skip the supervisor's own row if picked.
+    const targets = picked.filter((t) => t.id !== bulkSupervisor)
+    const outcome = await runBulk(targets, (t) => updateMember(t.id, { supervisorId: bulkSupervisor }, organizationId))
+    setBusy(false)
+    setSelected(new Set())
+    setMessage(
+      outcome.failures.length
+        ? `Assigned ${outcome.done}. Not assigned: ${outcome.failures.join('; ')}`
+        : `Assigned ${outcome.done} ${outcome.done === 1 ? 'teacher' : 'teachers'} to ${nameOf(bulkSupervisor)}.`,
+    )
+    load()
+    onAssignmentsChanged?.()
+  }
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          {schoolName && !isSuperadmin && <p className="text-xs font-bold uppercase tracking-[0.2em] text-terracotta-600">{schoolName}</p>}
+          <h1 className="mt-1 font-heading text-2xl font-extrabold text-forest md:text-[34px]">
+            Supervisor Assignments<span className="text-gold">.</span>
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm text-ink-soft">
+            Assign a primary supervisor to each teacher. A teacher can then share a lesson&rsquo;s Self-Eval with them.
+            Nothing is shared until the teacher chooses to.
+          </p>
+        </div>
+        {pickerTitle}
+      </div>
+
+      {!overview ? (
+        <p className="text-sm text-ink-soft">Loading...</p>
+      ) : !scoped ? (
+        <p className="text-sm text-ink-soft">Select an organization above to assign supervisors.</p>
+      ) : error ? (
+        <p className="text-sm text-terracotta-600">{error}</p>
+      ) : !members ? (
+        <p className="text-sm text-ink-soft">Loading...</p>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-x-8 gap-y-2 rounded-2xl bg-mint-tint/50 px-5 py-4 text-base text-ink">
+            <span>
+              <b className="font-bold">{teachers.length}</b> {teachers.length === 1 ? 'teacher' : 'teachers'}
+            </span>
+            <span>
+              <b className="font-bold">{assigned}</b> assigned
+            </span>
+            <span>
+              <b className="font-bold">{teachers.length - assigned}</b> unassigned
+            </span>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-hairline bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-4 py-3">
+              <label className="flex items-center gap-2 text-sm text-ink-soft">
+                <input
+                  type="checkbox"
+                  checked={unassignedOnly}
+                  onChange={(e) => {
+                    setUnassignedOnly(e.target.checked)
+                    setSelected(new Set())
+                  }}
+                  className="h-4 w-4 accent-forest"
+                />
+                Unassigned only
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={bulkSupervisor}
+                  onChange={(e) => setBulkSupervisor(e.target.value)}
+                  aria-label="Supervisor for the selected teachers"
+                  className={`${inputClass} w-56 py-2`}
+                >
+                  <option value="">Choose supervisor</option>
+                  {candidates.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name ?? c.email}
+                      {c.jobTitle ? ` — ${c.jobTitle}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={assignPicked}
+                  disabled={busy || !bulkSupervisor || picked.length === 0}
+                  className="rounded-xl bg-forest px-4 py-2 text-sm font-semibold text-cream disabled:bg-ink-soft/40"
+                >
+                  {busy ? 'Assigning...' : picked.length > 0 ? `Assign ${picked.length}` : 'Assign'}
+                </button>
+              </div>
+            </div>
+            {message && <p className="border-b border-hairline px-4 py-2 text-sm text-ink">{message}</p>}
+            {shown.length === 0 ? (
+              <p className="px-4 py-6 text-sm text-ink-soft">
+                {teachers.length === 0 ? 'No teachers have joined this school yet.' : 'Every teacher has a supervisor.'}
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[36rem] border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-cream/70 text-left text-xs font-semibold text-ink-soft">
+                      <th className="w-10 px-4 py-3">
+                        <SelectAllCheckbox
+                          checked={allPicked}
+                          indeterminate={picked.length > 0 && !allPicked}
+                          disabled={busy}
+                          onChange={() => setSelected(allPicked ? new Set() : new Set(shown.map((t) => t.id)))}
+                        />
+                      </th>
+                      <th className="px-2 py-3">Teacher</th>
+                      <th className="px-2 py-3">Department</th>
+                      <th className="px-4 py-3">Supervisor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((t, i) => (
+                      <tr key={t.id} className="border-t border-hairline/70">
+                        <td className="px-4 py-3">
+                          <RowCheckbox checked={selected.has(t.id)} disabled={busy} label={t.name ?? t.email} onChange={() => toggle(t.id)} />
+                        </td>
+                        <td className="px-2 py-3">
+                          <div className="flex items-center gap-3">
+                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${AVATAR_TINTS[i % 2]}`}>
+                              {initialsOf(t)}
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block font-semibold text-ink">{t.name ?? t.email}</span>
+                              {t.name && <span className="block text-xs text-ink-soft">{t.email}</span>}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-2 py-3 text-ink-soft">{departmentOf(t) || '—'}</td>
+                        <td className="px-4 py-3">
+                          <select
+                            value={t.supervisorId ?? ''}
+                            disabled={rowBusy === t.id || busy}
+                            onChange={(e) => void assignOne(t, e.target.value)}
+                            aria-label={`Supervisor for ${t.name ?? t.email}`}
+                            className={`${inputClass} w-full min-w-[11rem] bg-white py-2`}
+                          >
+                            <option value="">Unassigned</option>
+                            {candidates
+                              .filter((c) => c.id !== t.id)
+                              .map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name ?? c.email}
+                                </option>
+                              ))}
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-ink-soft">
+            Supervisors see only the Self-Evals a teacher shares with them, never recordings or the rest of a teacher&rsquo;s
+            coaching. Changing a teacher&rsquo;s supervisor ends the old supervisor&rsquo;s access to earlier shares.
+          </p>
+        </>
       )}
     </div>
   )

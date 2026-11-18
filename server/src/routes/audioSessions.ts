@@ -1589,10 +1589,23 @@ async function selfEvalShareState(userId: string, sessionId: string) {
     }),
     prisma.audioSession.findFirst({
       where: { id: sessionId, userId },
-      select: { id: true, rubricLens: true, selfEvalSharedWithId: true, selfEvalSharedAt: true },
+      select: {
+        id: true,
+        rubricLens: true,
+        selfEvalSharedWithId: true,
+        selfEvalSharedAt: true,
+        selfEvalFeedback: true,
+        selfEvalFeedbackById: true,
+        selfEvalFeedbackAt: true,
+      },
     }),
   ])
   if (!session) return null
+  // The supervisor's feedback stays the teacher's to read, even after they
+  // stop sharing or the supervisor changes.
+  const author = session.selfEvalFeedback && session.selfEvalFeedbackById
+    ? await prisma.user.findUnique({ where: { id: session.selfEvalFeedbackById }, select: { name: true, email: true } })
+    : null
   const supervisor = me?.supervisor ?? null
   // A share to someone who is no longer the supervisor is dead (they can't
   // read it), so it shows as not shared.
@@ -1603,6 +1616,9 @@ async function selfEvalShareState(userId: string, sessionId: string) {
     body: {
       supervisorName: supervisor ? (supervisor.name ?? supervisor.email) : null,
       sharedAt: live ? session.selfEvalSharedAt : null,
+      feedback: session.selfEvalFeedback
+        ? { text: session.selfEvalFeedback, fromName: author ? (author.name ?? author.email) : null, at: session.selfEvalFeedbackAt }
+        : null,
     },
   }
 }

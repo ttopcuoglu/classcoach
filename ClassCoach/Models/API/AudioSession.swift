@@ -199,6 +199,14 @@ struct AudioRubricComponent: Decodable, Identifiable {
 struct SelfEvalShareState: Decodable {
     let supervisorName: String?
     let sharedAt: String?
+    /// The supervisor's written feedback; absent from older servers.
+    let feedback: SelfEvalFeedback?
+}
+
+struct SelfEvalFeedback: Decodable {
+    let text: String
+    let fromName: String?
+    let at: String?
 }
 
 struct AudioRubricNotObservable: Decodable, Identifiable {
