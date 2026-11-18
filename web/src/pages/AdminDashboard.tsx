@@ -673,7 +673,7 @@ type EditValues = {
   // assistant and teacher-leader only (see hasLeaderOptions).
   leaderAreas?: LeaderArea[]
   leaderEvaluates?: boolean
-  // Self-Eval supervisor, '' = none. Always someone in the same school: set
+  // Self Evaluation supervisor, '' = none. Always someone in the same school: set
   // by a superadmin on the platform list or by the school admin on their
   // roster.
   supervisorId?: string
@@ -1255,7 +1255,7 @@ function MembersList({
         n={rosterN}
         title="Your staff"
         question={`Everyone at your school with a Wivoza account${members ? ` (${members.length})` : ''}.`}
-        howToRead="Last active is the last time someone used any part of Wivoza. Edit changes a name, job title, role or Self-Eval supervisor (the colleague a teacher can share a Self-Eval with); Suspend stops someone signing in until you unsuspend them; Remove takes them off your school without deleting anything of theirs. Select several people to do the same thing to all of them at once."
+        howToRead="Last active is the last time someone used any part of Wivoza. Edit changes a name, job title, role or Self Evaluation supervisor (the colleague a teacher can share a Self Evaluation with); Suspend stops someone signing in until you unsuspend them; Remove takes them off your school without deleting anything of theirs. Select several people to do the same thing to all of them at once."
       >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -3060,7 +3060,7 @@ function PeoplePanel({
   )
 }
 
-// Who supervises whom, for Self-Eval sharing. The school admin (or a
+// Who supervises whom, for Self Evaluation sharing. The school admin (or a
 // superadmin with a school selected) gives each teacher a supervisor from the
 // same school, one at a time from the row or several at once. Assigning shares
 // nothing: a teacher still chooses, lesson by lesson, what their supervisor
@@ -3204,7 +3204,7 @@ function SupervisorAssignmentsPanel({
             Supervisor Assignments<span className="text-gold">.</span>
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-ink-soft">
-            Assign a primary supervisor to each teacher. A teacher can then share a lesson&rsquo;s Self-Eval with them.
+            Assign a primary supervisor to each teacher. A teacher can then share a lesson&rsquo;s Self Evaluation with them.
             Nothing is shared until the teacher chooses to.
           </p>
         </div>
@@ -3339,7 +3339,7 @@ function SupervisorAssignmentsPanel({
             )}
           </div>
           <p className="text-xs text-ink-soft">
-            Supervisors see only the Self-Evals a teacher shares with them, never recordings or the rest of a teacher&rsquo;s
+            Supervisors see only the Self Evaluations a teacher shares with them, never recordings or the rest of a teacher&rsquo;s
             coaching. Changing a teacher&rsquo;s supervisor ends the old supervisor&rsquo;s access to earlier shares.
           </p>
         </>

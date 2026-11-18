@@ -29,7 +29,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // can open it, and the dashboard's school data would refuse them.
   { page: 'leadersCorner', slug: 'leaders-corner', label: 'Leader’s Corner', group: 'leader' },
   { page: 'dashboard', slug: '', label: 'Dashboard', group: 'overview' },
-  // Self-Evals teachers shared with this person as their supervisor. Its own
+  // Self Evaluations teachers shared with this person as their supervisor. Its own
   // route in App, like Leader's Corner: a supervisor need not be an admin.
   { page: 'evaluations', slug: 'evaluations', label: 'Evaluations', group: 'instruction' },
   { page: 'engagement', slug: 'usage', label: 'Usage & Engagement', group: 'insights' },

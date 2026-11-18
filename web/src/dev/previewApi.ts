@@ -32,7 +32,7 @@ const PROFILE: Json = {
   // Leader's Corner at that level, as a superadmin would.
   leaderLevel: new URLSearchParams(window.location.search).get('leader'),
   // `?supervisor=1` makes this account someone's supervisor, so Shared
-  // Self-Evals appears in the sidebar.
+  // Self Evaluations appears in the sidebar.
   supervisesCount: new URLSearchParams(window.location.search).has('supervisor') ? 2 : 0,
   jobTitle: 'Teacher',
   schoolName: 'Preview Middle School',
@@ -2222,7 +2222,7 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
     }
     return { ...(previewReport() as Record<string, unknown>), schoolFocusIdea: previewDebriefIdea }
   }
-  // Self-Eval sharing: `?nosupervisor=1` for a teacher with none assigned.
+  // Self Evaluation sharing: `?nosupervisor=1` for a teacher with none assigned.
   if (path === '/api/audio-sessions/preview-report/self-eval/share') {
     const supervisorName = new URLSearchParams(window.location.search).has('nosupervisor') ? null : 'Preview Dept Head'
     if (method === 'POST') {

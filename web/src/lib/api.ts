@@ -155,7 +155,7 @@ export type UserProfile = {
   // Leader's Corner level, set only by a superadmin; null = no Leader's Corner.
   // Optional because an older server never sends it.
   leaderLevel?: LeaderLevel | null
-  // How many teachers this person supervises (Self-Eval sharing). Only /me
+  // How many teachers this person supervises (Self Evaluation sharing). Only /me
   // sends it.
   supervisesCount?: number
   createdAt: string
@@ -363,7 +363,7 @@ export type OrgMember = {
   suspendedAt: string | null
   createdAt: string
   lastActiveAt: string | null
-  // Self-Eval supervisor (another member of the same school), or null.
+  // Self Evaluation supervisor (another member of the same school), or null.
   supervisorId?: string | null
   // From their profile, comma-separated; the Department column.
   subjects?: string | null
@@ -412,7 +412,7 @@ export type AdminUser = {
   organizationId: string | null
   organizationName: string | null
   // Superadmin-assigned, same school; the person this user can share a
-  // Self-Eval with.
+  // Self Evaluation with.
   supervisorId?: string | null
   suspendedAt: string | null
   createdAt: string
@@ -3087,7 +3087,7 @@ export function generateRubricLens(id: string): Promise<AudioSessionWithSegments
   return request(`/api/audio-sessions/${id}/rubric-lens`, { method: 'POST' })
 }
 
-// Self-Eval sharing with the supervisor a superadmin assigned.
+// Self Evaluation sharing with the supervisor a superadmin assigned.
 export type SelfEvalFeedback = { text: string; fromName: string | null; at: string | null }
 
 export type SelfEvalShareState = {

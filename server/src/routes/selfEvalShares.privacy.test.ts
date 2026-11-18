@@ -1,4 +1,4 @@
-// Self-Eval sharing: a supervisor sees a teacher's Self-Eval only when the
+// Self Evaluation sharing: a supervisor sees a teacher's Self Evaluation only when the
 // teacher shared it with them AND a superadmin assigned them as that
 // teacher's supervisor — and never anything else from the lesson. Run against
 // a throwaway in-memory Postgres (PGlite), the same harness as
@@ -156,7 +156,7 @@ test('the whole share lifecycle, and who can read what', async (t) => {
   assert.equal(JSON.parse((await call('/api/self-eval-shares', supervisor)).text).length, 0)
   assert.equal((await call(`/api/self-eval-shares/${ids.session}`, supervisor)).status, 404)
 
-  // Shared: the supervisor sees this Self-Eval with the teacher's note, and
+  // Shared: the supervisor sees this Self Evaluation with the teacher's note, and
   // nothing from the transcript. The other lesson stays private.
   const shared = JSON.parse((await call(share, teacher, json({ share: true }))).text)
   assert.equal(shared.supervisorName, 'Assistant Principal')

@@ -275,7 +275,7 @@ export default function App() {
               <Route path="coach-chat" element={<Practice />} />
               <Route path="communications" element={<Communications />} />
               <Route path="audio-coaching" element={<AudioCoaching />} />
-              {/* Self-Evals teachers shared with this person as their
+              {/* Self Evaluations teachers shared with this person as their
                   supervisor; the server decides what each person can see. */}
               {/* The supervisor's old page, now Evaluations in the School Workspace. */}
               <Route path="shared-self-evals" element={<Navigate to="/admin/evaluations" replace />} />

@@ -185,7 +185,7 @@ export function PlanningSection({
             plan behind each one. Where the plan says too little, it says so instead of guessing.
           </p>
           <p className="mt-1.5 text-xs text-ink-soft">
-            Only you see it unless you share this Self-Eval with your supervisor; the plan then goes with it.
+            Only you see it unless you share this Self Evaluation with your supervisor; the plan then goes with it.
           </p>
           {locked ? <p className="mt-3 text-sm text-ink-soft">This report is locked, so a plan can&rsquo;t be attached.</p> : picker}
         </div>
@@ -279,7 +279,7 @@ export function SelfEvalShareBar({ sessionId }: { sessionId: string }) {
     return (
       <div className="flex flex-col gap-3">
         {feedback}
-        <p className="text-xs text-ink-soft">No supervisor is assigned to you yet, so this Self-Eval can&rsquo;t be shared. Your school sets this up.</p>
+        <p className="text-xs text-ink-soft">No supervisor is assigned to you yet, so this Self Evaluation can&rsquo;t be shared. Your school sets this up.</p>
       </div>
     )
   }

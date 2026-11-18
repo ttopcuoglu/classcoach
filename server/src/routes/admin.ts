@@ -1193,7 +1193,7 @@ adminRouter.patch('/members/:id', async (req, res) => {
     res.status(400).json({ error: "You can't change your own role." })
     return
   }
-  // Self-Eval supervisor: a school admin assigns one for their own school's
+  // Self Evaluation supervisor: a school admin assigns one for their own school's
   // members, always someone else in that same school (findScopedMember has
   // already pinned the target to the school in scope).
   const { supervisorId } = (req.body ?? {}) as { supervisorId?: unknown }
@@ -1999,7 +1999,7 @@ adminRouter.patch('/users/:id', requireSuperadmin, async (req, res) => {
   }
   const finalOrg = data.organizationId !== undefined ? data.organizationId : target.organizationId
   const schoolChanged = finalOrg !== target.organizationId
-  // Supervisor for Self-Eval sharing (a school admin can also set it from
+  // Supervisor for Self Evaluation sharing (a school admin can also set it from
   // their roster), checked against the school they end up in.
   if (supervisorId !== undefined) {
     const problem = await supervisorError(id, finalOrg, supervisorId)

@@ -1,4 +1,4 @@
-// Self-Evals shared WITH the signed-in person, as someone's supervisor: the
+// Self Evaluations shared WITH the signed-in person, as someone's supervisor: the
 // supervisor's Evaluations page (inbox, my teachers, reports) and the
 // feedback they write back to the teacher.
 //
@@ -6,9 +6,9 @@
 // to this person (selfEvalSharedWithId), this person is still the teacher's
 // supervisor (the school admin or a superadmin can reassign, and the old
 // supervisor loses every share at once), and the lesson still has a
-// Self-Eval. What the supervisor reads is the report the teacher previewed
+// Self Evaluation. What the supervisor reads is the report the teacher previewed
 // and sent (selfEvalReport, see lib/selfEvalReport.ts), or for a share from
-// before that existed, the Self-Eval itself. Never the transcript, the rest
+// before that existed, the Self Evaluation itself. Never the transcript, the rest
 // of the lesson report, Reflect, or anything else on the session. Every
 // route here, reports included, reads only through visibleShareWhere.
 
@@ -126,7 +126,7 @@ async function visibleSharesWithLens(viewerId: string, teacherId?: string, sessi
   })
 }
 
-/// The report as sent, or the live Self-Eval for a share from before
+/// The report as sent, or the live Self Evaluation for a share from before
 /// snapshots (2026-11-18).
 function sharedReport(s: { selfEvalReport: unknown; rubricLens: unknown }): SharedSelfEvalReport | null {
   if (s.selfEvalReport) return s.selfEvalReport as SharedSelfEvalReport
@@ -134,7 +134,7 @@ function sharedReport(s: { selfEvalReport: unknown; rubricLens: unknown }): Shar
   return lens?.scored ? reportFromLiveLens(lens) : null
 }
 
-// The inbox: every Self-Eval shared with me, newest share first.
+// The inbox: every Self Evaluation shared with me, newest share first.
 selfEvalSharesRouter.get('/', async (req, res) => {
   const viewerId = req.user!.userId
   const shares = await visibleShares(viewerId)
@@ -213,7 +213,7 @@ selfEvalSharesRouter.get('/:sessionId', async (req, res) => {
   })
   const report = session ? sharedReport(session) : null
   if (!session || !report) {
-    res.status(404).json({ error: 'This Self-Eval is not shared with you.' })
+    res.status(404).json({ error: 'This Self Evaluation is not shared with you.' })
     return
   }
   const mine = session.selfEvalFeedbackById === viewerId
@@ -244,7 +244,7 @@ selfEvalSharesRouter.put('/:sessionId/feedback', async (req, res) => {
     select: { id: true },
   })
   if (!session) {
-    res.status(404).json({ error: 'This Self-Eval is not shared with you.' })
+    res.status(404).json({ error: 'This Self Evaluation is not shared with you.' })
     return
   }
   const at = text ? new Date() : null

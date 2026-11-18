@@ -1403,19 +1403,23 @@ const REFLECT_PATH_CARDS: {
   },
 ]
 
+/// Reflect's on/off switch. Hidden 2026-11-19 (the user's call): no tab, and
+/// the "Discuss with Wivoza Coach" buttons that open it are hidden too. The
+/// conversation code is kept, so turning this back on restores it as it was.
+const REFLECT_SHOWN = false
+
 const REPORT_TABS: { key: ReportTab; label: string }[] = [
   { key: 'summary', label: 'Summary' },
+  // Right after Summary since 2026-11-19 (the user's call). A whole-report
+  // view, like every tab here except Insights. It spent a while at the foot
+  // of the Insights column, where it repeated under all four sections and
+  // belonged to none of them.
+  { key: 'rubric', label: 'Self Evaluation' },
   { key: 'insights', label: 'Insights' },
   // Ideas for teaching the subject, not a read of the lesson — so it is not
   // one of the Insights sections, which are.
   { key: 'specialist', label: 'Content Specialist' },
-  // A whole-report view, like every tab here except Insights — which is why it
-  // sits at this level. It spent a while at the foot of the Insights column,
-  // where a report-scoped thing repeated under all four sections and belonged
-  // to none of them, and a teacher who came looking for it had to scroll a
-  // section to the end to find it.
-  { key: 'rubric', label: 'Self-Eval' },
-  { key: 'reflect', label: 'Reflect' },
+  ...(REFLECT_SHOWN ? [{ key: 'reflect' as const, label: 'Reflect' }] : []),
   { key: 'growth', label: 'My Growth' },
 ]
 
@@ -2080,7 +2084,7 @@ function ReportPanel({
       const updated = await generateRubricLens(session.id)
       onUpdate({ ...session, ...updated })
     } catch (err) {
-      setRubricLensError((err as Error).message || 'Could not build your Self-Eval. Please try again.')
+      setRubricLensError((err as Error).message || 'Could not build your Self Evaluation. Please try again.')
     } finally {
       setRubricLensSending(false)
     }
@@ -2288,6 +2292,7 @@ function ReportPanel({
   }
 
   function handleDiscussWithCoach(candidate: NoticeCandidate) {
+    if (!REFLECT_SHOWN) return
     setTab('reflect')
     // "this moment" is right for one timestamped excerpt and wrong for a whole
     // page — a teacher pressing Discuss at the foot of Checks & Feedback is
@@ -5074,7 +5079,7 @@ function LessonContentTab({
 // to bring it back.
 const HARD_LOOK_SHOWN = false
 
-// Shown to teachers as "Self-Eval" since 2026-11-16 (code still says Rubric
+// Shown to teachers as "Self Evaluation" since 2026-11-16 (code still says Rubric
 // Lens). On demand only — nothing here is built until the teacher asks, and
 // once built it's kept (see the /:id/rubric-lens route). Each component carries a
 // Danielson level (since 2026-11-16) for the teacher alone, with room for
@@ -5106,7 +5111,7 @@ function RubricLensTab({
         <div className="rounded-2xl border border-hairline bg-cream-card p-6">
           <p className="font-heading text-lg font-bold text-forest">See this lesson through the Danielson Framework</p>
           <p className="mt-2 text-sm text-ink">
-            Self-Eval sorts what your recording captured under Danielson's Domain 2 (Learning Environments) and
+            Self Evaluation sorts what your recording captured under Danielson's Domain 2 (Learning Environments) and
             Domain 3 (Learning Experiences). For each component you get a level from 1 to 4, the moments behind it, and
             one next step to try.
           </p>
@@ -5117,7 +5122,7 @@ function RubricLensTab({
             <li>· Only you see it, unless you share it with your supervisor. Levels are not part of the export.</li>
           </ul>
           {locked ? (
-            <p className="mt-5 text-sm text-ink-soft">This report is locked, so a Self-Eval can't be added to it.</p>
+            <p className="mt-5 text-sm text-ink-soft">This report is locked, so a Self Evaluation can't be added to it.</p>
           ) : (
             <div className="mt-5 flex flex-col gap-3">
               <button
@@ -5126,7 +5131,7 @@ function RubricLensTab({
                 disabled={sending}
                 className="self-start rounded-full bg-terracotta px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-terracotta/90 disabled:bg-hairline disabled:text-ink-soft"
               >
-                {sending ? 'Building your Self-Eval...' : 'View through Danielson rubric'}
+                {sending ? 'Building your Self Evaluation...' : 'View through Danielson rubric'}
               </button>
               <WorkingRing active={sending} estimatedMs={30000} label="Matching your lesson to the framework" className="text-forest" />
             </div>
@@ -5169,7 +5174,7 @@ function RubricLensTab({
 
       {!rubricLens.scored && !locked && (
         <div className="flex flex-col gap-3 rounded-2xl border border-hairline bg-cream-card p-5">
-          <p className="text-sm text-ink">This Self-Eval was made before it gave levels. Rebuild it to get a level for each component.</p>
+          <p className="text-sm text-ink">This Self Evaluation was made before it gave levels. Rebuild it to get a level for each component.</p>
           <button
             type="button"
             onClick={onGenerate}
@@ -6508,9 +6513,11 @@ function SectionShell({
               {k === 'read' ? 'How to read this' : 'The hard look'}
             </button>
           ))}
-          <button type="button" onClick={onDiscuss} className="ml-auto text-sm font-semibold text-terracotta-600 hover:underline">
-            Discuss with Wivoza Coach →
-          </button>
+          {REFLECT_SHOWN && (
+            <button type="button" onClick={onDiscuss} className="ml-auto text-sm font-semibold text-terracotta-600 hover:underline">
+              Discuss with Wivoza Coach →
+            </button>
+          )}
         </div>
         {panel === 'read' && <div className="flex flex-col gap-2 rounded-2xl bg-cream p-4">{howToRead}</div>}
         {panel === 'hard' && (
@@ -7185,6 +7192,7 @@ function RowChevron({ className = '' }: { className?: string }) {
 }
 
 function DiscussFooter({ label, onClick, compact }: { label: string; onClick: () => void; compact?: boolean }) {
+  if (!REFLECT_SHOWN) return null
   return (
     <button
       type="button"

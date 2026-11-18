@@ -138,7 +138,7 @@ export const VIDEO_SPEAKER = 'Video'
 const LESSON_LINES = { where: { speakerLabel: { not: VIDEO_SPEAKER } }, orderBy: { startSec: 'asc' as const } }
 
 const upload = multer({ storage: multer.diskStorage({}), limits: { fileSize: 200 * 1024 * 1024 } })
-// A lesson plan attached to a Self-Eval: read in a child process like every
+// A lesson plan attached to a Self Evaluation: read in a child process like every
 // other document (lib/extractInChild.ts), then dropped — only its text is kept.
 const planUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } })
 
@@ -1544,7 +1544,7 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
     // Most of the framework has to come back — a lens missing half its
     // components would look like those parts of teaching were absent.
     if (components.length < Math.ceil(framework.components.length * 0.75)) {
-      res.status(502).json({ error: 'Could not build your Self-Eval. Please try again.' })
+      res.status(502).json({ error: 'Could not build your Self Evaluation. Please try again.' })
       return
     }
 
@@ -1563,7 +1563,7 @@ audioSessionsRouter.post('/:id/rubric-lens', async (req, res) => {
     })
     res.json(updated)
   } catch (error) {
-    const failure = classifyModelError(error, 'Could not build your Self-Eval')
+    const failure = classifyModelError(error, 'Could not build your Self Evaluation')
     logModelFailure('[audio-sessions] rubric lens failed:', failure, error)
     res.status(failure.status).json({ error: failure.message })
   }
@@ -1589,7 +1589,7 @@ audioSessionsRouter.put('/:id/rubric-lens/note', async (req, res) => {
   // Domain 2/3 from the recording, or Domain 1 from an attached plan.
   const component = lens?.components.find((c) => c.code === code) ?? lens?.planning?.components.find((c) => c.code === code)
   if (!lens || !component) {
-    res.status(400).json({ error: 'That component is not in this Self-Eval.' })
+    res.status(400).json({ error: 'That component is not in this Self Evaluation.' })
     return
   }
   component.teacherNote = cleanTeacherNote(req.body?.note)
@@ -1601,9 +1601,9 @@ audioSessionsRouter.put('/:id/rubric-lens/note', async (req, res) => {
   res.json(updated)
 })
 
-// Self-Eval sharing, from the teacher's side. Who their supervisor is comes
+// Self Evaluation sharing, from the teacher's side. Who their supervisor is comes
 // only from a superadmin's assignment; the teacher can share one lesson's
-// Self-Eval with that person and take it back at any time. What the
+// Self Evaluation with that person and take it back at any time. What the
 // supervisor can then read is in routes/selfEvalShares.ts.
 async function selfEvalShareState(userId: string, sessionId: string) {
   const [me, session] = await Promise.all([
@@ -1674,7 +1674,7 @@ audioSessionsRouter.post('/:id/self-eval/share', async (req, res) => {
       return
     }
     if (!(state.session.rubricLens as RubricLensResult | null)?.scored) {
-      res.status(400).json({ error: 'Build your Self-Eval with levels before sharing it.' })
+      res.status(400).json({ error: 'Build your Self Evaluation with levels before sharing it.' })
       return
     }
   }
@@ -1785,7 +1785,7 @@ audioSessionsRouter.post('/:id/self-eval/preview', async (req, res) => {
     return
   }
   if (!(lesson.rubricLens as RubricLensResult | null)?.scored) {
-    res.status(400).json({ error: 'Build your Self-Eval with levels first.' })
+    res.status(400).json({ error: 'Build your Self Evaluation with levels first.' })
     return
   }
   let aboutError: string | null = null
@@ -1848,7 +1848,7 @@ audioSessionsRouter.post('/:id/self-eval/plan', planUpload.single('file'), async
     return
   }
   if (!lens?.scored) {
-    res.status(400).json({ error: 'Build your Self-Eval with levels first.' })
+    res.status(400).json({ error: 'Build your Self Evaluation with levels first.' })
     return
   }
 

@@ -6,14 +6,23 @@ enum ReportTab: String, CaseIterable {
     /// foot of the Insights column, where a report-scoped thing repeated under
     /// all four sections and belonged to none of them, and a teacher who came
     /// looking for it had to scroll a section to the end to find it.
-    case summary, insights, specialist, rubric, reflect, myGrowth
+    /// Self Evaluation sits right after Summary since 2026-11-19 (the
+    /// user's call), as on the web.
+    case summary, rubric, insights, specialist, reflect, myGrowth
+
+    /// Reflect's on/off switch, matching the web's REFLECT_SHOWN. Hidden
+    /// 2026-11-19: no tab and no Discuss buttons; the code is kept.
+    static let reflectShown = false
+
+    /// The tabs shown in the tab bar.
+    static var shown: [ReportTab] { allCases.filter { $0 != .reflect || reflectShown } }
 
     var label: String {
         switch self {
         case .summary: return "Summary"
         case .insights: return "Insights"
         case .specialist: return "Content Specialist"
-        case .rubric: return "Self-Eval"
+        case .rubric: return "Self Evaluation"
         case .reflect: return "Reflect"
         case .myGrowth: return "My Growth"
         }
@@ -128,6 +137,12 @@ struct DiscussFooter: View {
     let action: () -> Void
 
     var body: some View {
+        if ReportTab.reflectShown {
+            footer
+        }
+    }
+
+    private var footer: some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Text(label)
@@ -431,7 +446,7 @@ struct ReportView: View {
     private var tabBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(ReportTab.allCases, id: \.self) { t in
+                ForEach(ReportTab.shown, id: \.self) { t in
                     Button {
                         tab = t
                     } label: {

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { RUBRIC_LEVEL_NAMES, type AudioContentNote, type SharedSelfEvalReport } from '../lib/api'
 import { RubricComponentAbout, RubricLevelBadge } from './RubricLevel'
 
-// The Self-Eval report a teacher sends their supervisor, drawn the same way in
+// The Self Evaluation report a teacher sends their supervisor, drawn the same way in
 // the teacher's preview and on the supervisor's Evaluations page, so the
 // preview cannot show something the supervisor won't get. Order: About This
 // Lesson, Domain 1 from the plan (when attached), Domains 2 and 3 from the
@@ -32,7 +32,7 @@ export type Strength = { code: string; name: string; level: 3 | 4; quote: string
 
 /// The components placed at Level 3 or 4, highest first, each with the
 /// moment (or plan line) behind it. Shown before anything else is rated, so
-/// a Self-Eval opens on what went well rather than on Danielson's order.
+/// a Self Evaluation opens on what went well rather than on Danielson's order.
 export function strengthsOf(
   recording: { code: string; name: string; level?: number | null; evidence: { text: string }[] }[],
   plan: { code: string; name: string; level: number | null; excerpts: { text: string }[] }[] = [],

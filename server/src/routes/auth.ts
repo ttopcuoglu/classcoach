@@ -635,7 +635,7 @@ authRouter.get('/me', requireAuth, async (req, res) => {
     return
   }
   // How many teachers this person supervises, so the app knows to show the
-  // "Shared with me" page for Self-Evals (routes/selfEvalShares.ts).
+  // "Shared with me" page for Self Evaluations (routes/selfEvalShares.ts).
   const supervisesCount = await prisma.user.count({ where: { supervisorId: user.id } })
   res.json({ ...(await withPlusAccess(user)), supervisesCount })
 })

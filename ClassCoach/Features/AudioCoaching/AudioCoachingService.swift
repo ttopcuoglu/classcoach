@@ -250,7 +250,7 @@ enum AudioCoachingService {
         let note: String
     }
 
-    /// Self-Eval sharing with the supervisor a superadmin assigned.
+    /// Self Evaluation sharing with the supervisor a superadmin assigned.
     static func fetchSelfEvalShare(sessionId: String) async throws -> SelfEvalShareState {
         try await APIClient.shared.request("/api/audio-sessions/\(sessionId)/self-eval/share")
     }

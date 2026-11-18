@@ -1,4 +1,4 @@
-// The Self-Eval report a teacher sends their supervisor, and the two optional
+// The Self Evaluation report a teacher sends their supervisor, and the two optional
 // pieces that feed it: "About This Lesson" (a paragraph from the transcript
 // and, when attached, the plan) and Domain 1 from an attached lesson plan.
 //
@@ -151,7 +151,7 @@ export type SelfEvalPlanning = {
 
 export function buildPlanningPrompt(sections: PlanSection[], context: { subject: string | null; grade: string | null }, sharedRules: string): string {
   const levelWords = Object.values(RUBRIC_LEVEL_NAMES).map((w) => w.toLowerCase()).join(', ')
-  return `You are a fair, practical instructional coach reading a teacher's own lesson plan through Domain 1 (Planning and Preparation) of the Danielson Framework for Teaching (2022). The teacher attached this plan to their own Self-Eval and asked for a suggested level on each Domain 1 component. They see every level first and decide whether to share it.
+  return `You are a fair, practical instructional coach reading a teacher's own lesson plan through Domain 1 (Planning and Preparation) of the Danielson Framework for Teaching (2022). The teacher attached this plan to their own Self Evaluation and asked for a suggested level on each Domain 1 component. They see every level first and decide whether to share it.
 ${context.subject || context.grade ? `\nThe lesson: ${[context.grade ? `grade ${context.grade}` : null, context.subject].filter(Boolean).join(' ')}.\n` : ''}
 The levels, judged on this one plan as written:
 1 ${RUBRIC_LEVEL_NAMES[1]}: what the plan says works against the component (for example, outcomes that are only activities, content that is inaccurate, no assessment at all where one is clearly needed).

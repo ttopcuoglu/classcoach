@@ -15,8 +15,8 @@ import {
   type UserProfile,
 } from '../lib/api'
 
-// The supervisor's side of Self-Eval sharing, in the School Workspace:
-// Self-Evals their teachers chose to share (Inbox), everyone they supervise
+// The supervisor's side of Self Evaluation sharing, in the School Workspace:
+// Self Evaluations their teachers chose to share (Inbox), everyone they supervise
 // (My Teachers), and counts over what was shared (Reports). Read-only apart
 // from the supervisor's own feedback to the teacher. The server never sends
 // the recording, transcript or the rest of a report (routes/selfEvalShares.ts),
@@ -85,7 +85,7 @@ function inRange(iso: string, range: DateRange): boolean {
   return (!range.from || t >= range.from.getTime()) && (!range.to || t <= range.to.getTime())
 }
 
-const PRIVACY_LINE = 'Teachers choose which Self-Evals to share. The rest of their coaching stays private.'
+const PRIVACY_LINE = 'Teachers choose which Self Evaluations to share. The rest of their coaching stays private.'
 
 function formatDate(iso: string, withYear = false): string {
   return new Date(iso).toLocaleDateString(undefined, withYear ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' })
@@ -174,7 +174,7 @@ function EvaluationsHome({ school }: { school: string | null }) {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 sm:px-8">
-      <Header school={school} title="Evaluations" blurb="Review the Danielson Self-Evals your teachers share with you, and write feedback back to them." />
+      <Header school={school} title="Evaluations" blurb="Review the Danielson Self Evaluations your teachers share with you, and write feedback back to them." />
 
       {inbox && teachers && (
         <div className="flex flex-wrap gap-x-8 gap-y-2 rounded-2xl bg-mint-tint/50 px-5 py-4 text-base text-ink">
@@ -270,7 +270,7 @@ function InboxView({ inbox, filtered }: { inbox: SharedSelfEvalSummary[]; filter
   if (inbox.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-hairline p-6 text-sm text-ink-soft">
-        Nothing has been shared with you yet. When a teacher you supervise shares a lesson&rsquo;s Self-Eval, it appears here.
+        Nothing has been shared with you yet. When a teacher you supervise shares a lesson&rsquo;s Self Evaluation, it appears here.
       </div>
     )
   }
@@ -413,8 +413,8 @@ function ReportsView({ teachers, range }: { teachers: SupervisedTeacher[]; range
             {report.components.length === 0 ? (
               <p className="mt-4 text-sm text-ink-soft">
                 {range.from || range.to
-                  ? `No shared Self-Evals ${single ? 'from this teacher ' : ''}for lessons taught in these dates.`
-                  : `No shared Self-Evals ${single ? 'from this teacher ' : ''}yet.`}
+                  ? `No shared Self Evaluations ${single ? 'from this teacher ' : ''}for lessons taught in these dates.`
+                  : `No shared Self Evaluations ${single ? 'from this teacher ' : ''}yet.`}
               </p>
             ) : (
               domains.map((domain) => (
@@ -597,7 +597,7 @@ function EvaluationDetail({ sessionId, school }: { sessionId: string; school: st
   useEffect(() => {
     getSharedSelfEval(sessionId)
       .then(setData)
-      .catch((err: Error) => setError(err.message || 'This Self-Eval is not shared with you.'))
+      .catch((err: Error) => setError(err.message || 'This Self Evaluation is not shared with you.'))
   }, [sessionId])
 
   const back = (
@@ -652,7 +652,7 @@ function EvaluationDetail({ sessionId, school }: { sessionId: string; school: st
 }
 
 // The supervisor's written feedback, which the teacher sees on their own
-// Self-Eval tab. One per lesson; editing replaces it, clearing removes it.
+// Self Evaluation tab. One per lesson; editing replaces it, clearing removes it.
 function FeedbackCard({
   data,
   onSaved,
@@ -693,7 +693,7 @@ function FeedbackCard({
             onChange={(e) => setDraft(e.target.value)}
             maxLength={2000}
             rows={4}
-            placeholder="What stood out, a question for your next conversation, or one thing to try. The teacher sees this on their Self-Eval."
+            placeholder="What stood out, a question for your next conversation, or one thing to try. The teacher sees this on their Self Evaluation."
             className="w-full rounded-xl border border-hairline bg-cream/40 p-3 text-sm text-ink focus:border-forest focus:outline-none"
           />
           <div className="flex flex-wrap items-center gap-2">

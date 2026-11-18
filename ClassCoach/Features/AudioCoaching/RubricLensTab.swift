@@ -42,7 +42,7 @@ struct RubricLensTab: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("See this lesson through the Danielson Framework")
                 .font(.heading(.headline)).foregroundStyle(AppTheme.forest)
-            Text("Self-Eval sorts what your recording captured under Danielson's Domain 2 (Learning Environments) and Domain 3 (Learning Experiences). For each component you get a level from 1 to 4, the moments behind it, and one next step to try.")
+            Text("Self Evaluation sorts what your recording captured under Danielson's Domain 2 (Learning Environments) and Domain 3 (Learning Experiences). For each component you get a level from 1 to 4, the moments behind it, and one next step to try.")
                 .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
             VStack(alignment: .leading, spacing: 4) {
                 Text("· Levels come from what audio can show. Anything visual, like room setup, is left out.")
@@ -53,11 +53,11 @@ struct RubricLensTab: View {
             .font(.footnote).foregroundStyle(AppTheme.textSecondary)
 
             if locked {
-                Text("This report is locked, so a Self-Eval can't be added to it.")
+                Text("This report is locked, so a Self Evaluation can't be added to it.")
                     .font(.footnote).foregroundStyle(AppTheme.textSecondary)
                     .padding(.top, 4)
             } else {
-                Button(generating ? "Building your Self-Eval..." : "View through Danielson rubric") {
+                Button(generating ? "Building your Self Evaluation..." : "View through Danielson rubric") {
                     Task { await generate() }
                 }
                 .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
@@ -97,7 +97,7 @@ struct RubricLensTab: View {
 
         if lens.scored != true && !locked {
             VStack(alignment: .leading, spacing: 10) {
-                Text("This Self-Eval was made before it gave levels. Rebuild it to get a level for each component.")
+                Text("This Self Evaluation was made before it gave levels. Rebuild it to get a level for each component.")
                     .font(.subheadline).foregroundStyle(AppTheme.textPrimary)
                 Button(generating ? "Adding levels..." : "Add Danielson levels") {
                     Task { await generate() }
@@ -128,7 +128,7 @@ struct RubricLensTab: View {
         }
     }
 
-    // Share this lesson's Self-Eval with the supervisor a superadmin
+    // Share this lesson's Self Evaluation with the supervisor a superadmin
     // assigned — the teacher's choice, and undoable. Mirrors the web's
     // SelfEvalShareBar.
     @ViewBuilder
@@ -176,7 +176,7 @@ struct RubricLensTab: View {
                     .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 18))
                     .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(AppTheme.hairline))
                 } else {
-                    Text("No supervisor is assigned to you yet, so this Self-Eval can't be shared. Your school sets this up.")
+                    Text("No supervisor is assigned to you yet, so this Self Evaluation can't be shared. Your school sets this up.")
                         .font(.caption).foregroundStyle(AppTheme.textSecondary)
                 }
             }

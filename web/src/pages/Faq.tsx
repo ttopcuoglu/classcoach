@@ -66,7 +66,7 @@ const CATEGORIES: Category[] = [
     items: [
       {
         q: 'What do I get from a Lesson Debrief?',
-        a: 'A private report with six tabs, built around how you taught the content. Summary is the 60-second read: one thing to try next lesson, what the lesson covered, an idea for taking the content further, how the lesson moved, and its numbers (Teacher Talk, Student Talk, Group Talk, Silence, pace, questions and checks for understanding). Content Specialist reads how you taught the content the way a specialist in your subject would: what worked and why, where it could go further, and where students usually get stuck in this topic. Insights has the detail in four sections (Talk & Participation, Questioning & Checking, Clarity & Content, and Climate & Routines), always shown in your own words, with the time you said them. Self-Eval, Reflect, and My Growth cover the rest.',
+        a: 'A private report with six tabs, built around how you taught the content. Summary is the 60-second read: one thing to try next lesson, what the lesson covered, an idea for taking the content further, how the lesson moved, and its numbers (Teacher Talk, Student Talk, Group Talk, Silence, pace, questions and checks for understanding). Content Specialist reads how you taught the content the way a specialist in your subject would: what worked and why, where it could go further, and where students usually get stuck in this topic. Insights has the detail in four sections (Talk & Participation, Questioning & Checking, Clarity & Content, and Climate & Routines), always shown in your own words, with the time you said them. Self Evaluation, Reflect, and My Growth cover the rest.',
       },
       {
         q: 'What does Content Specialist look at, and does it check whether my content is right?',
@@ -77,7 +77,7 @@ const CATEGORIES: Category[] = [
         a: 'The report says so at the top (how much of the recording came through as audible speech) and its numbers come only from that part. Anything it could not measure shows as unavailable rather than as a zero.',
       },
       {
-        q: 'Does the Self-Eval rate my lesson?',
+        q: 'Does the Self Evaluation rate my lesson?',
         a: 'Yes, for you alone. On request, it places each component of the Danielson rubric’s classroom domains (2a–2d and 3a–3e) at a level from Level 1 (Emerging) to Level 4 (Exceeding Expectations), with the moments behind it and one next step. Where the recording doesn’t show enough, it says so instead of guessing. You can add a note beside any level. Only you see it, and the levels are not in the PDF.',
       },
       {

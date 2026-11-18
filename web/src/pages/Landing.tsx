@@ -86,7 +86,7 @@ const MOMENTS = [
         tint: 'bg-peach-tint text-terracotta',
         title: 'Lesson Debrief',
         slug: 'lesson-debrief',
-        description: 'See how you taught the content — what worked, where it could go further, where students usually get stuck — plus the questions you asked, talk and pace, and one focus for next lesson. Add a Danielson Self-Eval.',
+        description: 'See how you taught the content — what worked, where it could go further, where students usually get stuck — plus the questions you asked, talk and pace, and one focus for next lesson. Add a Danielson Self Evaluation.',
       },
       {
         icon: HeadsetIcon,

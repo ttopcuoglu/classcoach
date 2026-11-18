@@ -492,7 +492,7 @@ export default function AudioCoachingExport() {
         {session.rubricLens && (
           <ReportSection
             n={++n}
-            title="Self-Eval"
+            title="Self Evaluation"
             blurb={`${session.rubricLens.frameworkName}: evidence from this lesson for each component. Not a rating.`}
             accent={A.forest}
           >

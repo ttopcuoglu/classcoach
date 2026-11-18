@@ -143,9 +143,11 @@ struct SectionCard<Content: View>: View {
                 footerButton("read", "How to read this")
                 if hardLook != nil { footerButton("hard", "The hard look") }
             }
-            Button(action: onDiscuss) {
-                Text("Discuss with Wivoza Coach \u{2192}")
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
+            if ReportTab.reflectShown {
+                Button(action: onDiscuss) {
+                    Text("Discuss with Wivoza Coach \u{2192}")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.terracotta600)
+                }
             }
             if panel == "read" {
                 VStack(alignment: .leading, spacing: 8) {
