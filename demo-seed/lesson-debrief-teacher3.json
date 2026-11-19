@@ -1,0 +1,1208 @@
+{
+  "generatedAt": "2026-11-19T03:41:24.633Z",
+  "lessons": [
+    {
+      "key": "t3_ratios",
+      "lines": [
+        {
+          "s": "T",
+          "t": "Okay everyone, eyes up here, let's get started."
+        },
+        {
+          "s": "T",
+          "t": "Today we're going to learn about ratios, and we're gonna use a recipe to help us understand them."
+        },
+        {
+          "s": "S1",
+          "t": "Like a cooking recipe?"
+        },
+        {
+          "s": "T",
+          "t": "Exactly, like a cooking recipe, I like how you're already thinking ahead."
+        },
+        {
+          "s": "T",
+          "t": "So here's our recipe, it calls for two cups of flour and one cup of sugar."
+        },
+        {
+          "s": "T",
+          "t": "What is a ratio?"
+        },
+        {
+          "s": "S1",
+          "t": "A comparison of two things?"
+        },
+        {
+          "s": "T",
+          "t": "Nice work, Jayden, that's exactly right."
+        },
+        {
+          "s": "T",
+          "t": "A ratio is defined as a comparison between two quantities."
+        },
+        {
+          "s": "T",
+          "t": "So in other words, it tells us how two amounts relate to each other."
+        },
+        {
+          "s": "T",
+          "t": "Everyone, what's the answer, what is a ratio?"
+        },
+        {
+          "s": "S1",
+          "t": "A comparison between two things!"
+        },
+        {
+          "s": "T",
+          "t": "Awesome, good job everyone."
+        },
+        {
+          "s": "T",
+          "t": "Let's look back at our recipe, how many cups of flour do we need?"
+        },
+        {
+          "s": "S2",
+          "t": "Two?"
+        },
+        {
+          "s": "T",
+          "t": "Perfect, two cups of flour."
+        },
+        {
+          "s": "T",
+          "t": "And how many cups of sugar?"
+        },
+        {
+          "s": "S3",
+          "t": "One cup."
+        },
+        {
+          "s": "T",
+          "t": "Great job, one cup of sugar."
+        },
+        {
+          "s": "T",
+          "t": "So when we write this as a ratio, what do we write first?"
+        },
+        {
+          "s": "S1",
+          "t": "Flour?"
+        },
+        {
+          "s": "T",
+          "t": "Yes, we write flour first because that's the order it's given to us in the recipe."
+        },
+        {
+          "s": "T",
+          "t": "So we'd write two to one, flour to sugar."
+        },
+        {
+          "s": "T",
+          "t": "Everyone, what's the answer, what's the ratio of flour to sugar?"
+        },
+        {
+          "s": "S1",
+          "t": "Two to one!"
+        },
+        {
+          "s": "T",
+          "t": "Excellent, two to one."
+        },
+        {
+          "s": "T",
+          "t": "Now here's a question for you to really think about."
+        },
+        {
+          "s": "T",
+          "t": "Why does the order matter in a ratio?"
+        },
+        {
+          "s": "S4",
+          "t": "Because it changes what you're comparing?"
+        },
+        {
+          "s": "T",
+          "t": "I like that, say a little more."
+        },
+        {
+          "s": "S4",
+          "t": "Like if you flip it, it means something different."
+        },
+        {
+          "s": "T",
+          "t": "Great point, Mia, that's exactly it."
+        },
+        {
+          "s": "T",
+          "t": "If we said one to two instead, that would mean one cup of flour to two cups of sugar, and that's a totally different recipe."
+        },
+        {
+          "s": "T",
+          "t": "Have you ever made lemonade before, like mixing water and lemon juice?"
+        },
+        {
+          "s": "S2",
+          "t": "Yeah, with my grandma."
+        },
+        {
+          "s": "T",
+          "t": "So think about that, if you had too much water and not enough lemon juice, what would happen?"
+        },
+        {
+          "s": "S2",
+          "t": "It'd taste watery."
+        },
+        {
+          "s": "T",
+          "t": "Exactly, it wouldn't taste right, because the ratio would be off."
+        },
+        {
+          "s": "T",
+          "t": "So the order and the amounts both matter a whole lot."
+        },
+        {
+          "s": "T",
+          "t": "Okay, let's practice this together."
+        },
+        {
+          "s": "T",
+          "t": "Get out your whiteboards and markers."
+        },
+        {
+          "s": "T",
+          "t": "I'm gonna give you a new recipe, and you're gonna write the ratio."
+        },
+        {
+          "s": "T",
+          "t": "This recipe calls for three cups of flour and two cups of sugar."
+        },
+        {
+          "s": "T",
+          "t": "Write the ratio on your whiteboard.",
+          "work": 40
+        },
+        {
+          "s": "T",
+          "t": "Okay, whiteboards down, eyes up here."
+        },
+        {
+          "s": "S3",
+          "t": "Can we hold them up now?"
+        },
+        {
+          "s": "T",
+          "t": "Hold them up, let's see what you got."
+        },
+        {
+          "s": "T",
+          "t": "Most of you have it, nice work, three to two."
+        },
+        {
+          "s": "S1",
+          "t": "I got three to two!"
+        },
+        {
+          "s": "T",
+          "t": "Awesome, Jayden, that's right."
+        },
+        {
+          "s": "T",
+          "t": "Let's try another one."
+        },
+        {
+          "s": "T",
+          "t": "This time the recipe calls for one cup of flour and four cups of sugar."
+        },
+        {
+          "s": "T",
+          "t": "What do we write first?"
+        },
+        {
+          "s": "S5",
+          "t": "Flour."
+        },
+        {
+          "s": "T",
+          "t": "Right, flour first, because that's the order in the recipe."
+        },
+        {
+          "s": "T",
+          "t": "Write the ratio on your whiteboard.",
+          "work": 40
+        },
+        {
+          "s": "T",
+          "t": "Okay, whiteboards down, eyes up here."
+        },
+        {
+          "s": "S6",
+          "t": "Mine looks weird."
+        },
+        {
+          "s": "T",
+          "t": "That's okay, let's check it together."
+        },
+        {
+          "s": "T",
+          "t": "Hold them up."
+        },
+        {
+          "s": "T",
+          "t": "Most of you have it, I'm seeing one to four, nice work."
+        },
+        {
+          "s": "T",
+          "t": "S4, what'd you get?"
+        },
+        {
+          "s": "S4",
+          "t": "One to four."
+        },
+        {
+          "s": "T",
+          "t": "Perfect, exactly right."
+        },
+        {
+          "s": "T",
+          "t": "Let's keep going, this is great practice."
+        },
+        {
+          "s": "T",
+          "t": "Define the word ratio for me one more time."
+        },
+        {
+          "s": "S1",
+          "t": "A comparison of two amounts."
+        },
+        {
+          "s": "T",
+          "t": "Good job, yes."
+        },
+        {
+          "s": "T",
+          "t": "Now, what's the key term we use when we write it like this, two to one?"
+        },
+        {
+          "s": "S2",
+          "t": "A ratio?"
+        },
+        {
+          "s": "T",
+          "t": "Yes, that is a ratio, written in ratio form."
+        },
+        {
+          "s": "T",
+          "t": "Now let's think a little deeper."
+        },
+        {
+          "s": "T",
+          "t": "How would the recipe change if we doubled the ratio?"
+        },
+        {
+          "s": "S4",
+          "t": "You'd need double the flour and double the sugar?"
+        },
+        {
+          "s": "T",
+          "t": "Exactly, so what would four to two become, if we double two to one?"
+        },
+        {
+          "s": "S3",
+          "t": "Four to two."
+        },
+        {
+          "s": "T",
+          "t": "Right, we keep the relationship the same, we just scale it up."
+        },
+        {
+          "s": "T",
+          "t": "Everyone, what's the answer, what do we call it when we keep the relationship the same but change the numbers?"
+        },
+        {
+          "s": "S1",
+          "t": "Scaling!"
+        },
+        {
+          "s": "T",
+          "t": "Close, but we call it an equivalent ratio."
+        },
+        {
+          "s": "T",
+          "t": "Not quite the word, but you had the right idea."
+        },
+        {
+          "s": "T",
+          "t": "Let's try one more together before we move on."
+        },
+        {
+          "s": "T",
+          "t": "Quiet please, I need everyone looking at the board."
+        },
+        {
+          "s": "S6",
+          "t": "Sorry."
+        },
+        {
+          "s": "T",
+          "t": "It's okay, let's refocus."
+        },
+        {
+          "s": "T",
+          "t": "This recipe has five cups of flour and three cups of sugar."
+        },
+        {
+          "s": "T",
+          "t": "What is the ratio of flour to sugar?"
+        },
+        {
+          "s": "S5",
+          "t": "Five to three."
+        },
+        {
+          "s": "T",
+          "t": "Nice thinking, five to three, well done."
+        },
+        {
+          "s": "T",
+          "t": "Now, what if I asked for the ratio of sugar to flour instead?"
+        },
+        {
+          "s": "S2",
+          "t": "Three to five?"
+        },
+        {
+          "s": "T",
+          "t": "Yes, exactly, because order matters, we just talked about that."
+        },
+        {
+          "s": "T",
+          "t": "Why does the order matter again, can someone remind us?"
+        },
+        {
+          "s": "S4",
+          "t": "Because flipping it changes what it means."
+        },
+        {
+          "s": "T",
+          "t": "Great job, Mia, you remembered that perfectly."
+        },
+        {
+          "s": "T",
+          "t": "Okay, let's do one final check before we wrap up."
+        },
+        {
+          "s": "T",
+          "t": "On a scale of one to five, how confident are you with writing ratios?"
+        },
+        {
+          "s": "S3",
+          "t": "I'd say a four."
+        },
+        {
+          "s": "T",
+          "t": "Nice, I like hearing that."
+        },
+        {
+          "s": "T",
+          "t": "Alright, let's transition into our exit ticket."
+        },
+        {
+          "s": "T",
+          "t": "Before you leave, write down the ratio for this recipe, four cups of flour, two cups of sugar."
+        },
+        {
+          "s": "S1",
+          "t": "Four to two!"
+        },
+        {
+          "s": "T",
+          "t": "Hang on, don't shout it out, write it on your paper please."
+        },
+        {
+          "s": "S1",
+          "t": "Oops, sorry."
+        },
+        {
+          "s": "T",
+          "t": "It's alright, let's just make sure everyone gets their own thinking down."
+        },
+        {
+          "s": "T",
+          "t": "Write down your answer, and when you're done, hand it in on your way out.",
+          "work": 40
+        },
+        {
+          "s": "T",
+          "t": "Okay, let's check in, raise your hand if you wrote four to two."
+        },
+        {
+          "s": "S6",
+          "t": "I did!"
+        },
+        {
+          "s": "T",
+          "t": "Awesome, great job today everyone, you really worked hard on understanding ratios."
+        },
+        {
+          "s": "T",
+          "t": "Tomorrow we're gonna build on this with equivalent ratios, so get ready for that."
+        },
+        {
+          "s": "T",
+          "t": "Great job today, I'm really proud of how hard you worked."
+        }
+      ]
+    },
+    {
+      "key": "t3_rates",
+      "lines": [
+        {
+          "s": "T",
+          "t": "Good morning, everyone, let's get started. Our goal for today is to compare unit rates and figure out which store really gives us the better deal on granola bars."
+        },
+        {
+          "s": "T",
+          "t": "Here's the problem. Store A sells a box of eight granola bars for three dollars and twenty cents. Store B sells a box of twelve granola bars for four dollars and eighty cents. Which store has the better price per bar?"
+        },
+        {
+          "s": "S1",
+          "t": "Can we use a calculator for this one?"
+        },
+        {
+          "s": "T",
+          "t": "Yes, go ahead and use one if you need it."
+        },
+        {
+          "s": "T",
+          "t": "Solve it on your own first.",
+          "work": 120
+        },
+        {
+          "s": "T",
+          "t": "Okay, pencils down for a second. Now compare with your partner — did you do it the same way?"
+        },
+        {
+          "s": "T",
+          "t": "Take about sixty seconds to talk it through with them.",
+          "work": 60
+        },
+        {
+          "s": "T",
+          "t": "Alright, let's come back together as a class. Marcus, can you tell us how you solved it?"
+        },
+        {
+          "s": "S2",
+          "t": "I divided the price by the number of bars for each store to find the cost of one bar."
+        },
+        {
+          "s": "T",
+          "t": "Why did you divide the price by the number of bars?"
+        },
+        {
+          "s": "S2",
+          "t": "Because dividing tells me what one single bar costs, so then I can compare the two stores fairly."
+        },
+        {
+          "s": "T",
+          "t": "Nice work, Marcus — that's exactly what a unit rate is, the amount for just one."
+        },
+        {
+          "s": "T",
+          "t": "Ava, I saw you set your work up differently. Can you explain your way to the class?"
+        },
+        {
+          "s": "S1",
+          "t": "I made a ratio table and kept multiplying up until both stores had the same number of bars."
+        },
+        {
+          "s": "T",
+          "t": "How is your way like Marcus's way, Ava?"
+        },
+        {
+          "s": "S1",
+          "t": "We both end up finding what one bar costs, I just get there by scaling the table instead of dividing."
+        },
+        {
+          "s": "T",
+          "t": "Great point, Ava — you connected your ratio table right back to the idea of a unit rate."
+        },
+        {
+          "s": "T",
+          "t": "Let's check one more store. Jada, what did you find for Store C?"
+        },
+        {
+          "s": "S3",
+          "t": "Store C sells ten bars for four dollars, so each bar costs forty cents."
+        },
+        {
+          "s": "T",
+          "t": "Let's test that. Diego, did you get the same unit price for Store C?"
+        },
+        {
+          "s": "S4",
+          "t": "I got thirty-five cents, but now I'm not totally sure that's right."
+        },
+        {
+          "s": "T",
+          "t": "Not quite — walk me through your first step."
+        },
+        {
+          "s": "S4",
+          "t": "I think I divided ten by four instead of four by ten."
+        },
+        {
+          "s": "T",
+          "t": "Try it again — what do you get this time?"
+        },
+        {
+          "s": "S4",
+          "t": "Four divided by ten is point four, so forty cents a bar, same as Jada's answer."
+        },
+        {
+          "s": "T",
+          "t": "Good catch, Diego — that's exactly why we slow down and check which number goes first."
+        },
+        {
+          "s": "T",
+          "t": "I need everyone's eyes up here for a second, a couple of you are still talking about something else."
+        },
+        {
+          "s": "T",
+          "t": "Explain how you know Store C isn't automatically the best deal just because the total price is the lowest."
+        },
+        {
+          "s": "S5",
+          "t": "Even though the total price is small, you still have to find the price for just one bar to really compare them."
+        },
+        {
+          "s": "S6",
+          "t": "Yeah, and Store C only has ten bars, so the total doesn't really tell you much by itself."
+        },
+        {
+          "s": "T",
+          "t": "Exactly, the number of bars changes everything. What would happen if the bigger box cost more money, say five dollars for twelve bars instead of four eighty?"
+        },
+        {
+          "s": "S7",
+          "t": "Then Store B's unit price would go up, so Store A might actually become the better deal instead."
+        },
+        {
+          "s": "T",
+          "t": "What evidence would you look for to prove Store A is better in that case?"
+        },
+        {
+          "s": "S8",
+          "t": "I'd divide five by twelve to get the new price, then compare it to Store A's forty cents."
+        },
+        {
+          "s": "T",
+          "t": "Nice thinking, Carlos — you went right back to the math instead of guessing."
+        },
+        {
+          "s": "S9",
+          "t": "What if two stores end up with the exact same unit price, which one do you pick?"
+        },
+        {
+          "s": "T",
+          "t": "That's a great question, Emma — in real life you might think about freshness or how far you have to drive."
+        },
+        {
+          "s": "S9",
+          "t": "Oh, so it's not always just about the number."
+        },
+        {
+          "s": "T",
+          "t": "Right, the unit rate helps you start the comparison, but sometimes there's more to think about."
+        },
+        {
+          "s": "T",
+          "t": "Let's look at one more scenario together before we wrap up."
+        },
+        {
+          "s": "T",
+          "t": "Store D sells fifteen bars for six dollars. Who wants to try that one?"
+        },
+        {
+          "s": "S3",
+          "t": "I can try it, six divided by fifteen is point four, so forty cents a bar again."
+        },
+        {
+          "s": "T",
+          "t": "Nice work, Jada, same price as Store C and Store B."
+        },
+        {
+          "s": "S2",
+          "t": "So three different stores all end up with the same deal?"
+        },
+        {
+          "s": "T",
+          "t": "It happens sometimes, which is exactly why checking the unit rate matters instead of just guessing."
+        },
+        {
+          "s": "T",
+          "t": "Show me on your fingers, how many stores did you check today?"
+        },
+        {
+          "s": "S4",
+          "t": "I checked three stores total."
+        },
+        {
+          "s": "S5",
+          "t": "I only checked two, Store A and Store B."
+        },
+        {
+          "s": "T",
+          "t": "That's okay, Priya, two is still a solid comparison for today."
+        },
+        {
+          "s": "T",
+          "t": "Let's do one more check before we move on. Does the unit rate always stay the same no matter how many bars you buy?"
+        },
+        {
+          "s": "S6",
+          "t": "Yes, because it's just the price for one bar, so it shouldn't change even if you buy more."
+        },
+        {
+          "s": "T",
+          "t": "Why do you think that's true, Noah?"
+        },
+        {
+          "s": "S6",
+          "t": "Because you're always scaling the price and the bars by the same amount, so the ratio stays equal."
+        },
+        {
+          "s": "T",
+          "t": "Exactly — that's the whole idea behind a ratio table too."
+        },
+        {
+          "s": "T",
+          "t": "Let's turn and talk for a second. Tell your partner which method you liked better, dividing or the ratio table."
+        },
+        {
+          "s": "T",
+          "t": "Go ahead and share for about thirty seconds.",
+          "work": 30
+        },
+        {
+          "s": "T",
+          "t": "Okay, who wants to share what their partner said?"
+        },
+        {
+          "s": "S7",
+          "t": "My partner likes the ratio table because she can see all the numbers lined up together."
+        },
+        {
+          "s": "S8",
+          "t": "Mine likes dividing because it's faster once you know what to do."
+        },
+        {
+          "s": "T",
+          "t": "Both are totally valid, there's no one right way to solve a unit rate problem."
+        },
+        {
+          "s": "T",
+          "t": "Let's go back to our original problem one more time. So which store actually has the better deal, Store A or Store B?"
+        },
+        {
+          "s": "S1",
+          "t": "Store A, because forty cents a bar is cheaper than what Store B comes out to."
+        },
+        {
+          "s": "T",
+          "t": "Can someone double check that for us? What's the unit price for Store B exactly?"
+        },
+        {
+          "s": "S2",
+          "t": "Four eighty divided by twelve is forty cents too, so actually they're the same."
+        },
+        {
+          "s": "T",
+          "t": "Oh, interesting catch, Marcus — so does that change our answer?"
+        },
+        {
+          "s": "S2",
+          "t": "Yeah, it means neither store is really better, they're tied."
+        },
+        {
+          "s": "T",
+          "t": "Great job catching that, everyone — that's why we always finish the math instead of guessing from the total price."
+        },
+        {
+          "s": "T",
+          "t": "Let's recap quickly. What does unit rate mean in your own words?"
+        },
+        {
+          "s": "S3",
+          "t": "It means the cost or amount for just one of something."
+        },
+        {
+          "s": "T",
+          "t": "Nice, Jada, that's a solid definition to remember."
+        },
+        {
+          "s": "T",
+          "t": "And why does comparing unit rates help us more than comparing total prices?"
+        },
+        {
+          "s": "S9",
+          "t": "Because boxes come in different sizes, so the total price alone can trick you."
+        },
+        {
+          "s": "T",
+          "t": "Exactly right, Emma."
+        },
+        {
+          "s": "T",
+          "t": "One last check, on a scale of one to five, how confident do you feel finding a unit rate on your own?"
+        },
+        {
+          "s": "S4",
+          "t": "I'd say a four, I just need to be more careful with my division."
+        },
+        {
+          "s": "S7",
+          "t": "I'd say a five, I feel pretty good about it."
+        },
+        {
+          "s": "T",
+          "t": "That's great to hear, keep practicing that careful first step."
+        },
+        {
+          "s": "T",
+          "t": "Before you leave, write the unit price for one more store — pick one we haven't checked yet and solve it on your own."
+        },
+        {
+          "s": "T",
+          "t": "Make sure you show your division or your ratio table so I can see your thinking."
+        },
+        {
+          "s": "S5",
+          "t": "Can we pick any numbers we want?"
+        },
+        {
+          "s": "T",
+          "t": "Sure, just make up a reasonable price and number of bars, then find the unit rate."
+        },
+        {
+          "s": "S6",
+          "t": "Does it have to be granola bars?"
+        },
+        {
+          "s": "T",
+          "t": "Nope, it can be anything you want, juice boxes, pencils, whatever you'd like."
+        },
+        {
+          "s": "T",
+          "t": "Alright, get started on your exit ticket, and hand it in on your way out."
+        },
+        {
+          "s": "S8",
+          "t": "Do we turn it in at your desk?"
+        },
+        {
+          "s": "T",
+          "t": "Yes, right here on my desk before you head to your next class."
+        },
+        {
+          "s": "T",
+          "t": "Great work today, everyone, I saw a lot of careful thinking and some really good catches."
+        },
+        {
+          "s": "S1",
+          "t": "Thanks, Ms. Reyes, this one actually made sense to me."
+        },
+        {
+          "s": "T",
+          "t": "I'm so glad to hear that, Ava, nice work today."
+        }
+      ]
+    },
+    {
+      "key": "t3_percent",
+      "lines": [
+        {
+          "s": "T",
+          "t": "Okay everyone, eyes up here."
+        },
+        {
+          "s": "S1",
+          "t": "Can I sharpen my pencil first?"
+        },
+        {
+          "s": "T",
+          "t": "Quick, go ahead, then get right back to your seat."
+        },
+        {
+          "s": "T",
+          "t": "By the end of class, you will be able to explain what a percent is and decide which of two scores is actually better."
+        },
+        {
+          "s": "T",
+          "t": "Today we're going to work with hundred grids and then tackle a real problem about test scores."
+        },
+        {
+          "s": "T",
+          "t": "Quick recall - what does percent mean?"
+        },
+        {
+          "s": "S2",
+          "t": "Like out of a hundred?"
+        },
+        {
+          "s": "T",
+          "t": "Close, let's get exact. The word percent means per hundred. So forty percent means forty out of a hundred squares."
+        },
+        {
+          "s": "T",
+          "t": "Get out your grid sheet from your folder, please."
+        },
+        {
+          "s": "S3",
+          "t": "I don't have one."
+        },
+        {
+          "s": "T",
+          "t": "I've got extras, hang on, I'll bring you one."
+        },
+        {
+          "s": "T",
+          "t": "Shade 35 percent of your grid.",
+          "work": 45
+        },
+        {
+          "s": "T",
+          "t": "Okay, pencils down, let's look at what you did."
+        },
+        {
+          "s": "T",
+          "t": "Who can tell me how many squares you shaded?"
+        },
+        {
+          "s": "S4",
+          "t": "I did thirty-five squares."
+        },
+        {
+          "s": "T",
+          "t": "Nice work. How do you know thirty-five squares equals thirty-five percent?"
+        },
+        {
+          "s": "S4",
+          "t": "Because the whole grid is a hundred squares, so each square is one percent."
+        },
+        {
+          "s": "T",
+          "t": "Exactly, I like how you connected the square to one percent. That's the key idea for today."
+        },
+        {
+          "s": "T",
+          "t": "Why do you think a hundred grid is useful for understanding percent?"
+        },
+        {
+          "s": "S5",
+          "t": "Because you can actually see the parts instead of just hearing a number?"
+        },
+        {
+          "s": "T",
+          "t": "Great point, Maya. Seeing it makes it real instead of just a fraction floating around."
+        },
+        {
+          "s": "T",
+          "t": "Now here's our problem for today. Which is the better test score, eighteen out of twenty or forty-three out of fifty?"
+        },
+        {
+          "s": "S6",
+          "t": "Eighteen out of twenty is better because eighteen is a big number."
+        },
+        {
+          "s": "T",
+          "t": "Hold that thought, let's see what your table thinks too."
+        },
+        {
+          "s": "T",
+          "t": "Work with your table group and decide which is better - you need a reason.",
+          "work": 150
+        },
+        {
+          "s": "T",
+          "t": "Alright, let's come back together, eyes up here please."
+        },
+        {
+          "s": "T",
+          "t": "Table one, what did you decide?"
+        },
+        {
+          "s": "S7",
+          "t": "We think forty-three out of fifty is better because forty-three is higher than eighteen."
+        },
+        {
+          "s": "T",
+          "t": "Do you agree with table one? Why?"
+        },
+        {
+          "s": "S8",
+          "t": "Not really, because the two tests don't have the same total number of questions."
+        },
+        {
+          "s": "T",
+          "t": "Say more about that, Jordan."
+        },
+        {
+          "s": "S8",
+          "t": "Like eighteen out of twenty means almost the whole test, but forty-three out of fifty is out of more questions."
+        },
+        {
+          "s": "T",
+          "t": "Nice thinking. So the totals being different matters. Table two, what did your group find?"
+        },
+        {
+          "s": "S9",
+          "t": "We turned both into grids and shaded them to compare."
+        },
+        {
+          "s": "T",
+          "t": "How does shading help you compare them?"
+        },
+        {
+          "s": "S9",
+          "t": "Because then both grids are out of a hundred, so you can line them up and see which has more shaded."
+        },
+        {
+          "s": "T",
+          "t": "Love that strategy. What did you get for eighteen out of twenty?"
+        },
+        {
+          "s": "S9",
+          "t": "We got ninety percent."
+        },
+        {
+          "s": "T",
+          "t": "And forty-three out of fifty?"
+        },
+        {
+          "s": "S9",
+          "t": "Eighty-six percent."
+        },
+        {
+          "s": "T",
+          "t": "So which score is actually better?"
+        },
+        {
+          "s": "S9",
+          "t": "Eighteen out of twenty, because ninety is bigger than eighty-six."
+        },
+        {
+          "s": "T",
+          "t": "Excellent work, table two. Do you agree with table two, table three?"
+        },
+        {
+          "s": "S6",
+          "t": "Wait, I thought eighteen out of twenty was just eighteen percent."
+        },
+        {
+          "s": "T",
+          "t": "Not quite, check what the whole is. Eighteen is out of twenty, not out of a hundred."
+        },
+        {
+          "s": "S5",
+          "t": "Can I explain it with the grid?"
+        },
+        {
+          "s": "T",
+          "t": "Go ahead, Maya."
+        },
+        {
+          "s": "S5",
+          "t": "If the whole grid is a hundred, twenty out of twenty questions right would fill a fifth of the grid, so each question is worth five percent, not one percent."
+        },
+        {
+          "s": "T",
+          "t": "So what would eighteen questions right be worth then?"
+        },
+        {
+          "s": "S5",
+          "t": "Eighteen times five, so ninety percent."
+        },
+        {
+          "s": "T",
+          "t": "Perfect, that clears it up. Does that make sense now, table three?"
+        },
+        {
+          "s": "S6",
+          "t": "Oh, yeah, that makes sense, each right answer is worth more because there's fewer questions total."
+        },
+        {
+          "s": "T",
+          "t": "Exactly, good job working through that together."
+        },
+        {
+          "s": "T",
+          "t": "Table four, what's your reasoning?"
+        },
+        {
+          "s": "S10",
+          "t": "We said forty-three out of fifty is better because it has a bigger top number."
+        },
+        {
+          "s": "T",
+          "t": "How would you check that using what we just talked about?"
+        },
+        {
+          "s": "S10",
+          "t": "Um, maybe I should turn it into a percent instead of just looking at the top number."
+        },
+        {
+          "s": "T",
+          "t": "Try it, what do you get?"
+        },
+        {
+          "s": "S10",
+          "t": "Forty-three divided by fifty times a hundred... is eighty-six percent."
+        },
+        {
+          "s": "T",
+          "t": "So now compare that to ninety percent. Which one wins?"
+        },
+        {
+          "s": "S10",
+          "t": "Ninety percent wins, so eighteen out of twenty is actually better."
+        },
+        {
+          "s": "T",
+          "t": "Great job catching that and fixing it. That's exactly the kind of thinking we want."
+        },
+        {
+          "s": "T",
+          "t": "Why do you think it's risky to just compare the top numbers without turning them into percents?"
+        },
+        {
+          "s": "S2",
+          "t": "Because the tests might not be the same size, so the numbers don't mean the same thing?"
+        },
+        {
+          "s": "T",
+          "t": "Exactly right. In real life, this comes up more than you'd think - like when a store says forty percent off instead of just saying a dollar amount off."
+        },
+        {
+          "s": "S4",
+          "t": "Oh, like comparing coupons?"
+        },
+        {
+          "s": "T",
+          "t": "Exactly like comparing coupons. A percent lets you compare fairly even when the totals are different."
+        },
+        {
+          "s": "T",
+          "t": "How might this same idea help you compare your grades on two different quizzes?"
+        },
+        {
+          "s": "S3",
+          "t": "You could turn both scores into percents and then see which one is actually higher."
+        },
+        {
+          "s": "T",
+          "t": "Nice work, Camila. That's the whole point of today's lesson."
+        },
+        {
+          "s": "T",
+          "t": "What evidence would you use to justify that ninety percent is better than eighty-six percent?"
+        },
+        {
+          "s": "S7",
+          "t": "Because when you line up the grids, the ninety percent grid has more shaded squares than the other one."
+        },
+        {
+          "s": "T",
+          "t": "Great point. Justify why we can even compare two different grids in the first place."
+        },
+        {
+          "s": "S8",
+          "t": "Because both grids are the same size, out of a hundred, so it's a fair comparison."
+        },
+        {
+          "s": "T",
+          "t": "Exactly, that's why percent is so powerful, it puts everything on the same hundred scale."
+        },
+        {
+          "s": "T",
+          "t": "Compare the two methods we used today - shading a grid versus multiplying the fraction. Which one makes more sense to you?"
+        },
+        {
+          "s": "S9",
+          "t": "The grid helps me see it, but the multiplying is faster once I understand why it works."
+        },
+        {
+          "s": "T",
+          "t": "That's a really honest answer, and both are valid ways to think about it."
+        },
+        {
+          "s": "T",
+          "t": "How could you explain today's idea to someone who missed class?"
+        },
+        {
+          "s": "S10",
+          "t": "I'd tell them percent means out of a hundred, and you can turn any fraction into a percent to compare it fairly."
+        },
+        {
+          "s": "T",
+          "t": "Perfect summary. Give yourselves a thumbs up if that makes sense now."
+        },
+        {
+          "s": "S1",
+          "t": "Thumbs up."
+        },
+        {
+          "s": "S6",
+          "t": "Thumbs up, I get it now."
+        },
+        {
+          "s": "T",
+          "t": "Awesome. Let's do one more check - on a scale of one to five, how confident are you turning a fraction into a percent?"
+        },
+        {
+          "s": "S5",
+          "t": "I'd say a five."
+        },
+        {
+          "s": "S3",
+          "t": "Maybe a three, I need more practice."
+        },
+        {
+          "s": "T",
+          "t": "That's totally fine, we'll practice more tomorrow."
+        },
+        {
+          "s": "T",
+          "t": "Before you leave, write 3 out of 4 as a percent and show how you know."
+        },
+        {
+          "s": "S2",
+          "t": "Can we use the grid for that?"
+        },
+        {
+          "s": "T",
+          "t": "Yes, use whatever method makes sense to you, just show your thinking."
+        },
+        {
+          "s": "S4",
+          "t": "Is it seventy-five percent?"
+        },
+        {
+          "s": "T",
+          "t": "I'm not telling yet, show me the work and I'll check it as you hand it in."
+        },
+        {
+          "s": "T",
+          "t": "Hand in your exit ticket on your way out, and nice work today, everyone."
+        },
+        {
+          "s": "S8",
+          "t": "That was actually kind of fun."
+        },
+        {
+          "s": "T",
+          "t": "I'm glad to hear it, Jordan. See you all tomorrow."
+        }
+      ]
+    }
+  ]
+}

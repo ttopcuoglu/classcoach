@@ -7,6 +7,8 @@
 //   npx tsx --env-file=.env src/scripts/seedLessonDebriefDemo.ts generate <out.json>
 //   npx tsx --env-file=.env src/scripts/seedLessonDebriefDemo.ts insert <in.json> <email>
 //
+// --set=teacher2 or --set=teacher3 uses those lesson sets instead (default demo).
+//
 // Afterwards, refreshDemoDates.ts moves the whole demo story up to today.
 //
 // Claude writes each transcript from a brief; every number the teacher sees
@@ -39,7 +41,7 @@ import {
 const WORDS_PER_SEC = 2.4
 // My Growth opens on this metric — the teacher habit every lesson below
 // shares, whichever class it is.
-const FOCUS_METRIC = 'avgWaitTime'
+const FOCUS_METRIC = 'avgWaitTime' // the default (demo) set's focus; see LESSON_SETS
 
 export type Lesson = {
   key: string
@@ -167,6 +169,129 @@ export const LESSONS: Lesson[] = [
 - 11 distinct students speak. About 85 lines, ~1,800 words; students say roughly 30% of the words.`,
   },
 ]
+
+// Two more demo teachers at Maple Ridge (demo.teacher2 / demo.teacher3), so a
+// supervisor demo has two different classrooms to look at. Dated in November
+// so the default "this semester" filter shows them; no Reflect notes, and
+// Self Evaluation is left for the person trying the demo.
+export const TEACHER2_LESSONS: Lesson[] = [
+  {
+    key: 't2_forces',
+    recordedAt: '2026-11-04T10:15:00-05:00',
+    classSubject: 'Science 8',
+    gradeLevel: '8th',
+    period: '3rd period',
+    waitRange: [1.0, 2.2],
+    brief: `8th grade physical science, 3rd period, 26 students. Lesson: balanced and unbalanced forces, with a quick cart-and-spring-scale demo. A capable, organized teacher whose explanations are clear but who does most of the thinking out loud.
+- States the objective with "By the end of class".
+- Runs the demo while narrating; asks mostly recall questions ("What is a force?", "Which way did the cart move?", "How many newtons does the scale read?").
+- About 15 questions, about 3 higher-order ("Why do you think the cart didn't move when both of you pulled?", "What would happen if...").
+- Students answer in 2-8 words; about 6 distinct students speak, two of them often.
+- Defines "net force is defined as..." and "an unbalanced force means...".
+- Two checks: "Thumbs up if that makes sense" and "Does everyone understand?" — moves on quickly after both.
+- Mixed feedback: some generic ("Good", "Nice") and one specific ("I like how you said the forces cancel out instead of just 'they're equal'").
+- Two mild redirections ("Eyes up here", "I need everyone") during the demo.
+- One short independent task: "Draw the force arrows for the picture on your sheet" (work time 120s, own line).
+- About 105 lines, ~2,300 words; the teacher says roughly 78% of the words.`,
+  },
+  {
+    key: 't2_reactions',
+    recordedAt: '2026-11-10T10:15:00-05:00',
+    classSubject: 'Science 8',
+    gradeLevel: '8th',
+    period: '3rd period',
+    waitRange: [1.8, 3.2],
+    brief: `Same 8th grade science class, 3rd period. Lesson: physical vs chemical changes, with a baking soda and vinegar observation in table groups. The teacher is deliberately asking more "how do you know" questions.
+- States the goal with "Today we're going to".
+- Group observation: "With your table, record three things you notice" (work time 150s, own line).
+- Groups report; the teacher asks follow-ups: "What makes you say that?", "How do you know it's a new substance?", "What evidence did you see?"
+- About 13 questions, about 6 higher-order ("Why do you think...", "Explain how...", "Compare melting ice to the fizzing — what's different?").
+- One misconception surfaces (a student says dissolving sugar is chemical); the teacher asks another student to respond rather than correcting it straight away, then clarifies.
+- Specific feedback twice. One redirection.
+- Check: "Fist to five, how confident are you sorting these on your own?"
+- 9 distinct students; answers 6-20 words. About 95 lines, ~2,000 words; students say roughly 28% of the words.`,
+  },
+  {
+    key: 't2_energy',
+    recordedAt: '2026-11-16T10:15:00-05:00',
+    classSubject: 'Science 8',
+    gradeLevel: '8th',
+    period: '3rd period',
+    waitRange: [2.4, 3.8],
+    brief: `Same 8th grade science class, 3rd period. Lesson: kinetic and potential energy on a roller coaster model. The teacher uses a claim-evidence-reasoning routine and students do more of the explaining.
+- States the objective with "Our goal for today".
+- Shows a coaster track diagram; asks "Where is the car moving fastest, and why?" then "Write your claim and one piece of evidence" (work time 60s, own line) → "Share with your partner" (work time 45s, own line) → calls on pairs by name.
+- About 12 questions, about 7 higher-order ("Why...", "What would happen if the first hill were lower?", "How would you justify...", "Compare...").
+- Students build on each other a few times ("I agree with Jordan but...", "Adding to what Sam said...").
+- Specific feedback; corrects one misunderstanding about energy "disappearing" by asking where it went.
+- Uses "in real life" once (playground swing). Defines "potential energy means...".
+- Exit ticket: "Before you leave, write where the energy goes when the car stops at the end."
+- No redirections. 11 distinct students; answers 10-30 words. About 90 lines, ~1,900 words; students say roughly 35% of the words.`,
+  },
+]
+
+export const TEACHER3_LESSONS: Lesson[] = [
+  {
+    key: 't3_ratios',
+    recordedAt: '2026-11-05T08:50:00-05:00',
+    classSubject: 'Math 6',
+    gradeLevel: '6th',
+    period: '1st period',
+    waitRange: [0.8, 1.8],
+    brief: `6th grade math, 1st period, 24 students. Lesson: introduction to ratios using a recipe (cups of flour to cups of sugar). A warm, energetic teacher who moves fast; lots of choral and quick-answer questions.
+- States the objective with "Today we're going to".
+- Mostly recall and procedure: "What is a ratio?", "How many cups of flour?", "What do we write first?" About 16 questions, about 3 higher-order ("Why does the order matter in a ratio?").
+- Several choral answers prompted by "Everyone, what's the answer?" — the transcript shows one student (S1) answering for the room.
+- Guided practice on whiteboards: "Write the ratio on your whiteboard" (work time 40s, own line), repeated twice, then "Hold them up" — the teacher says "Most of you have it" and moves on.
+- Encouraging, generic praise ("Awesome", "Good job", "Perfect").
+- Two redirections ("Whiteboards down, eyes up here", "Quiet please").
+- Defines "a ratio is defined as...". One "Have you ever..." connection (making lemonade).
+- 6 distinct students; answers 1-6 words. About 110 lines, ~2,200 words; the teacher says roughly 80% of the words.`,
+  },
+  {
+    key: 't3_rates',
+    recordedAt: '2026-11-11T08:50:00-05:00',
+    classSubject: 'Math 6',
+    gradeLevel: '6th',
+    period: '1st period',
+    waitRange: [1.6, 3.0],
+    brief: `Same 6th grade math class, 1st period. Lesson: unit rates — which store has the better deal on granola bars. The teacher tries having students explain their method before the answer.
+- States the goal with "Our goal for today is".
+- Problem posed; "Solve it on your own first" (work time 120s, own line) → "Compare with your partner — did you do it the same way?" (work time 60s, own line).
+- Calls on two students who used different methods (dividing vs a ratio table) and asks "How is your way like Ava's way?"
+- About 13 questions, about 5 higher-order ("Why did you divide?", "Explain how you know...", "What would happen if the bigger box cost more?").
+- One student gives a wrong answer; the teacher says "Not quite — walk me through your first step" and the student finds the error.
+- Specific feedback twice. One redirection.
+- Check: "Show me on your fingers, how many stores did you check?" and an exit ticket "Before you leave, write the unit price for one more store."
+- 9 distinct students; answers 5-18 words. About 95 lines, ~1,900 words; students say roughly 27% of the words.`,
+  },
+  {
+    key: 't3_percent',
+    recordedAt: '2026-11-17T08:50:00-05:00',
+    classSubject: 'Math 6',
+    gradeLevel: '6th',
+    period: '1st period',
+    waitRange: [2.0, 3.4],
+    brief: `Same 6th grade math class, 1st period. Lesson: percent as a rate per 100, using a 10x10 grid and a "which is the better test score, 18 out of 20 or 43 out of 50?" problem.
+- States the objective with "By the end of class".
+- Grid task: "Shade 35 percent of your grid" (work time 45s, own line). Then the score problem: "Work with your table group and decide which is better — you need a reason" (work time 150s, own line).
+- Groups present; the teacher asks other students to respond ("Do you agree with table 3? Why?").
+- About 12 questions, about 6 higher-order ("Why...", "How do you know...", "Justify...", "Compare...").
+- One student confuses 18 out of 20 with 18 percent; a classmate explains using the grid.
+- Specific feedback; one corrective ("Not quite, check what the whole is").
+- Uses "in real life" once (store discounts). Defines "percent means per hundred".
+- One quick redirection while groups transition ("Let's come back together").
+- Exit ticket: "Before you leave, write 3 out of 4 as a percent and show how you know."
+- 10 distinct students; answers 8-25 words. About 90 lines, ~1,900 words; students say roughly 32% of the words.`,
+  },
+]
+
+// Which lessons a run uses, and the My Growth focus it sets: --set=<name>.
+const LESSON_SETS: Record<string, { lessons: Lesson[]; focusMetric: string }> = {
+  demo: { lessons: LESSONS, focusMetric: FOCUS_METRIC },
+  teacher2: { lessons: TEACHER2_LESSONS, focusMetric: 'higherOrderPct' },
+  teacher3: { lessons: TEACHER3_LESSONS, focusMetric: 'talkRatio' },
+}
 
 const TRANSCRIPT_PROMPT = `You write realistic classroom audio transcripts for a teacher-coaching app's demo account. A teacher reads them back as their own recorded lesson, so they must sound like a real classroom: natural spoken language, occasional "um" or restarts, students who sound their age, and a teacher who is competent and caring even when the lesson shows a problem.
 
@@ -322,11 +447,11 @@ function summarize(lesson: Lesson, lines: Line[]) {
 
 // Saves after every lesson and skips lessons already in the file, so one
 // failed transcript costs one rerun of that lesson, not all five.
-async function generate(outPath: string) {
+async function generate(outPath: string, lessons: Lesson[]) {
   const file: DemoFile = existsSync(outPath)
     ? (JSON.parse(readFileSync(outPath, 'utf8')) as DemoFile)
     : { generatedAt: new Date().toISOString(), lessons: [] }
-  for (const lesson of LESSONS) {
+  for (const lesson of lessons) {
     const done = file.lessons.find((l) => l.key === lesson.key)
     if (done) {
       console.log(`${summarize(lesson, done.lines)}  (kept)`)
@@ -340,7 +465,7 @@ async function generate(outPath: string) {
   console.log(`\nWrote ${outPath}`)
 }
 
-async function insert(inPath: string, email: string) {
+async function insert(inPath: string, email: string, lessons: Lesson[], focusMetric: string) {
   const { prisma } = await import('../lib/prisma.ts')
   // The full pipeline a real upload gets — the Claude reads, the headline and
   // the Summary prose — so the demo report has every section a teacher's
@@ -352,7 +477,7 @@ async function insert(inPath: string, email: string) {
   const existing = await prisma.audioSession.count({ where: { userId: user.id } })
   if (existing > 0) throw new Error(`${email} already has ${existing} Lesson Debrief sessions — not adding a second set.`)
 
-  for (const lesson of LESSONS) {
+  for (const lesson of lessons) {
     const generated = file.lessons.find((l) => l.key === lesson.key)
     if (!generated) throw new Error(`${lesson.key} missing from ${inPath}`)
     const segments = buildSegments(lesson, generated.lines)
@@ -413,8 +538,8 @@ async function insert(inPath: string, email: string) {
     console.log(summarize(lesson, generated.lines))
   }
 
-  await prisma.user.update({ where: { id: user.id }, data: { focusMetric: FOCUS_METRIC } })
-  console.log(`\nAdded ${LESSONS.length} Lesson Debrief sessions to ${email}; My Growth focus set to ${FOCUS_METRIC}.`)
+  await prisma.user.update({ where: { id: user.id }, data: { focusMetric } })
+  console.log(`\nAdded ${lessons.length} Lesson Debrief sessions to ${email}; My Growth focus set to ${focusMetric}.`)
   await prisma.$disconnect()
 }
 
@@ -446,11 +571,14 @@ async function addTraces(inPath: string, email: string) {
 
 // Only when run directly — buildTeacherSamples imports the lesson timing above.
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [command, ...args] = process.argv.slice(2)
+  const setFlag = process.argv.find((a) => a.startsWith('--set='))
+  const set = LESSON_SETS[setFlag ? setFlag.slice(6) : 'demo']
+  if (!set) throw new Error(`Unknown --set; use one of ${Object.keys(LESSON_SETS).join(', ')}`)
+  const [command, ...args] = process.argv.slice(2).filter((a) => !a.startsWith('--set='))
   if (command === 'generate' && args[0]) {
-    await generate(args[0])
+    await generate(args[0], set.lessons)
   } else if (command === 'insert' && args.length >= 2) {
-    await insert(args[0], args[1])
+    await insert(args[0], args[1], set.lessons, set.focusMetric)
   } else if (command === 'add-traces' && args.length >= 2) {
     await addTraces(args[0], args[1])
   } else {

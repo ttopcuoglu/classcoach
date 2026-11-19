@@ -1,0 +1,988 @@
+{
+  "generatedAt": "2026-11-19T03:41:24.633Z",
+  "lessons": [
+    {
+      "key": "t2_forces",
+      "lines": [
+        {
+          "s": "T",
+          "t": "Okay everyone, eyes up here."
+        },
+        {
+          "s": "S1",
+          "t": "Are we doing the cart thing today?"
+        },
+        {
+          "s": "T",
+          "t": "We are, hang tight. By the end of class, you will be able to tell the difference between a balanced force and an unbalanced force."
+        },
+        {
+          "s": "T",
+          "t": "Let's start simple. What is a force?"
+        },
+        {
+          "s": "S2",
+          "t": "A push or a pull."
+        },
+        {
+          "s": "T",
+          "t": "Good. A push or a pull on an object, exactly."
+        },
+        {
+          "s": "T",
+          "t": "Can somebody give me an example of a force in real life?"
+        },
+        {
+          "s": "S3",
+          "t": "Like kicking a ball?"
+        },
+        {
+          "s": "T",
+          "t": "Nice, kicking a ball is a push."
+        },
+        {
+          "s": "T",
+          "t": "What are some other examples of forces?"
+        },
+        {
+          "s": "S1",
+          "t": "Gravity pulling stuff down."
+        },
+        {
+          "s": "T",
+          "t": "Yes, gravity counts too."
+        },
+        {
+          "s": "T",
+          "t": "Okay, now I've got this cart and two spring scales here on the table."
+        },
+        {
+          "s": "T",
+          "t": "I need everyone watching, not talking."
+        },
+        {
+          "s": "T",
+          "t": "Here's what we're going to do. I'm going to hook a spring scale to each side of the cart, and two volunteers are going to pull."
+        },
+        {
+          "s": "S4",
+          "t": "Can I do it?"
+        },
+        {
+          "s": "T",
+          "t": "Sure, come on up. Marcus, you too."
+        },
+        {
+          "s": "T",
+          "t": "Alright, Marcus, you pull on this side, and Jayden, you pull on that side."
+        },
+        {
+          "s": "T",
+          "t": "Everybody else, eyes up here so you can see the scale readings."
+        },
+        {
+          "s": "T",
+          "t": "Go ahead and pull, gently please."
+        },
+        {
+          "s": "S4",
+          "t": "It's not moving!"
+        },
+        {
+          "s": "T",
+          "t": "Interesting. What is a force again, remind me?"
+        },
+        {
+          "s": "S2",
+          "t": "A push or pull."
+        },
+        {
+          "s": "T",
+          "t": "Right, and you're both applying a force, but the cart didn't move."
+        },
+        {
+          "s": "T",
+          "t": "Why do you think the cart didn't move when both of you pulled?"
+        },
+        {
+          "s": "S5",
+          "t": "Because they're pulling the same but opposite ways?"
+        },
+        {
+          "s": "T",
+          "t": "I like how you said the forces cancel out instead of just \"they're equal.\""
+        },
+        {
+          "s": "T",
+          "t": "That's a great way to put it."
+        },
+        {
+          "s": "T",
+          "t": "So when forces cancel out like that, we call that balanced forces."
+        },
+        {
+          "s": "T",
+          "t": "How many newtons does the scale read on Marcus's side?"
+        },
+        {
+          "s": "S4",
+          "t": "It says five."
+        },
+        {
+          "s": "T",
+          "t": "And on Jayden's side?"
+        },
+        {
+          "s": "S6",
+          "t": "Also five."
+        },
+        {
+          "s": "T",
+          "t": "Five and five, equal and opposite, so the cart stays still."
+        },
+        {
+          "s": "T",
+          "t": "Let's try it again, but this time Jayden, pull a little harder."
+        },
+        {
+          "s": "S6",
+          "t": "Okay."
+        },
+        {
+          "s": "T",
+          "t": "Go ahead, pull."
+        },
+        {
+          "s": "S4",
+          "t": "Whoa, it's moving toward him!"
+        },
+        {
+          "s": "T",
+          "t": "Which way did the cart move?"
+        },
+        {
+          "s": "S1",
+          "t": "Toward Jayden."
+        },
+        {
+          "s": "T",
+          "t": "Exactly, it moved toward the stronger pull."
+        },
+        {
+          "s": "T",
+          "t": "Settle down back there, I need everyone watching."
+        },
+        {
+          "s": "T",
+          "t": "Okay, so now the forces are not equal anymore. What does that mean is happening?"
+        },
+        {
+          "s": "S3",
+          "t": "The forces aren't balanced?"
+        },
+        {
+          "s": "T",
+          "t": "Right, when the forces aren't equal, we call that an unbalanced force."
+        },
+        {
+          "s": "T",
+          "t": "An unbalanced force is defined as a force that causes an object to change its motion, like speeding up, slowing down, or changing direction."
+        },
+        {
+          "s": "T",
+          "t": "Thumbs up if that makes sense so far."
+        },
+        {
+          "s": "T",
+          "t": "Okay, good, most thumbs up, let's keep going."
+        },
+        {
+          "s": "T",
+          "t": "Now here's a new term. Net force is defined as the overall force acting on an object after you combine all the forces together."
+        },
+        {
+          "s": "T",
+          "t": "So in our first try, what was the net force?"
+        },
+        {
+          "s": "S2",
+          "t": "Zero?"
+        },
+        {
+          "s": "T",
+          "t": "Zero, nice, because the two forces canceled each other out."
+        },
+        {
+          "s": "T",
+          "t": "And in the second try, was there a net force?"
+        },
+        {
+          "s": "S5",
+          "t": "Yeah, toward Jayden."
+        },
+        {
+          "s": "T",
+          "t": "Yes, a net force in the direction Jayden was pulling."
+        },
+        {
+          "s": "T",
+          "t": "Let's do one more round. This time, Marcus, you pull twice as hard as before."
+        },
+        {
+          "s": "S4",
+          "t": "I'm trying!"
+        },
+        {
+          "s": "T",
+          "t": "Eyes up here, everyone, watch the scale numbers this time, not just the cart."
+        },
+        {
+          "s": "T",
+          "t": "How many newtons does Marcus's side read now?"
+        },
+        {
+          "s": "S4",
+          "t": "Ten."
+        },
+        {
+          "s": "T",
+          "t": "And Jayden's side?"
+        },
+        {
+          "s": "S6",
+          "t": "Still five."
+        },
+        {
+          "s": "T",
+          "t": "So we've got ten newtons versus five newtons."
+        },
+        {
+          "s": "T",
+          "t": "What would happen if I added a third person pulling on Jayden's side with five newtons?"
+        },
+        {
+          "s": "S1",
+          "t": "Then it'd be even again?"
+        },
+        {
+          "s": "T",
+          "t": "Yeah, that's exactly it, it would balance back out to zero net force."
+        },
+        {
+          "s": "T",
+          "t": "Nice thinking."
+        },
+        {
+          "s": "T",
+          "t": "Let's set the cart aside for a second and look at our notes page."
+        },
+        {
+          "s": "T",
+          "t": "Open your science notebooks to the force section."
+        },
+        {
+          "s": "T",
+          "t": "Does everyone understand the difference between balanced and unbalanced so far?"
+        },
+        {
+          "s": "T",
+          "t": "Okay, moving on then."
+        },
+        {
+          "s": "T",
+          "t": "What is the definition of net force again, somebody remind the class?"
+        },
+        {
+          "s": "S3",
+          "t": "The total force added together."
+        },
+        {
+          "s": "T",
+          "t": "Close, but let's rethink that a little, it's the overall force after combining all of them, direction matters too."
+        },
+        {
+          "s": "T",
+          "t": "Try again, what does net force mean?"
+        },
+        {
+          "s": "S3",
+          "t": "The combined force in one direction."
+        },
+        {
+          "s": "T",
+          "t": "There we go, that's it."
+        },
+        {
+          "s": "T",
+          "t": "Now when forces are balanced, what happens to the object's motion?"
+        },
+        {
+          "s": "S2",
+          "t": "It doesn't change."
+        },
+        {
+          "s": "T",
+          "t": "Good, it stays at rest or keeps moving the same way."
+        },
+        {
+          "s": "T",
+          "t": "And when forces are unbalanced?"
+        },
+        {
+          "s": "S5",
+          "t": "It speeds up or changes direction."
+        },
+        {
+          "s": "T",
+          "t": "Exactly, well done."
+        },
+        {
+          "s": "T",
+          "t": "Let's connect this to something you've seen before."
+        },
+        {
+          "s": "T",
+          "t": "Think about a time when you were in a car and it suddenly stopped."
+        },
+        {
+          "s": "S6",
+          "t": "I almost hit the seat in front of me!"
+        },
+        {
+          "s": "T",
+          "t": "Right, that's an unbalanced force acting on you, the car stopped but your body kept moving forward."
+        },
+        {
+          "s": "T",
+          "t": "Okay, now I want you to practice identifying forces on your own."
+        },
+        {
+          "s": "T",
+          "t": "Get out your worksheet from yesterday, the one with the two trucks pushing on a box."
+        },
+        {
+          "s": "T",
+          "t": "Draw the force arrows for the picture on your sheet, showing whether the forces are balanced or unbalanced.",
+          "work": 120
+        },
+        {
+          "s": "T",
+          "t": "Alright, pencils down, let's check a few."
+        },
+        {
+          "s": "T",
+          "t": "Who can tell me what they drew for the first picture?"
+        },
+        {
+          "s": "S1",
+          "t": "Two arrows the same size, pointing apart."
+        },
+        {
+          "s": "T",
+          "t": "And is that balanced or unbalanced?"
+        },
+        {
+          "s": "S1",
+          "t": "Balanced."
+        },
+        {
+          "s": "T",
+          "t": "Good job."
+        },
+        {
+          "s": "T",
+          "t": "What about picture two, what did you draw?"
+        },
+        {
+          "s": "S4",
+          "t": "One big arrow and one small one."
+        },
+        {
+          "s": "T",
+          "t": "And what's happening to the object there?"
+        },
+        {
+          "s": "S4",
+          "t": "It moves toward the bigger arrow."
+        },
+        {
+          "s": "T",
+          "t": "Nice work, that's correct."
+        },
+        {
+          "s": "T",
+          "t": "Before you leave, write down one sentence explaining the difference between balanced and unbalanced forces, that's your exit ticket."
+        },
+        {
+          "s": "S2",
+          "t": "Does it have to be long?"
+        },
+        {
+          "s": "T",
+          "t": "Nope, just one clear sentence works."
+        },
+        {
+          "s": "T",
+          "t": "Hand it in on your way out, great job today everyone."
+        }
+      ]
+    },
+    {
+      "key": "t2_reactions",
+      "lines": [
+        {
+          "s": "T",
+          "t": "Okay everyone, eyes up front, let's get started."
+        },
+        {
+          "s": "T",
+          "t": "Today we're going to compare physical changes and chemical changes, and by the end of class you'll be able to tell the difference using real evidence, not just a guess."
+        },
+        {
+          "s": "T",
+          "t": "Before we start our lab, let's review. What is a physical change?"
+        },
+        {
+          "s": "S1",
+          "t": "It's when something changes shape or state but it's still the same substance as before."
+        },
+        {
+          "s": "T",
+          "t": "Nice work, Maya, that's exactly right."
+        },
+        {
+          "s": "T",
+          "t": "What is a chemical change?"
+        },
+        {
+          "s": "S2",
+          "t": "It's when the substance turns into something totally new, like a different chemical than you started with."
+        },
+        {
+          "s": "T",
+          "t": "Good job, Jordan. Now, what are some examples you might have seen in real life?"
+        },
+        {
+          "s": "S3",
+          "t": "Like when wood burns in a fire and turns into ash, that's a chemical change."
+        },
+        {
+          "s": "T",
+          "t": "Great point, Priya. Alright, let's get into our lab for today."
+        },
+        {
+          "s": "T",
+          "t": "Get out your lab sheets and turn to page sixty-two."
+        },
+        {
+          "s": "T",
+          "t": "Each table is going to do a baking soda and vinegar reaction, and I need everyone watching closely for evidence."
+        },
+        {
+          "s": "T",
+          "t": "With your table, record three things you notice.",
+          "work": 150
+        },
+        {
+          "s": "T",
+          "t": "Okay, let's hear what you found. Who wants to share first?"
+        },
+        {
+          "s": "S4",
+          "t": "We saw bubbles and fizzing right away as soon as we poured the vinegar in."
+        },
+        {
+          "s": "T",
+          "t": "What makes you say that's evidence of something new forming?"
+        },
+        {
+          "s": "S4",
+          "t": "Because bubbles mean gas is being made, and the baking soda definitely wasn't a gas before we mixed it."
+        },
+        {
+          "s": "T",
+          "t": "Exactly, nice thinking, Marcus."
+        },
+        {
+          "s": "T",
+          "t": "What evidence did you see at your table, Jordan?"
+        },
+        {
+          "s": "S2",
+          "t": "Our cup got really cold and there was kind of a hissing sound too, it was weird."
+        },
+        {
+          "s": "T",
+          "t": "How do you know it's a new substance and not just the two things mixing together?"
+        },
+        {
+          "s": "S2",
+          "t": "Because it kept bubbling on its own even after we stopped stirring it with the spoon."
+        },
+        {
+          "s": "T",
+          "t": "Good observation. Did anyone else notice a temperature change?"
+        },
+        {
+          "s": "S5",
+          "t": "Ours actually got warm, not cold, which was kind of surprising to us."
+        },
+        {
+          "s": "T",
+          "t": "Interesting. Why do you think two tables got different temperature results?"
+        },
+        {
+          "s": "S5",
+          "t": "Maybe we used more vinegar or more baking soda than the other table used."
+        },
+        {
+          "s": "T",
+          "t": "That's a solid hypothesis, Chloe."
+        },
+        {
+          "s": "T",
+          "t": "Let's talk about the gas part some more. Explain how you knew a gas was actually being produced."
+        },
+        {
+          "s": "S6",
+          "t": "We held a balloon over the top of the bottle and it inflated by itself."
+        },
+        {
+          "s": "T",
+          "t": "Love that, excellent evidence, Ethan."
+        },
+        {
+          "s": "T",
+          "t": "Did your group see the balloon do anything else interesting?"
+        },
+        {
+          "s": "S6",
+          "t": "Yeah, it kept getting bigger for like a whole minute before it stopped."
+        },
+        {
+          "s": "T",
+          "t": "So, based on everything we saw, was this reaction a physical change or a chemical change?"
+        },
+        {
+          "s": "S7",
+          "t": "Chemical change, because new gas was made and it can't really turn back into what it was."
+        },
+        {
+          "s": "T",
+          "t": "What makes you say it can't turn back?"
+        },
+        {
+          "s": "S7",
+          "t": "Because the bubbles don't ever come back together and turn into baking soda again."
+        },
+        {
+          "s": "T",
+          "t": "Nice reasoning, Aaliyah."
+        },
+        {
+          "s": "T",
+          "t": "Now here's a trickier one. If I dissolve sugar in water, is that physical or chemical?"
+        },
+        {
+          "s": "S8",
+          "t": "That's a chemical change, because the sugar disappears and seems like it turns into something different."
+        },
+        {
+          "s": "T",
+          "t": "Hmm, let's check that idea. Sam, what do you think about what Diego just said?"
+        },
+        {
+          "s": "S9",
+          "t": "I don't think so, because if you let the water evaporate you'd get the sugar back out."
+        },
+        {
+          "s": "T",
+          "t": "Exactly, nice work, Sam."
+        },
+        {
+          "s": "T",
+          "t": "So remember, the word means — dissolving is a physical change because the sugar particles are still sugar, they're just spread out through the water."
+        },
+        {
+          "s": "T",
+          "t": "In other words, nothing new actually formed, it just looks different because it's spread out."
+        },
+        {
+          "s": "T",
+          "t": "That's different from our baking soda reaction, where a new gas and a new substance were actually formed."
+        },
+        {
+          "s": "T",
+          "t": "Put that away and get out your observation chart from last week."
+        },
+        {
+          "s": "T",
+          "t": "Compare melting ice to the fizzing we saw today — what's different between them?"
+        },
+        {
+          "s": "S3",
+          "t": "Melting ice is still water, just solid turning to liquid, but the fizzing made a whole new gas."
+        },
+        {
+          "s": "T",
+          "t": "Great comparison, Priya."
+        },
+        {
+          "s": "T",
+          "t": "What would happen if we added way more baking soda to the same amount of vinegar?"
+        },
+        {
+          "s": "S4",
+          "t": "I think it would just fizz a lot more and probably overflow the cup onto the table."
+        },
+        {
+          "s": "T",
+          "t": "How might we test that safely next time?"
+        },
+        {
+          "s": "S1",
+          "t": "We could measure smaller amounts first and slowly add more to see what happens each time."
+        },
+        {
+          "s": "T",
+          "t": "Jordan, eyes on me, let's stay focused on the lab please."
+        },
+        {
+          "s": "S2",
+          "t": "Sorry, I was just checking my phone real quick for the time."
+        },
+        {
+          "s": "T",
+          "t": "Thank you, let's keep going."
+        },
+        {
+          "s": "T",
+          "t": "Why do you think scientists care so much about telling physical and chemical changes apart?"
+        },
+        {
+          "s": "S5",
+          "t": "Maybe so they can predict if something is dangerous or if it can be undone later."
+        },
+        {
+          "s": "T",
+          "t": "Nice work, Chloe, that's a really mature answer."
+        },
+        {
+          "s": "T",
+          "t": "What other clues tell us a chemical change happened, besides bubbles and gas?"
+        },
+        {
+          "s": "S6",
+          "t": "Like a color change, or if it gives off heat or light that wasn't there before."
+        },
+        {
+          "s": "T",
+          "t": "Good job, Ethan, those are exactly the clues we're looking for."
+        },
+        {
+          "s": "T",
+          "t": "How does temperature change relate to whether a reaction is chemical?"
+        },
+        {
+          "s": "S8",
+          "t": "It shows energy is being released or absorbed, which usually means a new substance formed."
+        },
+        {
+          "s": "T",
+          "t": "Alright, let's do a quick check. Fist to five, how confident are you sorting these on your own?"
+        },
+        {
+          "s": "S6",
+          "t": "I'd say like a four, I feel pretty good about it now."
+        },
+        {
+          "s": "S7",
+          "t": "Three for me, the dissolving one still confuses me a little bit."
+        },
+        {
+          "s": "T",
+          "t": "That's okay, that's exactly why we're going to practice more. Let's do one more together before you go."
+        },
+        {
+          "s": "T",
+          "t": "List the three signs of a chemical change we talked about today."
+        },
+        {
+          "s": "S8",
+          "t": "Gas being produced, color change, and temperature change, like getting hot or cold."
+        },
+        {
+          "s": "T",
+          "t": "Good job, Diego, that's a really solid list."
+        },
+        {
+          "s": "T",
+          "t": "Why do you think it's important to look for more than one piece of evidence before deciding?"
+        },
+        {
+          "s": "S9",
+          "t": "Because one clue by itself might not be enough, like heat alone could just mean friction."
+        },
+        {
+          "s": "T",
+          "t": "Great point, Sam, that's some really careful thinking."
+        },
+        {
+          "s": "T",
+          "t": "Defend your answer for a second — could the hissing sound alone prove it was a chemical change?"
+        },
+        {
+          "s": "S2",
+          "t": "No, because sound alone doesn't prove a new substance formed, you need the gas or color too."
+        },
+        {
+          "s": "T",
+          "t": "Exactly right, nice work."
+        },
+        {
+          "s": "T",
+          "t": "Before you leave, write one physical change and one chemical change you observed today on your exit ticket."
+        },
+        {
+          "s": "S9",
+          "t": "Does it have to be from the lab or can it be something else?"
+        },
+        {
+          "s": "T",
+          "t": "It can be from the lab or something you thought of on your own."
+        },
+        {
+          "s": "T",
+          "t": "Turn it in on your way out, and great work today, everyone."
+        }
+      ]
+    },
+    {
+      "key": "t2_energy",
+      "lines": [
+        {
+          "s": "T",
+          "t": "Okay everyone, eyes up here. Our goal for today is to explain where the energy goes as a roller coaster car moves along a track, using evidence from the diagram."
+        },
+        {
+          "s": "T",
+          "t": "Take out your science notebooks, please."
+        },
+        {
+          "s": "S1",
+          "t": "Are we doing the marble track again?"
+        },
+        {
+          "s": "T",
+          "t": "Not today, Marcus, today we're looking at a diagram of a full coaster, hills and all. Take out your, let's see, your pencils and your notebooks."
+        },
+        {
+          "s": "T",
+          "t": "So here's our track. Big hill at the start, a dip, a smaller hill, then a flat section at the end. Where is the car moving fastest, and why?"
+        },
+        {
+          "s": "S2",
+          "t": "Probably at the bottom of the first hill because it's been falling the whole way down?"
+        },
+        {
+          "s": "T",
+          "t": "Good start, Priya. Write your claim and one piece of evidence to back that up.",
+          "work": 60
+        },
+        {
+          "s": "T",
+          "t": "Okay, pencils down for a second. Now turn and talk, share what you wrote with your partner.",
+          "work": 45
+        },
+        {
+          "s": "T",
+          "t": "Alright, let's hear some of these. Jordan and Sam, what did you two come up with?"
+        },
+        {
+          "s": "S3",
+          "t": "I said the car is fastest at the bottom of the first hill because that's where it has the least height, so most of the energy turned into motion."
+        },
+        {
+          "s": "S4",
+          "t": "I agree with Jordan but I think we should say it's the lowest point overall, because the track dips there too, not just after the first hill."
+        },
+        {
+          "s": "T",
+          "t": "Nice thinking, both of you. So you're both pointing at a low point on the track. Why does being low matter so much for speed?"
+        },
+        {
+          "s": "S4",
+          "t": "Because potential energy is highest at the top, and the word means stored energy from height, so as it goes down, that stored energy turns into kinetic energy, which is motion energy."
+        },
+        {
+          "s": "T",
+          "t": "Excellent, that's exactly the vocabulary word I wanted us to use today. Potential energy means energy that's stored because of position, like height. What's another example of that, maybe something not on a track?"
+        },
+        {
+          "s": "S5",
+          "t": "Like a swing on the playground, when you're at the top of the swing you stop for a second before you go back down?"
+        },
+        {
+          "s": "T",
+          "t": "I love that connection. In real life, think about a time when you've been on a swing at the very top, barely moving. What kind of energy do you have at that exact moment?"
+        },
+        {
+          "s": "S5",
+          "t": "Mostly potential, because you're high up but not really moving yet."
+        },
+        {
+          "s": "T",
+          "t": "Great point. And at the bottom of the swing's arc?"
+        },
+        {
+          "s": "S6",
+          "t": "Mostly kinetic, because you're moving the fastest but you're the lowest to the ground."
+        },
+        {
+          "s": "T",
+          "t": "Nice work. Now let's push further. What would happen if the first hill were lower?"
+        },
+        {
+          "s": "S7",
+          "t": "I think the car would go slower down it because there's less height, so there's less potential energy to start with."
+        },
+        {
+          "s": "T",
+          "t": "How would you justify that using the diagram?"
+        },
+        {
+          "s": "S7",
+          "t": "Well the diagram shows the height of the hill connects to how steep the drop is, and a shorter drop means less energy builds up before the bottom."
+        },
+        {
+          "s": "T",
+          "t": "Adding to what Sam said, anyone?"
+        },
+        {
+          "s": "S8",
+          "t": "Yeah, and if it's lower then the car might not even make it over the second hill, because it wouldn't have enough energy stored up."
+        },
+        {
+          "s": "T",
+          "t": "Ooh, that's a great prediction. Why do you think the second hill has to be shorter than the first one on most real coasters?"
+        },
+        {
+          "s": "S9",
+          "t": "Because the car loses some energy going up and down the first part, so there's not as much left to climb a second really tall hill."
+        },
+        {
+          "s": "T",
+          "t": "That's close, but where does that energy actually go, since the car still has less total energy by the end? Does it disappear?"
+        },
+        {
+          "s": "S10",
+          "t": "I thought it just disappears a little each time, like it gets used up?"
+        },
+        {
+          "s": "T",
+          "t": "Not quite, let's rethink that. Energy doesn't disappear, it transforms or transfers somewhere else. So if the car has less kinetic and potential energy at the end, where did that energy go?"
+        },
+        {
+          "s": "S10",
+          "t": "Oh, maybe into like sound and heat, from the wheels rubbing on the track?"
+        },
+        {
+          "s": "T",
+          "t": "Yes, exactly, nice fix. That's a key term we'll keep using, friction turns some of that energy into heat and sound, so the total energy isn't lost, it's just changed form. How does that connect to the car eventually slowing down at the end of the ride?"
+        },
+        {
+          "s": "S11",
+          "t": "It connects because the flat part at the end has friction the whole time, so the car keeps losing kinetic energy to heat until it stops."
+        },
+        {
+          "s": "T",
+          "t": "Well done. Let's compare two spots on the track then. Compare the energy at the very top of the first hill to the energy on the flat section at the very end."
+        },
+        {
+          "s": "S2",
+          "t": "At the top it's mostly potential, almost no motion. At the end on the flat part it's basically zero of both, because the energy's been changed into heat and sound by friction the whole way."
+        },
+        {
+          "s": "T",
+          "t": "Great point, Priya. What evidence from the diagram supports that the flat section has friction acting on it the whole time?"
+        },
+        {
+          "s": "S3",
+          "t": "The diagram shows the car moving in a straight line with the track touching it, so the wheels are always in contact, which means friction the whole way."
+        },
+        {
+          "s": "T",
+          "t": "Nice work, I like how you tied that back to the picture. Now, how might the ride be different if the track were totally frictionless?"
+        },
+        {
+          "s": "S6",
+          "t": "I think the car would never actually stop, it would just keep going back and forth forever because no energy would ever change into heat."
+        },
+        {
+          "s": "T",
+          "t": "Defend your answer, why would it never stop?"
+        },
+        {
+          "s": "S6",
+          "t": "Because if nothing is taking energy away as heat or sound, then all the potential and kinetic energy just keeps swapping back and forth, so it never slows down."
+        },
+        {
+          "s": "T",
+          "t": "Excellent reasoning. Let's try one more. How would you justify saying the car has the most total energy near the very start of the ride, before the first hill?"
+        },
+        {
+          "s": "S7",
+          "t": "Because that's before any friction has acted on it yet, so no energy has transformed into heat yet, it's all still potential or kinetic."
+        },
+        {
+          "s": "T",
+          "t": "Nice work. One more higher-order one for us to chew on, why do you think coaster designers put the tallest hill first instead of somewhere in the middle?"
+        },
+        {
+          "s": "S9",
+          "t": "Maybe because the car needs the most stored energy right away so it has enough to make it through the rest of the ride without stopping."
+        },
+        {
+          "s": "T",
+          "t": "That's a really strong claim. What evidence could back that up from what we've discussed today?"
+        },
+        {
+          "s": "S8",
+          "t": "The evidence is that energy keeps getting lost to friction the whole ride, so if the biggest hill were later, the car might not have enough energy left to get up it."
+        },
+        {
+          "s": "T",
+          "t": "I love that reasoning, that's claim, evidence, and reasoning all in one answer. Let's do a quick check. On a scale of one to five, how confident are you that you could explain where the energy goes when the car stops?"
+        },
+        {
+          "s": "S1",
+          "t": "I'd say like a four, I get the transform part now."
+        },
+        {
+          "s": "T",
+          "t": "Good, raise your hand if you'd also say a four or five."
+        },
+        {
+          "s": "T",
+          "t": "Okay, lots of hands, nice work today everyone. Before you leave, write where the energy goes when the car stops at the end of the ride."
+        },
+        {
+          "s": "S4",
+          "t": "Does it have to be in full sentences?"
+        },
+        {
+          "s": "T",
+          "t": "Yes please, Jordan, one or two full sentences explaining it in your own words."
+        },
+        {
+          "s": "S11",
+          "t": "Can we use the word friction in it?"
+        },
+        {
+          "s": "T",
+          "t": "Absolutely, that would be great evidence to include. Hand in your exit tickets on your way out, and great thinking today, all of you."
+        }
+      ]
+    }
+  ]
+}
