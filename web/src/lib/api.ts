@@ -3187,6 +3187,33 @@ export function getSharedSelfEvals(): Promise<SharedSelfEvalSummary[]> {
   return request('/api/self-eval-shares')
 }
 
+/** One component of a shared lesson, with the first piece of evidence behind its level. */
+export type WorkspaceComponent = {
+  code: string
+  name: string
+  domain: string
+  level: 1 | 2 | 3 | 4 | null
+  evidence: { text: string; timestampSec: number | null; source: 'recording' | 'plan'; ref: string | null } | null
+}
+export type WorkspaceShare = SharedSelfEvalSummary & {
+  /** Domain 1 is included (the teacher attached a plan). */
+  hasPlanning: boolean
+  /** My own feedback, if I wrote any. */
+  feedback: string | null
+  feedbackAt: string | null
+  components: WorkspaceComponent[]
+  notes: (AudioContentNote & { code: string | null })[]
+}
+export type SupervisorWorkspace = {
+  teachers: Omit<SupervisedTeacher, 'shares'>[]
+  shares: WorkspaceShare[]
+}
+
+/** Everything the supervisor's Overview, My Teachers and Reports draw from. */
+export function getSupervisorWorkspace(): Promise<SupervisorWorkspace> {
+  return request('/api/self-eval-shares/workspace')
+}
+
 export function getSupervisedTeachers(): Promise<SupervisedTeacher[]> {
   return request('/api/self-eval-shares/teachers')
 }

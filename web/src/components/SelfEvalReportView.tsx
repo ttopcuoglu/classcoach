@@ -79,7 +79,7 @@ export function SelfEvalReportView({
             <p className="text-xs text-ink-soft">From the lesson plan: {report.planning.label}. Each level is suggested from the plan as written.</p>
           </div>
           {report.planning.components.map((c) => (
-            <div key={c.code} className="rounded-2xl border border-hairline bg-cream-card p-5">
+            <div key={c.code} id={`component-${c.code}`} className="scroll-mt-6 rounded-2xl border border-hairline bg-cream-card p-5">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-md bg-gold px-2 py-0.5 text-xs font-bold text-forest">{c.code}</span>
                 <p className="font-heading text-base font-bold text-forest">{c.name}</p>
@@ -122,7 +122,7 @@ export function SelfEvalReportView({
           {report.components
             .filter((c) => c.domain === domain)
             .map((c) => (
-              <div key={c.code} className="rounded-2xl border border-hairline bg-cream-card p-5">
+              <div key={c.code} id={`component-${c.code}`} className="scroll-mt-6 rounded-2xl border border-hairline bg-cream-card p-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-md bg-gold px-2 py-0.5 text-xs font-bold text-forest">{c.code}</span>
                   <p className="font-heading text-base font-bold text-forest">{c.name}</p>

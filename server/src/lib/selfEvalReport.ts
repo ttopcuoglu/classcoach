@@ -476,3 +476,42 @@ export function reportLevels(report: SharedSelfEvalReport): { code: string; name
     ...report.components.map((c) => ({ code: c.code, name: c.name, domain: c.domain, level: c.level, hasNote: !!c.teacherNote })),
   ]
 }
+
+/// One component of a shared report as the supervisor's workspace reports
+/// read it: its level and the first piece of evidence behind it (a moment of
+/// the recording, or a line of the plan for Domain 1).
+export type WorkspaceComponent = {
+  code: string
+  name: string
+  domain: string
+  level: RubricLevel | null
+  evidence: { text: string; timestampSec: number | null; source: 'recording' | 'plan'; ref: string | null } | null
+}
+
+export function workspaceComponents(report: SharedSelfEvalReport): WorkspaceComponent[] {
+  return [
+    ...(report.planning?.components ?? []).map((c) => ({
+      code: c.code,
+      name: c.name,
+      domain: c.domain,
+      level: c.level,
+      evidence: c.excerpts[0] ? { text: c.excerpts[0].text, timestampSec: null, source: 'plan' as const, ref: c.excerpts[0].ref } : null,
+    })),
+    ...report.components.map((c) => ({
+      code: c.code,
+      name: c.name,
+      domain: c.domain,
+      level: c.level ?? null,
+      evidence: c.evidence[0] ? { text: c.evidence[0].text, timestampSec: c.evidence[0].timestampSec, source: 'recording' as const, ref: null } : null,
+    })),
+  ]
+}
+
+/// Every Content Specialist note a shared report carries, each with the
+/// component it sits beside (null for the rest), in lesson order.
+export function workspaceNotes(report: SharedSelfEvalReport): (ContentNoteRef & { code: string | null })[] {
+  return [
+    ...report.components.flatMap((c) => c.contentNotes.map((n) => ({ ...n, code: c.code as string | null }))),
+    ...(report.additionalContent?.notes ?? []).map((n) => ({ ...n, code: null })),
+  ].sort((a, b) => a.timestampSec - b.timestampSec)
+}

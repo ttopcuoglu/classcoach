@@ -16,7 +16,14 @@ import { Router } from 'express'
 
 import { Prisma } from '../generated/prisma/client.ts'
 import { prisma } from '../lib/prisma.ts'
-import { reportFromLiveLens, reportLevels, type SelfEvalLens, type SharedSelfEvalReport } from '../lib/selfEvalReport.ts'
+import {
+  reportFromLiveLens,
+  reportLevels,
+  workspaceComponents,
+  workspaceNotes,
+  type SelfEvalLens,
+  type SharedSelfEvalReport,
+} from '../lib/selfEvalReport.ts'
 
 export const selfEvalSharesRouter = Router()
 
@@ -202,6 +209,47 @@ selfEvalSharesRouter.get('/report', async (req, res) => {
     components: [...rows.values()].sort((a, b) => a.code.localeCompare(b.code)),
     // Oldest first, so a teacher's row reads left to right in time.
     lessons: lessons.sort((a, b) => a.sessionDate.getTime() - b.sessionDate.getTime()),
+  })
+})
+
+// Everything the supervisor's workspace (Overview, My Teachers and the four
+// Reports) draws from, in one read: my teachers, and every lesson shared with
+// me with its levels, the first piece of evidence per component, the Content
+// Specialist notes it carries, and my own feedback. Only what
+// visibleShareWhere allows; the client filters by period.
+selfEvalSharesRouter.get('/workspace', async (req, res) => {
+  const viewerId = req.user!.userId
+  const [teachers, shares] = await Promise.all([
+    prisma.user.findMany({
+      where: { supervisorId: viewerId },
+      select: { id: true, name: true, email: true, subjects: true, gradeLevels: true },
+      orderBy: [{ name: 'asc' }, { email: 'asc' }],
+    }),
+    visibleSharesWithLens(viewerId),
+  ])
+  res.json({
+    teachers: teachers.map((t) => ({
+      teacherId: t.id,
+      teacherName: t.name ?? t.email,
+      subjects: splitList(t.subjects),
+      gradeLevels: splitList(t.gradeLevels),
+    })),
+    shares: shares.flatMap((s) => {
+      const report = sharedReport(s)
+      if (!report) return []
+      const mine = s.selfEvalFeedbackById === viewerId
+      return [
+        {
+          ...summaryOf(s, viewerId),
+          hasPlanning: !!report.planning,
+          // Only my own feedback: a previous supervisor's words are the teacher's.
+          feedback: mine ? s.selfEvalFeedback : null,
+          feedbackAt: mine ? s.selfEvalFeedbackAt : null,
+          components: workspaceComponents(report),
+          notes: workspaceNotes(report),
+        },
+      ]
+    }),
   })
 })
 

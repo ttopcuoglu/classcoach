@@ -2246,6 +2246,41 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
       { teacherId: 'u3', teacherName: 'Preview Science Teacher', subjects: ['Science'], gradeLevels: ['7th'], shares: [] },
     ]
   }
+  if (path === '/api/self-eval-shares/workspace') {
+    const shares = previewShareSummaries()
+    const lens = previewScoredLens()
+    const planning = previewPlanningFixture()
+    const notes = (previewReport() as { contentNotes?: { notes?: { id: string; label: string; text: string; excerpt: string; timestampSec: number }[] } }).contentNotes?.notes ?? []
+    return {
+      teachers: [
+        { teacherId: 'u4', teacherName: 'Maya Chen', subjects: ['Science'], gradeLevels: ['8th'] },
+        { teacherId: 'u8', teacherName: 'Jordan Ellis', subjects: ['Social Studies'], gradeLevels: ['9th'] },
+        { teacherId: 'u3', teacherName: 'Preview Science Teacher', subjects: ['Science'], gradeLevels: ['7th'] },
+      ],
+      // Older lessons a level lower on some components, as in /report.
+      shares: shares.map((x, i) => {
+        const older = i >= shares.length / 2
+        const fb = previewShareFeedback[x.sessionId] ?? (x.status === 'replied' ? { text: 'Thank you for sharing this one. The pairs routine is working; keep the share-out short.', at: x.sharedAt } : null)
+        return {
+          ...x,
+          hasPlanning: x.sessionId === 'preview-shared-1',
+          feedback: fb?.text ?? null,
+          feedbackAt: fb?.at ?? null,
+          components: [
+            ...(x.sessionId === 'preview-shared-1'
+              ? planning.components.map((c) => ({ code: c.code, name: c.name, domain: c.domain, level: c.level, evidence: c.excerpts[0] ? { text: c.excerpts[0].text, timestampSec: null, source: 'plan', ref: c.excerpts[0].ref } : null }))
+              : []),
+            ...lens.components.map((c, j) => {
+              const shift = older && j % 3 !== 2 ? -1 : j % 3 === 2 && !older ? -1 : 0
+              const level = (j + i) % 4 === 3 || c.level == null ? null : Math.max(1, Math.min(4, c.level + shift))
+              return { code: c.code, name: c.name, domain: c.domain, level, evidence: c.evidence[0] ? { ...c.evidence[0], source: 'recording', ref: null } : null }
+            }),
+          ],
+          notes: i < 3 ? notes.map((n) => ({ ...n, code: null })) : [],
+        }
+      }),
+    }
+  }
   if (path.startsWith('/api/self-eval-shares/report')) {
     const q = new URLSearchParams(path.split('?')[1] ?? '')
     const teacherId = q.get('teacherId')
