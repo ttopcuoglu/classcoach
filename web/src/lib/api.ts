@@ -158,6 +158,8 @@ export type UserProfile = {
   // How many teachers this person supervises (Self Evaluation sharing). Only /me
   // sends it.
   supervisesCount?: number
+  /** Observations a supervisor sent this person (routes/observations.ts). */
+  observationsReceived?: number
   createdAt: string
   updatedAt: string
 }
@@ -3207,6 +3209,128 @@ export type WorkspaceShare = SharedSelfEvalSummary & {
 export type SupervisorWorkspace = {
   teachers: Omit<SupervisedTeacher, 'shares'>[]
   shares: WorkspaceShare[]
+}
+
+// ---- Observations (routes/observations.ts) ----
+
+export type ObservationStatus = 'recording' | 'transcribing' | 'transcribed' | 'no_recording' | 'generating' | 'draft' | 'failed' | 'sent'
+export type ObservationNote = { atSec: number; text: string; code: string | null }
+export type ObservationEvidenceMoment = { kind: string; timestampSec: number; text: string }
+export type ObservationComponent = {
+  code: string
+  name: string
+  domain: string
+  suggestedLevel: 1 | 2 | 3 | 4 | null
+  level: 1 | 2 | 3 | 4 | null
+  reason: string
+  observed: { question: string; answer: string } | null
+  notes: ObservationNote[]
+  recording: ObservationEvidenceMoment[]
+  disagreement: string | null
+  nextStep: string | null
+}
+export type ObservationReport = {
+  version: 1
+  generatedAt: string
+  frameworkName: string
+  about: string
+  planVsLesson: string | null
+  planning: PlanningComponent[] | null
+  components: ObservationComponent[]
+  comments: string | null
+  recordingMissing: boolean
+}
+export type ObservationSummary = {
+  id: string
+  teacherId: string | null
+  teacherName: string
+  lessonTitle: string | null
+  subject: string | null
+  gradeLevel: string | null
+  observedAt: string
+  durationSec: number | null
+  status: ObservationStatus
+  sentAt: string | null
+}
+export type Observation = ObservationSummary & {
+  failureReason: string | null
+  answers: Record<string, string> | null
+  notes: ObservationNote[] | null
+  closingNote: string | null
+  answeredAt: string | null
+  hasRecording: boolean
+  plan: { label: string; sections: number } | null
+  report: ObservationReport | null
+}
+export type ReceivedObservation = ObservationSummary & { observerName: string; report?: ObservationReport }
+export type ObservableTeacher = { id: string; name: string; email: string; subject: string | null; gradeLevel: string | null; mine: boolean }
+
+export function getObservations(): Promise<ObservationSummary[]> {
+  return request('/api/observations')
+}
+export function getObservation(id: string): Promise<Observation> {
+  return request(`/api/observations/${id}`)
+}
+export function findObservableTeachers(q: string): Promise<ObservableTeacher[]> {
+  return request(`/api/observations/teachers${q ? `?q=${encodeURIComponent(q)}` : ''}`)
+}
+export function createObservation(data: { teacherId?: string | null; teacherName?: string; lessonTitle?: string; subject?: string; gradeLevel?: string }): Promise<Observation> {
+  return request('/api/observations', { method: 'POST', body: JSON.stringify(data) })
+}
+export function updateObservation(
+  id: string,
+  data: { teacherId?: string | null; teacherName?: string; lessonTitle?: string | null; subject?: string | null; gradeLevel?: string | null; observedAt?: string },
+): Promise<Observation> {
+  return request(`/api/observations/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+/** Hands the recording over; the server transcribes it while the questions are answered. */
+export async function uploadObservationAudio(id: string, audio: Blob, durationSec: number): Promise<void> {
+  const form = new FormData()
+  form.append('audio', audio, 'observation-audio')
+  form.append('durationSec', String(Math.round(durationSec)))
+  const res = await fetch(`${API_BASE_URL}/api/observations/${id}/audio`, { method: 'POST', credentials: 'include', body: form })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw apiError(body?.error ?? messageForStatus(res.status), res.status)
+  }
+}
+export async function attachObservationPlan(id: string, plan: { file?: File; text?: string }): Promise<Observation> {
+  if (plan.file) {
+    const form = new FormData()
+    form.append('file', plan.file)
+    const res = await fetch(`${API_BASE_URL}/api/observations/${id}/plan`, { method: 'POST', credentials: 'include', body: form })
+    const body = await res.json().catch(() => null)
+    if (!res.ok) throw apiError(body?.error ?? messageForStatus(res.status), res.status)
+    return body
+  }
+  return request(`/api/observations/${id}/plan`, { method: 'POST', body: JSON.stringify({ text: plan.text ?? '' }) })
+}
+export function removeObservationPlan(id: string): Promise<Observation> {
+  return request(`/api/observations/${id}/plan`, { method: 'DELETE' })
+}
+export function submitObservationAnswers(
+  id: string,
+  data: { answers: Record<string, string>; notes: ObservationNote[]; closingNote: string; recording?: boolean },
+): Promise<Observation> {
+  return request(`/api/observations/${id}/answers`, { method: 'POST', body: JSON.stringify(data) })
+}
+export function regenerateObservation(id: string): Promise<Observation> {
+  return request(`/api/observations/${id}/generate`, { method: 'POST' })
+}
+export function saveObservationReport(id: string, data: { levels?: Record<string, 1 | 2 | 3 | 4 | null>; comments?: string }): Promise<Observation> {
+  return request(`/api/observations/${id}/report`, { method: 'PUT', body: JSON.stringify(data) })
+}
+export function sendObservation(id: string): Promise<Observation> {
+  return request(`/api/observations/${id}/send`, { method: 'POST' })
+}
+export function deleteObservation(id: string): Promise<{ ok: true }> {
+  return request(`/api/observations/${id}`, { method: 'DELETE' })
+}
+export function getReceivedObservations(): Promise<ReceivedObservation[]> {
+  return request('/api/observations/received')
+}
+export function getReceivedObservation(id: string): Promise<ReceivedObservation> {
+  return request(`/api/observations/received/${id}`)
 }
 
 /** Everything the supervisor's Overview, My Teachers and Reports draw from. */

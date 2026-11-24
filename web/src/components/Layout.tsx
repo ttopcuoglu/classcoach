@@ -6,6 +6,7 @@ import { FOCUS_METRIC_LABELS } from '../lib/focusMetrics'
 import {
   UserIcon,
   ChatBubbleIcon,
+  ClipboardIcon,
   CloseIcon,
   HomeIcon,
   LessonPlanIcon,
@@ -65,6 +66,16 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ]
 
+// Observations a supervisor sent this teacher, under Grow, once there is one
+// (pages/observations/ReceivedObservations.tsx). Hidden until then: most
+// teachers will never be observed through Wivoza.
+function navGroupsFor(user: UserProfile | null): NavGroup[] {
+  if (!user?.observationsReceived) return NAV_GROUPS
+  return NAV_GROUPS.map((g) =>
+    g.label === 'Grow' ? { ...g, items: [...g.items, { to: '/observations', label: 'Observations', icon: ClipboardIcon, subtitle: 'from your supervisor' }] } : g,
+  )
+}
+
 // Profile is not in the nav. It was a group of its own — a "Grow" header over a
 // single link — which spent a section of the sidebar on the one thing every app
 // puts in the same corner. It lives in the footer block below instead, on the
@@ -101,6 +112,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
   // they always were) and School Admin. Which one is showing follows the
   // address, so back, forward and a shared /admin link all keep it right.
   const canAdmin = isAdminRole(user) || isLeader(user) || isSupervisor(user)
+  const navGroups = navGroupsFor(user)
   const admin = canAdmin && isAdminPath(location.pathname)
 
   async function handleLogout() {
@@ -152,7 +164,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             </NavLink>
           </div>
 
-          {NAV_GROUPS.map((group) => (
+          {navGroups.map((group) => (
             <div key={group.label}>
               <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-cream/40">{group.label}</p>
               <div className="mt-1.5 flex flex-col gap-1">
@@ -328,7 +340,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             Talk
           </NavLink>
 
-          {NAV_GROUPS.map((group) => {
+          {navGroups.map((group) => {
             const GroupIcon = group.icon
             if (group.items.length === 1) {
               const item = group.items[0]

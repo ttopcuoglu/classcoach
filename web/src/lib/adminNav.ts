@@ -17,6 +17,7 @@ export type AdminPage =
   | 'schoolInquiries'
   | 'leadersCorner'
   | 'evaluations'
+  | 'observations'
   | 'supervisorAssignments'
 
 export type AdminGroup = 'leader' | 'overview' | 'instruction' | 'insights' | 'coaching' | 'manage' | 'settings' | 'internal'
@@ -32,6 +33,9 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // Self Evaluations teachers shared with this person as their supervisor. Its own
   // route in App, like Leader's Corner: a supervisor need not be an admin.
   { page: 'evaluations', slug: 'evaluations', label: 'Evaluations', group: 'instruction' },
+  // A supervisor's classroom observations (pages/observations/). Same rule as
+  // Evaluations: anyone the school made a supervisor.
+  { page: 'observations', slug: 'observations', label: 'Observations', group: 'instruction' },
   { page: 'engagement', slug: 'usage', label: 'Usage & Engagement', group: 'insights' },
   { page: 'insights', slug: 'insights', label: 'Coaching Insights', group: 'insights' },
   { page: 'professionalLearning', slug: 'professional-learning', label: 'Professional Learning', group: 'insights' },

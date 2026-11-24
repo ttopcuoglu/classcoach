@@ -15,6 +15,7 @@ import {
   ShieldIcon,
   TargetIcon,
   UserIcon,
+  MicIcon,
 } from './icons'
 
 // The School Admin half of the one Wivoza sidebar: the workspace switch, the
@@ -37,6 +38,7 @@ const ICON: Record<AdminPage, IconComponent> = {
   schoolInquiries: ShieldIcon,
   leadersCorner: ChatBubbleIcon,
   evaluations: ClipboardIcon,
+  observations: MicIcon,
   supervisorAssignments: UserIcon,
 }
 

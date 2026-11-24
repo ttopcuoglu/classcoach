@@ -34,6 +34,7 @@ const PROFILE: Json = {
   // `?supervisor=1` makes this account someone's supervisor, so Shared
   // Self Evaluations appears in the sidebar.
   supervisesCount: new URLSearchParams(window.location.search).has('supervisor') ? 2 : 0,
+  observationsReceived: new URLSearchParams(window.location.search).has('observed') ? 1 : 0,
   jobTitle: 'Teacher',
   schoolName: 'Preview Middle School',
   teachingGoal: null,
@@ -2246,6 +2247,105 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
       { teacherId: 'u3', teacherName: 'Preview Science Teacher', subjects: ['Science'], gradeLevels: ['7th'], shares: [] },
     ]
   }
+  // Observations (`?supervisor=1`): a supervisor's list, the Teacher box, the
+  // recording, the questions, a draft written a few seconds after the answers,
+  // and sending. `?observed=1` gives the teacher one received observation.
+  if (path.startsWith('/api/observations')) {
+    const route = path.split('?')[0]
+    const q = new URLSearchParams(path.split('?')[1] ?? '').get('q')?.toLowerCase() ?? ''
+    if (route === '/api/observations/teachers') {
+      const all = [
+        { id: 'u4', name: 'Maya Chen', email: 'maya.chen@preview.example', subject: 'Science', gradeLevel: '8th', mine: true },
+        { id: 'u8', name: 'Jordan Ellis', email: 'jordan.ellis@preview.example', subject: 'Social Studies', gradeLevel: '9th', mine: true },
+        { id: 'u9', name: 'Michael Tork', email: 'michael.tork@preview.example', subject: 'Math', gradeLevel: '6th', mine: false },
+      ]
+      return all.filter((t) => !q || t.name.toLowerCase().includes(q) || t.email.includes(q))
+    }
+    if (route === '/api/observations/received') return previewObservations.filter((o) => o.sentAt).map((o) => ({ ...previewObservationOut(o), observerName: 'Preview Dept Head' }))
+    const received = route.match(/^\/api\/observations\/received\/([\w-]+)$/)
+    if (received) {
+      const o = previewObservations.find((x) => x.id === received[1] && x.sentAt)
+      return o ? { ...previewObservationOut(o), observerName: 'Preview Dept Head' } : null
+    }
+    if (route === '/api/observations' && method === 'GET') return previewObservations.map(previewObservationOut)
+    if (route === '/api/observations' && method === 'POST') {
+      const teacher = body.teacherId ? { u4: 'Maya Chen', u8: 'Jordan Ellis', u9: 'Michael Tork' }[String(body.teacherId) as 'u4'] : null
+      const o: PreviewObservation = {
+        id: `preview-obs-${previewObservations.length + 1}`,
+        teacherId: teacher ? String(body.teacherId) : null,
+        teacherName: teacher ?? String(body.teacherName ?? ''),
+        lessonTitle: (body.lessonTitle as string) ?? null,
+        subject: (body.subject as string) ?? null,
+        gradeLevel: (body.gradeLevel as string) ?? null,
+        observedAt: new Date().toISOString(),
+        durationSec: null,
+        status: 'recording',
+        sentAt: null,
+        failureReason: null,
+        answers: null,
+        notes: null,
+        closingNote: null,
+        answeredAt: null,
+        hasRecording: false,
+        plan: null,
+        report: null,
+        generatingSince: 0,
+      }
+      previewObservations.unshift(o)
+      return previewObservationOut(o)
+    }
+    const one = route.match(/^\/api\/observations\/([\w-]+)(?:\/(audio|plan|answers|generate|report|send))?$/)
+    const o = one ? previewObservations.find((x) => x.id === one[1]) : undefined
+    if (!one || !o) return null
+    const action = one[2]
+    if (!action && method === 'DELETE') {
+      previewObservations.splice(previewObservations.indexOf(o), 1)
+      return { ok: true }
+    }
+    if (!action && method === 'PATCH') {
+      if (body.teacherId) {
+        o.teacherId = String(body.teacherId)
+        o.teacherName = { u4: 'Maya Chen', u8: 'Jordan Ellis', u9: 'Michael Tork' }[o.teacherId as 'u4'] ?? o.teacherName
+      }
+      if (typeof body.observedAt === 'string') o.observedAt = body.observedAt
+    }
+    if (action === 'audio') {
+      o.status = 'transcribed'
+      o.hasRecording = true
+      o.durationSec = 1260
+    }
+    if (action === 'plan') o.plan = method === 'DELETE' ? null : { label: 'Pasted plan', sections: 3 }
+    if (action === 'answers') {
+      o.answers = body.answers as Record<string, string>
+      o.notes = body.notes as PreviewObservation['notes']
+      o.closingNote = (body.closingNote as string) || null
+      o.answeredAt = new Date().toISOString()
+      if (body.recording === false) o.status = 'no_recording'
+      o.status = 'generating'
+      o.generatingSince = Date.now()
+    }
+    if (action === 'generate') {
+      o.status = 'generating'
+      o.generatingSince = Date.now()
+    }
+    if (action === 'report' && o.report) {
+      const levels = (body.levels ?? {}) as Record<string, number | null>
+      o.report = {
+        ...o.report,
+        components: o.report.components.map((c) => (c.code in levels ? { ...c, level: levels[c.code] } : c)),
+        comments: 'comments' in body ? String(body.comments ?? '') || null : o.report.comments,
+      }
+    }
+    if (action === 'send') {
+      o.status = 'sent'
+      o.sentAt = new Date().toISOString()
+    }
+    if (o.status === 'generating' && Date.now() - o.generatingSince > 2500) {
+      o.status = 'draft'
+      o.report = previewObservationReport(o)
+    }
+    return previewObservationOut(o)
+  }
   if (path === '/api/self-eval-shares/workspace') {
     const shares = previewShareSummaries()
     const lens = previewScoredLens()
@@ -2532,6 +2632,102 @@ function previewPlanFixture() {
     ],
   }
 }
+
+type PreviewObservation = {
+  id: string
+  teacherId: string | null
+  teacherName: string
+  lessonTitle: string | null
+  subject: string | null
+  gradeLevel: string | null
+  observedAt: string
+  durationSec: number | null
+  status: string
+  sentAt: string | null
+  failureReason: string | null
+  answers: Record<string, string> | null
+  notes: { atSec: number; text: string; code: string | null }[] | null
+  closingNote: string | null
+  answeredAt: string | null
+  hasRecording: boolean
+  plan: { label: string; sections: number } | null
+  report: ReturnType<typeof previewObservationReport> | null
+  generatingSince: number
+}
+
+function previewObservationOut(o: PreviewObservation) {
+  const { generatingSince: _g, ...rest } = o
+  return rest
+}
+
+function previewObservationReport(o: Pick<PreviewObservation, 'answers' | 'notes' | 'hasRecording'>) {
+  const env = 'Domain 2: Learning Environments'
+  const exp = 'Domain 3: Learning Experiences'
+  const answer = (code: string, question: string, labels: Record<string, string>) => {
+    const key = o.answers?.[code]
+    return key && labels[key] ? { question, answer: labels[key] } : null
+  }
+  const notesFor = (code: string) => (o.notes ?? []).filter((n) => n.code === code)
+  const rec = (t: number, kind: string, text: string) => (o.hasRecording ? [{ timestampSec: t, kind, text }] : [])
+  const c = (code: string, name: string, domain: string, level: number | null, reason: string, extra: Record<string, unknown> = {}) => ({
+    code, name, domain, suggestedLevel: level, level, reason, observed: null, notes: notesFor(code), recording: [], disagreement: null, nextStep: null, ...extra,
+  })
+  return {
+    version: 1 as const,
+    generatedAt: new Date().toISOString(),
+    frameworkName: 'Danielson Framework for Teaching (2022)',
+    about: 'An 8th grade science lesson on why salt water conducts electricity: a short demonstration, pairs testing four solutions, and a whole-class discussion of the pattern.',
+    planVsLesson: null as string | null,
+    planning: null,
+    comments: null as string | null,
+    recordingMissing: !o.hasRecording,
+    components: [
+      c('2a', 'Cultivating Respectful and Affirming Environments', env, 3, 'You saw warm, respectful talk in pairs, and the recording heard encouraging language when a student was unsure.', { observed: answer('2a', 'How did students treat each other and the teacher?', { warm: 'Warm and respectful', mostly: 'Mostly respectful', unkind: 'Some unkind or dismissive moments' }), recording: rec(212, 'Encouraging language', 'I love that you tried that, let’s look at it together.') }),
+      c('2b', 'Fostering a Culture for Learning', env, 3, 'You saw most students sticking with the hard part of the lab.', { observed: answer('2b', 'Did students show effort and care about getting it right?', { most: 'Most students', some: 'Some students', few: 'Few students' }) }),
+      c('2c', 'Maintaining Purposeful Environments', env, 2, 'You noted some lost time handing out materials; the recording heard clear directions for each step.', { observed: answer('2c', 'How did routines, transitions and materials run?', { smooth: 'Smoothly, students ran them', mostly: 'Mostly smooth, some lost time', lost: 'Frequent lost time' }), recording: rec(140, 'How an activity was set up', 'With your partner, you have four minutes to test all four cups.'), nextStep: 'Put lab materials on each table before class so pairs can start the moment directions end.' }),
+      c('2d', 'Supporting Positive Student Behavior', env, 3, 'You saw students respond quickly to nonverbal cues; only one brief redirection was heard.', { observed: answer('2d', 'How did students respond to expectations?', { self: 'Students managed themselves', cues: 'Responded quickly to cues', repeated: 'Needed repeated redirection' }) }),
+      c('2e', 'Organizing Spaces for Learning', env, 3, 'From your answer and note: the room was arranged for pair lab work and the walls showed this unit.', { observed: answer('2e', 'Did the room support the lesson?', { yes: 'Yes, clearly', partly: 'Partly', no: 'Not really' }) }),
+      c('3a', 'Communicating About Purpose and Content', exp, 3, 'The goal was stated at the start, and students could explain what they were learning when you asked.', { observed: answer('3a', 'Could students explain what they were learning and why?', { clearly: 'Clearly', partly: 'Partly', no: 'Not really', not_asked: 'I didn’t ask' }), recording: rec(35, 'Stated learning goal', 'Our goal for today is to explain why some solutions conduct electricity.') }),
+      c('3b', 'Using Questioning and Discussion Techniques', exp, 3, 'From the recording, most questions asked students to explain; you saw most pairs discussing the content.', { observed: answer('3b', 'Were students discussing the content with each other?', { most: 'Most groups', some: 'Some groups', few: 'Few groups', none: 'No pair or group work' }), recording: rec(426, 'Question asking students to explain or reason', 'Why do you think the salt water lit the bulb and the sugar water didn’t?'), disagreement: o.hasRecording ? 'The recording heard little pair talk, but you saw most pairs discussing; pair talk rarely reaches the microphone.' : null }),
+      c('3c', 'Engaging Students in Learning', exp, 3, 'You saw most students actively working during the lab.', { observed: answer('3c', 'About how many students were actively thinking and working?', { all: 'All or almost all', most: 'Most', half: 'About half', few: 'Few' }) }),
+      c('3d', 'Using Assessment for Learning', exp, 2, 'The recording heard one whole-class check; you saw some students getting it from their data tables.', { observed: answer('3d', 'How many students were getting it?', { most: 'Most', some: 'Some', few: 'Few', not_seen: 'I didn’t see student work' }), recording: rec(905, 'Check for understanding (whole class)', 'Thumbs up if that makes sense.'), nextStep: 'Swap the thumbs-up for a one-sentence written prediction you can scan as you walk the room.' }),
+      c('3e', 'Responding Flexibly to Student Needs', exp, null, 'There was too little from the recording, your answers or your notes to judge this component.', { observed: answer('3e', 'Did students get help or a next step?', { yes: 'Yes, adjusted for students or groups', sometimes: 'Sometimes', no: 'No', no_need: 'There was no need' }) }),
+    ],
+  }
+}
+
+const previewObservations: PreviewObservation[] = (() => {
+  const notes = [
+    { atSec: 95, text: 'Objective posted on the board; anchor chart from this unit on the side wall.', code: '2e' },
+    { atSec: 610, text: '4 of 6 pairs talking about the bulb results; 2 pairs off task near the window.', code: '3b' },
+  ]
+  const base = (id: string, status: string, sentAt: string | null): PreviewObservation => ({
+    id,
+    teacherId: 'u4',
+    teacherName: 'Maya Chen',
+    lessonTitle: 'Why salt water conducts',
+    subject: 'Science',
+    gradeLevel: '8th',
+    observedAt: daysAgo(3),
+    durationSec: 1320,
+    status,
+    sentAt,
+    failureReason: null,
+    answers: { '2a': 'warm', '2b': 'most', '2c': 'mostly', '2d': 'cues', '2e': 'yes', '3a': 'clearly', '3b': 'most', '3c': 'most', '3d': 'some', '3e': 'no_need' },
+    notes,
+    closingNote: null,
+    answeredAt: daysAgo(3),
+    hasRecording: true,
+    plan: null,
+    report: null,
+    generatingSince: 0,
+  })
+  const sent = base('preview-obs-sent', 'sent', daysAgo(2))
+  sent.report = { ...previewObservationReport(sent), comments: 'The pairs lab was well set up and most pairs were really reasoning. Next time, try a written prediction as your check so you can see every student.' }
+  const draft = { ...base('preview-obs-draft', 'draft', null), lessonTitle: 'Comparing primary sources', teacherId: 'u8', teacherName: 'Jordan Ellis', subject: 'Social Studies', gradeLevel: '9th', observedAt: daysAgo(1) }
+  draft.report = previewObservationReport(draft)
+  return [draft, sent]
+})()
 
 function previewPlanningFixture() {
   const d = 'Domain 1: Planning and Preparation'

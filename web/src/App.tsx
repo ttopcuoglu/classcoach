@@ -23,6 +23,8 @@ const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 const AudioCoaching = lazy(() => import('./pages/AudioCoaching'))
 const AudioCoachingExport = lazy(() => import('./pages/AudioCoachingExport'))
 const Evaluations = lazy(() => import('./pages/Evaluations'))
+const ObserverPages = lazy(() => import('./pages/observations/ObserverPages'))
+const ReceivedObservations = lazy(() => import('./pages/observations/ReceivedObservations'))
 const LessonPlanning = lazy(() => import('./pages/LessonPlanning'))
 const AssignmentCoachExport = lazy(() => import('./pages/AssignmentCoachExport'))
 const LessonPlanExport = lazy(() => import('./pages/LessonPlanExport'))
@@ -280,6 +282,9 @@ export default function App() {
               {/* The supervisor's old page, now Evaluations in the School Workspace. */}
               <Route path="shared-self-evals" element={<Navigate to="/admin/evaluations" replace />} />
               <Route path="shared-self-evals/:sessionId" element={<SharedSelfEvalRedirect />} />
+              {/* Observations a supervisor sent this teacher (read-only). */}
+              <Route path="observations" element={<ReceivedObservations />} />
+              <Route path="observations/:id" element={<ReceivedObservations />} />
               <Route path="lesson-planning" element={<LessonPlanning />} />
               {/* Assignment Coach is a chip inside Planning Coach now. The
                   route stays as a redirect: it is in the guide, in Home's cards
@@ -303,6 +308,15 @@ export default function App() {
               <Route
                 path="admin/evaluations/:sessionId"
                 element={isSupervisor(user) ? <Evaluations user={user} /> : <Navigate to={user != null && user.role !== 'teacher' ? '/admin' : '/'} replace />}
+              />
+              {/* Observations: also only for supervisors (routes/observations.ts). */}
+              <Route
+                path="admin/observations"
+                element={isSupervisor(user) ? <ObserverPages /> : <Navigate to={user != null && user.role !== 'teacher' ? '/admin' : '/'} replace />}
+              />
+              <Route
+                path="admin/observations/:id"
+                element={isSupervisor(user) ? <ObserverPages /> : <Navigate to={user != null && user.role !== 'teacher' ? '/admin' : '/'} replace />}
               />
               <Route
                 path="admin/*"

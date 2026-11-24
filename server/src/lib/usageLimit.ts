@@ -59,6 +59,10 @@ export type UsageAction =
   | 'rubric_lens'
   | 'self_eval_about'
   | 'self_eval_planning'
+  // A supervisor's classroom observation (routes/observations.ts): the
+  // combined report, and Domain 1 from an attached plan.
+  | 'observation_report'
+  | 'observation_planning'
   | 'hard_look'
   // Lesson Debrief's on-request idea connected to a school focus the teacher
   // chose (lib/debriefSchoolFocus.ts).

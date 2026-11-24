@@ -84,6 +84,8 @@ model User {
   supervisorId          String?
   supervisor            User?     @relation("Supervision", fields: [supervisorId], references: [id], onDelete: SetNull)
   supervisees           User[]    @relation("Supervision")
+  observationsMade      Observation[] @relation("ObservationsMade")
+  observationsReceived  Observation[] @relation("ObservationsReceived")
   // "free" | "plus" — individual self-serve billing. Independent of
   // Organization.plan below; a teacher can be "free" here while still
   // getting Plus-equivalent access through a district (see hasActivePlan
@@ -1123,4 +1125,48 @@ model LtiPendingLink {
   name       String?
   expiresAt  DateTime
   createdAt  DateTime    @default(now())
+}
+
+// A supervisor's classroom observation (2026-11-24). Separate from Self
+// Evaluation: the supervisor starts it, records the lesson, answers ten
+// Danielson questions about what a recording can't capture, and may attach
+// the plan. Wivoza combines the four into a draft the supervisor edits and
+// sends. The teacher reads it only once sent, and only when linked to their
+// account (teacherId); a typed name stays with the supervisor.
+model Observation {
+  id             String    @id @default(cuid())
+  observerId     String
+  observer       User      @relation("ObservationsMade", fields: [observerId], references: [id], onDelete: Cascade)
+  organizationId String?
+  teacherId      String?
+  teacher        User?     @relation("ObservationsReceived", fields: [teacherId], references: [id], onDelete: SetNull)
+  // As typed, or the linked teacher's name when chosen from the school.
+  teacherName    String
+  lessonTitle    String?
+  subject        String?
+  gradeLevel     String?
+  observedAt     DateTime  @default(now())
+  durationSec    Int?
+  // recording → transcribing → transcribed | no_recording, then generating →
+  // draft → sent. "failed" = the report could not be written (retry).
+  status         String    @default("recording")
+  failureReason  String?
+  // Utterances with student names masked: [{speaker, startSec, endSec, text}].
+  // The audio itself is never kept.
+  transcript     Json?
+  // The supervisor's notes taken while observing: [{atSec, text, code?}].
+  notes          Json?
+  // The ten questions: { "2a": "warm", ... }.
+  answers        Json?
+  closingNote    String?
+  answeredAt     DateTime?
+  // { label, sections } — only the plan's text is kept.
+  plan           Json?
+  report         Json?
+  sentAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([observerId, observedAt])
+  @@index([teacherId, sentAt])
 }
