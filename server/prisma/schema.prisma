@@ -960,6 +960,11 @@ model AudioSession {
   reflectConversation Json?
 
   deleteAfter      DateTime? // computed from User.audioRetentionDays at creation
+  // Set when this is a supervisor's observation recording (2026-11-24): owned
+  // by the supervisor, analyzed like any lesson, but kept out of their own
+  // Lesson Debrief list and every school count. Deleted with its observation.
+  observationId    String?      @unique
+  observation      Observation? @relation(fields: [observationId], references: [id], onDelete: Cascade)
 
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -1164,6 +1169,8 @@ model Observation {
   plan           Json?
   report         Json?
   sentAt         DateTime?
+  // The recording, analyzed as a lesson: Summary, Insights, Content Specialist.
+  session        AudioSession?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

@@ -85,6 +85,7 @@ const NEXT_STEP_KEYS = ['talk', 'questions', 'climate']
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
 import { splitMetricLogs } from '../lib/metricsForClient.ts'
 import { maskStudentNames } from '../lib/studentNames.ts'
+import { generateWhenReady } from './observations.ts'
 import { extractInChild } from '../lib/extractInChild.ts'
 import { sendExtractionError } from '../lib/extractHttp.ts'
 import { lessonAsText } from '../lib/lessonPlanModel.ts'
@@ -397,8 +398,10 @@ audioSessionsRouter.get('/', async (req, res) => {
     where: { userId, deleteAfter: { lt: new Date() } },
   })
 
+  // A supervisor's observation recordings live under Observations, not in
+  // their own Lesson Debrief list (routes/observations.ts).
   const sessions = await prisma.audioSession.findMany({
-    where: { userId },
+    where: { userId, observationId: null },
     orderBy: { createdAt: 'desc' },
   })
   res.json(sessions)
@@ -434,7 +437,7 @@ audioSessionsRouter.post('/', async (req, res) => {
       : null
 
   const access = await checkFeatureAccess(req.user!.userId, 'lesson_debrief', () =>
-    prisma.audioSession.count({ where: { userId: req.user!.userId, createdAt: { gte: startOfCurrentMonth() } } }),
+    prisma.audioSession.count({ where: { userId: req.user!.userId, observationId: null, createdAt: { gte: startOfCurrentMonth() } } }),
   )
   if (!access.allowed) {
     res.status(403).json({ error: access.upgradeMessage })
@@ -1106,6 +1109,10 @@ export async function runAnalysis(sessionId: string, userId: string, segments: S
     console.error('[audio-sessions] class summary after analysis failed:', error)
   })
   if (awaitSummary) await summary
+
+  // An observation's recording: the supervisor's draft starts once its
+  // lesson is analyzed, if the questions are already answered.
+  if (updated.observationId) void generateWhenReady(updated.observationId).catch((error) => console.error('[audio-sessions] observation draft failed:', error))
 
   return updated
 }

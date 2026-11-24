@@ -40,6 +40,7 @@ before(async () => {
   const express = (await import('express')).default
   const { prisma } = await import('../lib/prisma.ts')
   const { observationsRouter } = await import('./observations.ts')
+  const { audioSessionsRouter } = await import('./audioSessions.ts')
 
   const org = await prisma.organization.create({ data: { name: 'Maple Ridge Academy', joinCode: 'MAPLE4' } })
   const otherOrg = await prisma.organization.create({ data: { name: 'Elm Street School', joinCode: 'ELM444' } })
@@ -56,6 +57,7 @@ before(async () => {
     next()
   })
   app.use('/api/observations', observationsRouter)
+  app.use('/api/audio-sessions', audioSessionsRouter)
   const server = app.listen(0)
   await new Promise<void>((resolve) => server.once('listening', () => resolve()))
   const { port: httpPort } = server.address() as AddressInfo
@@ -135,6 +137,18 @@ test('who can observe, who they can pick, and who reads what', async () => {
   assert.ok(!JSON.stringify(draft.body).includes(TRANSCRIPT_MARKER))
   assert.equal(draft.body.hasRecording, true)
 
+  // Its recording is a lesson owned by the supervisor, but never in their own
+  // Lesson Debrief list.
+  const sessionId = draft.body.sessionId as string
+  assert.ok(sessionId)
+  const ownList = (await call('/api/audio-sessions', supervisor)).body as { id: string }[]
+  assert.ok(!ownList.some((s) => s.id === sessionId), 'an observation recording is not one of the supervisor’s lessons')
+  await ctx!.prisma.audioSession.update({
+    where: { id: sessionId },
+    data: { status: 'analyzed', segments: { create: [{ rawSpeakerTag: 'A', speakerLabel: 'Teacher', startSec: 0, endSec: 5, text: 'Today we are comparing conductors.' }] } },
+  })
+  assert.equal((await call(`/api/observations/received/${id}/lesson`, teacher)).status, 404, 'not before it is sent')
+
   // Nobody else reads or changes it, and the teacher doesn't see a draft.
   assert.equal((await call(`/api/observations/${id}`, colleague)).status, 403)
   assert.equal((await call(`/api/observations/received/${id}`, teacher)).status, 404)
@@ -154,6 +168,13 @@ test('who can observe, who they can pick, and who reads what', async () => {
   assert.equal(received.body.report.comments, 'Strong pairs work.')
   assert.ok(!JSON.stringify(received.body).includes(TRANSCRIPT_MARKER))
   assert.equal((await call(`/api/observations/received/${id}`, colleague)).status, 404, 'only the teacher it was sent to')
+  assert.equal(received.body.hasLesson, true)
+  const lesson = await call(`/api/observations/received/${id}/lesson`, teacher)
+  assert.equal(lesson.status, 200)
+  assert.equal(lesson.body.status, 'locked', 'read-only on the teacher’s side')
+  assert.equal(lesson.body.segments.length, 1)
+  assert.equal((await call(`/api/observations/received/${id}/lesson`, colleague)).status, 404)
+  assert.equal((await call(`/api/audio-sessions/${sessionId}`, teacher)).status, 404, 'the teacher reads it only through the observation')
   assert.equal((await call(`/api/observations/${id}`, supervisor, { method: 'DELETE' })).status, 400)
   assert.equal((await call(`/api/observations/${id}/report`, supervisor, { method: 'PUT', body: JSON.stringify({ comments: 'x' }) })).status, 400)
 })

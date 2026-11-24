@@ -126,7 +126,7 @@ export function selectDigestSessions(sessions: DigestSession[], subject: string 
 
 export async function loadDigestSessions(userId: string, subject: string | null): Promise<DigestSession[]> {
   const sessions = await prisma.audioSession.findMany({
-    where: { userId, status: { in: ['analyzed', 'locked'] }, classSubject: { not: null } },
+    where: { userId, status: { in: ['analyzed', 'locked'] }, classSubject: { not: null }, observationId: null },
     orderBy: { sessionDate: 'desc' },
     take: 25,
     select: DIGEST_SELECT,

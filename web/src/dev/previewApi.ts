@@ -2262,6 +2262,7 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
       ]
       return all.filter((t) => !q || t.name.toLowerCase().includes(q) || t.email.includes(q))
     }
+    if (/^\/api\/observations\/received\/[\w-]+\/lesson$/.test(route)) return { ...previewReport(), status: 'locked' }
     if (route === '/api/observations/received') return previewObservations.filter((o) => o.sentAt).map((o) => ({ ...previewObservationOut(o), observerName: 'Preview Dept Head' }))
     const received = route.match(/^\/api\/observations\/received\/([\w-]+)$/)
     if (received) {
@@ -2663,7 +2664,10 @@ type PreviewObservation = {
 
 function previewObservationOut(o: PreviewObservation) {
   const { generatingSince: _g, ...rest } = o
-  return rest
+  // The two seeded observations carry the sample lesson, so their Summary,
+  // Insights and Content Specialist tabs can be looked at; a new one has none.
+  const seeded = o.id === 'preview-obs-sent' || o.id === 'preview-obs-draft'
+  return { ...rest, sessionId: seeded ? 'preview-report' : null, sessionStatus: seeded ? 'analyzed' : null, hasLesson: seeded }
 }
 
 function previewObservationReport(o: Pick<PreviewObservation, 'answers' | 'notes' | 'hasRecording'>) {

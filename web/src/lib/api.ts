@@ -3213,7 +3213,7 @@ export type SupervisorWorkspace = {
 
 // ---- Observations (routes/observations.ts) ----
 
-export type ObservationStatus = 'recording' | 'transcribing' | 'transcribed' | 'no_recording' | 'generating' | 'draft' | 'failed' | 'sent'
+export type ObservationStatus = 'recording' | 'transcribing' | 'transcribed' | 'no_recording' | 'pending' | 'generating' | 'draft' | 'failed' | 'sent'
 export type ObservationNote = { atSec: number; text: string; code: string | null }
 export type ObservationEvidenceMoment = { kind: string; timestampSec: number; text: string }
 export type ObservationComponent = {
@@ -3259,10 +3259,15 @@ export type Observation = ObservationSummary & {
   closingNote: string | null
   answeredAt: string | null
   hasRecording: boolean
+  /** The recording as a lesson (Summary, Insights, Content Specialist), and
+   *  where its transcription and analysis are: transcribing, tagging (pick the
+   *  teacher's voice), analyzing, analyzed, failed. */
+  sessionId: string | null
+  sessionStatus: string | null
   plan: { label: string; sections: number } | null
   report: ObservationReport | null
 }
-export type ReceivedObservation = ObservationSummary & { observerName: string; report?: ObservationReport }
+export type ReceivedObservation = ObservationSummary & { observerName: string; report?: ObservationReport; hasLesson?: boolean }
 export type ObservableTeacher = { id: string; name: string; email: string; subject: string | null; gradeLevel: string | null; mine: boolean }
 
 export function getObservations(): Promise<ObservationSummary[]> {
@@ -3331,6 +3336,10 @@ export function getReceivedObservations(): Promise<ReceivedObservation[]> {
 }
 export function getReceivedObservation(id: string): Promise<ReceivedObservation> {
   return request(`/api/observations/received/${id}`)
+}
+/** The observed lesson, read-only (it comes back locked), for its Summary, Insights and Content Specialist tabs. */
+export function getReceivedObservationLesson(id: string): Promise<AudioSessionWithSegments> {
+  return request(`/api/observations/received/${id}/lesson`)
 }
 
 /** Everything the supervisor's Overview, My Teachers and Reports draw from. */

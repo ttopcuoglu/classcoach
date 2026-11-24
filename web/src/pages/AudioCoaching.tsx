@@ -1,4 +1,4 @@
-import { cloneElement, createContext, isValidElement, useEffect, useMemo, useRef, useState } from 'react'
+import { cloneElement, createContext, isValidElement, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { RubricComponentAbout, RubricLevelBadge } from '../components/RubricLevel'
 import { PlanningSection, SelfEvalShareBar } from '../components/SelfEvalSharing'
@@ -1352,7 +1352,7 @@ function sessionTitle(session: { lessonContent?: AudioLessonContent | null; clas
   return session.classSubject || session.lessonContent?.subject || session.period || 'Untitled lesson'
 }
 
-type ReportTab = 'summary' | 'insights' | 'specialist' | 'rubric' | 'reflect' | 'growth'
+type ReportTab = 'summary' | 'insights' | 'specialist' | 'rubric' | 'reflect' | 'growth' | 'observation'
 // Four sections, organised by how much a microphone can actually hear.
 // Everything the teacher says is captured well; everything that depends on
 // students answering out loud is not. Questioning and checking were two
@@ -1454,6 +1454,12 @@ const INSIGHTS_SECTION_META: Record<InsightsSection, { n: number; blurb: string;
 // colour without every Insights tab having to pass it down by hand.
 const SectionAccentContext = createContext<Accent>(ACCENTS.mint)
 
+/// True when the report is shown inside a supervisor's Observation
+/// (pages/observations/): the lesson is the teacher's class seen through the
+/// observer's recording, so the teacher's own planning controls (choose a
+/// focus, plan my next class, school focus idea) are left off.
+const ObservationViewContext = createContext(false)
+
 function InsightsSectionHeader({ section, inCard }: { section: InsightsSection; inCard?: boolean }) {
   const meta = INSIGHTS_SECTION_META[section]
   const label = section === 'topic' ? 'Content Specialist' : (INSIGHTS_SECTIONS.find((s) => s.key === section)?.label ?? '')
@@ -1509,10 +1515,10 @@ function InsightsNav({ section, onSelect }: { section: InsightsSection; onSelect
   )
 }
 
-function TabBar({ tab, onSelect }: { tab: ReportTab; onSelect: (t: ReportTab) => void }) {
+function TabBar({ tab, onSelect, tabs = REPORT_TABS }: { tab: ReportTab; onSelect: (t: ReportTab) => void; tabs?: { key: ReportTab; label: string }[] }) {
   return (
     <div className="flex flex-wrap gap-2">
-      {REPORT_TABS.map(({ key, label }) => (
+      {tabs.map(({ key, label }) => (
         <button
           key={key}
           type="button"
@@ -1874,6 +1880,7 @@ function ReportPanel({
   focusMetric,
   onFocusMetricChange,
   talkVoice,
+  observation,
 }: {
   session: AudioSessionWithSegments
   onUpdate: (s: AudioSessionWithSegments) => void
@@ -1882,9 +1889,11 @@ function ReportPanel({
   focusMetric: FocusMetric | null
   onFocusMetricChange: (metric: FocusMetric | null) => void
   talkVoice: TalkVoice | null
+  /** Inside a supervisor's Observation: its own first tab, then Summary,
+   *  Insights and Content Specialist only. */
+  observation?: { label: string; content: ReactNode }
 }) {
-  // TEMPORARY preview params — removed before commit.
-  const [tab, setTab] = useState<ReportTab>('summary')
+  const [tab, setTab] = useState<ReportTab>(observation ? 'observation' : 'summary')
   // The whole report on paper: Summary, then each Insights section on its own
   // page, everything opened up. Laid out, handed to the browser's print
   // dialog (where Save as PDF lives), and put back once it closes. The Hard
@@ -2149,28 +2158,30 @@ function ReportPanel({
   // mount (via the ref) so a Claude/API hiccup doesn't retry in a loop,
   // and skipped for locked sessions since they can never accept the write.
   useEffect(() => {
-    if (tab !== 'summary' || locked || session.classSummary != null || hasAttemptedClassSummaryRef.current) return
+    // Inside an Observation the pieces are asked for as soon as it opens, so
+    // they are there when the teacher reads it, whichever tab was looked at.
+    if ((tab !== 'summary' && !observation) || locked || session.classSummary != null || hasAttemptedClassSummaryRef.current) return
     hasAttemptedClassSummaryRef.current = true
     setClassSummarySending(true)
     generateClassSummary(session.id)
       .then((updated) => onUpdate({ ...session, ...updated }))
       .catch(() => {})
       .finally(() => setClassSummarySending(false))
-  }, [tab, locked, session, onUpdate])
+  }, [tab, locked, session, onUpdate, observation])
 
   // The same arrangement for the moment to revisit: new reports arrive with
   // one, and a report analyzed before it existed is read the first time its
   // Summary is opened. The server keeps whatever comes back, so this is one
   // read per lesson, ever.
   useEffect(() => {
-    if (tab !== 'summary' || locked || session.momentToRevisit != null || hasAttemptedMomentRef.current) return
+    if ((tab !== 'summary' && !observation) || locked || session.momentToRevisit != null || hasAttemptedMomentRef.current) return
     hasAttemptedMomentRef.current = true
     setMomentSending(true)
     generateMomentToRevisit(session.id)
       .then((updated) => onUpdate({ ...session, ...updated }))
       .catch(() => {})
       .finally(() => setMomentSending(false))
-  }, [tab, locked, session, onUpdate])
+  }, [tab, locked, session, onUpdate, observation])
 
   // And for "Try next time": a report summarized before those lines existed
   // gets them written from the notes it already has, the first time it is
@@ -2358,11 +2369,16 @@ function ReportPanel({
   }
 
   return (
+    <ObservationViewContext.Provider value={!!observation}>
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between print:hidden">
-        <button type="button" onClick={() => onExit()} className="text-sm font-medium text-ink-soft hover:text-ink">
-          ← Back to sessions
-        </button>
+        {observation ? (
+          <span />
+        ) : (
+          <button type="button" onClick={() => onExit()} className="text-sm font-medium text-ink-soft hover:text-ink">
+            ← Back to sessions
+          </button>
+        )}
         <div className="flex items-center gap-3">
           {!locked && (
             <button
@@ -2374,7 +2390,7 @@ function ReportPanel({
               {retagLoading ? 'Loading voices...' : "Wrong speaker? Fix who's who"}
             </button>
           )}
-          {locked && (
+          {locked && !observation && (
             <span className="rounded-full bg-mint-tint/60 px-3 py-1 text-xs font-semibold text-forest">Locked</span>
           )}
         </div>
@@ -2388,7 +2404,7 @@ function ReportPanel({
       <header className="overflow-hidden rounded-3xl bg-forest p-7 text-cream sm:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">Wivoza · Lesson Debrief</p>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">{observation ? 'Wivoza · Classroom Observation' : 'Wivoza · Lesson Debrief'}</p>
             <h1 className="mt-3 font-heading text-3xl font-extrabold leading-tight sm:text-4xl">
               {sessionTitle(session)}
               {session.period ? <span className="text-gold"> · {session.period}</span> : null}
@@ -2405,19 +2421,36 @@ function ReportPanel({
               </span>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => setPrinting(true)}
-            className="shrink-0 rounded-full bg-cream px-4 py-2.5 text-sm font-semibold text-forest transition-opacity hover:opacity-90 print:hidden"
-          >
-            Save full report as PDF
-          </button>
+          {!observation && (
+            <button
+              type="button"
+              onClick={() => setPrinting(true)}
+              className="shrink-0 rounded-full bg-cream px-4 py-2.5 text-sm font-semibold text-forest transition-opacity hover:opacity-90 print:hidden"
+            >
+              Save full report as PDF
+            </button>
+          )}
         </div>
       </header>
 
       <div className="print:hidden">
-        <TabBar tab={tab} onSelect={setTab} />
+        <TabBar
+          tab={tab}
+          onSelect={setTab}
+          tabs={
+            observation
+              ? [
+                  { key: 'observation', label: observation.label },
+                  { key: 'summary', label: 'Summary' },
+                  { key: 'insights', label: 'Insights' },
+                  { key: 'specialist', label: 'Content Specialist' },
+                ]
+              : undefined
+          }
+        />
       </div>
+
+      {tab === 'observation' && observation && !printing && observation.content}
 
       <PrintAllContext.Provider value={printing}>
 
@@ -2652,20 +2685,61 @@ function ReportPanel({
 
       </PrintAllContext.Provider>
 
-      <div className="rounded-xl border border-dashed border-hairline p-4 text-xs text-ink-soft">
-        This report reflects what could be heard in your recording — talk patterns, questioning, and classroom
-        routines. It doesn't capture lesson planning, materials, physical space, visual engagement, or anything
-        outside class time. Automated counts above are suggestions to confirm or edit, not final judgments. Audio is
-        deleted once it's transcribed; only the transcript and these insights are kept.
-      </div>
+      {observation ? (
+        tab !== 'observation' && (
+          <div className="rounded-xl border border-dashed border-hairline p-4 text-xs text-ink-soft">
+            Summary, Insights and Content Specialist come from the observer&rsquo;s recording, read the same way as a teacher&rsquo;s own
+            lesson. A recording made from across the room can miss quiet students and pair talk. Audio is deleted once it&rsquo;s
+            transcribed.
+          </div>
+        )
+      ) : (
+        <>
+          <div className="rounded-xl border border-dashed border-hairline p-4 text-xs text-ink-soft">
+            This report reflects what could be heard in your recording — talk patterns, questioning, and classroom
+            routines. It doesn't capture lesson planning, materials, physical space, visual engagement, or anything
+            outside class time. Automated counts above are suggestions to confirm or edit, not final judgments. Audio is
+            deleted once it's transcribed; only the transcript and these insights are kept.
+          </div>
 
-      <Link
-        to={`/audio-coaching/${session.id}/export`}
-        className="self-start text-sm font-medium text-forest hover:text-terracotta-600 print:hidden"
-      >
-        Open printable report →
-      </Link>
+          <Link
+            to={`/audio-coaching/${session.id}/export`}
+            className="self-start text-sm font-medium text-forest hover:text-terracotta-600 print:hidden"
+          >
+            Open printable report →
+          </Link>
+        </>
+      )}
     </div>
+    </ObservationViewContext.Provider>
+  )
+}
+
+/// A supervisor's Observation, with the recording's lesson tabs beside it:
+/// the observation report first, then Summary, Insights and Content
+/// Specialist, drawn by the same components a teacher's own report uses.
+/// `readOnly` is the teacher's side, where the lesson comes back locked so
+/// nothing on it writes.
+export function ObservationLessonReport({
+  session,
+  onUpdate,
+  observationContent,
+}: {
+  session: AudioSessionWithSegments
+  onUpdate: (s: AudioSessionWithSegments) => void
+  observationContent: ReactNode
+}) {
+  return (
+    <ReportPanel
+      session={session}
+      onUpdate={onUpdate}
+      onExit={() => {}}
+      sessions={[]}
+      focusMetric={null}
+      onFocusMetricChange={() => {}}
+      talkVoice={null}
+      observation={{ label: 'Observation', content: observationContent }}
+    />
   )
 }
 
@@ -3064,6 +3138,9 @@ function SummaryTab({
   onDiscussWithCoach: (candidate: NoticeCandidate) => void
 }) {
   const classSummaryProgress = useSimulatedProgress(classSummarySending, 14000)
+  // Inside an Observation the focus and planning controls belong to the
+  // teacher's own lessons, not this one.
+  const observing = useContext(ObservationViewContext)
   const spotlight = buildSpotlight(talkInsight, questioningInsight, cfuInsight)
   const moves = session.teachingMoves
 
@@ -3369,7 +3446,7 @@ function SummaryTab({
               ) : (
                 <span>From {focus.from.split(' · ').pop()}</span>
               )}
-              <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              {!observing && <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 {/* With no suggestion to go back to, the way out is to clear it. */}
                 {chosenFocus && suggested?.id !== chosenFocus.id && (
                   <button type="button" onClick={() => void chooseFocus(null)} className="hover:underline">
@@ -3409,12 +3486,12 @@ function SummaryTab({
                     {moreOpen || choosing ? 'Hide the other ideas' : `Want more to try? (${moreCount}) ›`}
                   </button>
                 )}
-              </span>
+              </span>}
             </div>
             {/* The school focus idea, inside the focus card but closed until
                 "Want more to try?" (or planning) opens the rest; with nothing
                 more to open, it shows. */}
-            {(moreOpen || choosing || moreCount === 0) && (
+            {!observing && (moreOpen || choosing || moreCount === 0) && (
               <SchoolFocusDebriefIdea session={session} onUpdate={onUpdate} className="mt-4" />
             )}
           </div>
@@ -3423,8 +3500,8 @@ function SummaryTab({
 
       {/* The planning question, right under the focus, then Try next time —
           closed until "Want more to try?" or the question opens it. */}
-      <TryNextTimeList part="planning" {...tryNextTimeProps} />
-      <TryNextTimeList part="list" {...tryNextTimeProps} />
+      {!observing && <TryNextTimeList part="planning" {...tryNextTimeProps} />}
+      {!observing && <TryNextTimeList part="list" {...tryNextTimeProps} />}
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-1 print:hidden">
         <span className="text-sm text-ink-soft">🔒 Audio was used for transcription only and has been deleted.</span>

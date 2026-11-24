@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ObservationReportView, observationHeading } from '../../components/ObservationReportView'
+import { ObservationLessonReport } from '../AudioCoaching'
 import {
   attachObservationPlan,
   createObservation,
   deleteObservation,
   findObservableTeachers,
+  getAudioSession,
+  getSpeakerSamples,
+  startTranscription,
+  tagSpeakers,
   getObservation,
   getObservations,
   regenerateObservation,
@@ -15,7 +20,9 @@ import {
   submitObservationAnswers,
   updateObservation,
   uploadObservationAudio,
+  type AudioSessionWithSegments,
   type ObservableTeacher,
+  type SpeakerSample,
   type Observation,
   type ObservationNote,
   type ObservationStatus,
@@ -44,9 +51,9 @@ function clock(sec: number): string {
   return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 }
 
-function Shell({ children, back }: { children: ReactNode; back?: boolean }) {
+function Shell({ children, back, wide }: { children: ReactNode; back?: boolean; wide?: boolean }) {
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 sm:px-8">
+    <div className={`mx-auto flex ${wide ? 'max-w-5xl' : 'max-w-4xl'} flex-col gap-6 px-4 py-8 sm:px-8`}>
       {back && (
         <Link to="/admin/observations" className="text-sm text-ink-soft hover:text-forest">
           ← All observations
@@ -62,6 +69,7 @@ const STATUS_LABEL: Record<ObservationStatus, { label: string; tone: string }> =
   transcribing: { label: 'In progress', tone: 'bg-gold-tint text-terracotta-600' },
   transcribed: { label: 'In progress', tone: 'bg-gold-tint text-terracotta-600' },
   no_recording: { label: 'In progress', tone: 'bg-gold-tint text-terracotta-600' },
+  pending: { label: 'Preparing report', tone: 'bg-gold-tint text-terracotta-600' },
   generating: { label: 'Preparing report', tone: 'bg-gold-tint text-terracotta-600' },
   draft: { label: 'Draft', tone: 'bg-mint-tint/70 text-forest' },
   failed: { label: 'Needs a retry', tone: 'bg-terracotta/15 text-terracotta-600' },
@@ -325,12 +333,15 @@ function ObservationFlow({ id }: { id: string }) {
     void reload()
   }, [reload])
 
-  const preparing = !!o && !!o.answeredAt && ['transcribing', 'transcribed', 'no_recording', 'generating'].includes(o.status)
+  // Watch while the recording is being transcribed or analyzed, and while
+  // the draft is being written.
+  const busyLesson = !!o && ['transcribing', 'analyzing'].includes(o.sessionStatus ?? '')
+  const preparing = !!o && !!o.answeredAt && ['recording', 'transcribing', 'transcribed', 'no_recording', 'pending', 'generating'].includes(o.status)
   useEffect(() => {
-    if (!preparing) return
+    if (!preparing && !busyLesson) return
     const t = window.setInterval(() => void reload(), 4000)
     return () => window.clearInterval(t)
-  }, [preparing, reload])
+  }, [preparing, busyLesson, reload])
 
   if (error) {
     return (
@@ -354,8 +365,9 @@ function ObservationFlow({ id }: { id: string }) {
       blurb={o.teacherName ? observationHeading({ ...o, teacherName: '' }) : 'Record first. You’ll add who you observed after Stop.'}
     />
   )
+  const voiceStep = o.sessionId && o.sessionStatus === 'tagging' ? <VoicePicker sessionId={o.sessionId} onDone={() => void reload()} /> : null
 
-  if (o.status === 'recording' && !o.answeredAt && !stopped) {
+  if (o.status === 'recording' && !o.answeredAt && !stopped && (o.sessionStatus == null || o.sessionStatus === 'recording')) {
     return (
       <Shell back>
         {header}
@@ -375,21 +387,27 @@ function ObservationFlow({ id }: { id: string }) {
     return (
       <Shell back>
         {header}
+        {voiceStep}
         <Questions observation={o} notes={notes} onNotes={setNotes} onChanged={setO} />
       </Shell>
     )
   }
   if (preparing) {
+    const line =
+      o.sessionStatus === 'transcribing'
+        ? 'Wivoza is still transcribing the recording. The report starts as soon as it is done.'
+        : o.sessionStatus === 'tagging'
+          ? 'Pick the teacher’s voice above, and Wivoza will analyze the lesson and write the report.'
+          : o.sessionStatus === 'analyzing'
+            ? 'Wivoza is analyzing the lesson, the same way it reads a teacher’s own recording.'
+            : 'Wivoza is combining the recording, your answers, your notes and the plan. This usually takes under a minute. You can leave this page; the draft will be waiting under Observations.'
     return (
       <Shell back>
         {header}
+        {voiceStep}
         <section className="rounded-2xl border border-hairline bg-white p-6">
           <p className="font-heading text-lg font-bold text-forest">Preparing the report...</p>
-          <p className="mt-1 text-sm text-ink-soft">
-            {o.status === 'transcribing'
-              ? 'Wivoza is still transcribing the recording. The report starts as soon as it is done.'
-              : 'Wivoza is combining the recording, your answers, your notes and the plan. This usually takes under a minute. You can leave this page; the draft will be waiting under Observations.'}
-          </p>
+          <p className="mt-1 text-sm text-ink-soft">{line}</p>
         </section>
       </Shell>
     )
@@ -408,24 +426,116 @@ function ObservationFlow({ id }: { id: string }) {
       </Shell>
     )
   }
-  if (o.status === 'draft' && o.report) {
-    return (
-      <Shell back>
-        {header}
-        <DraftEditor observation={o} onChanged={setO} />
-      </Shell>
+  const content =
+    o.status === 'draft' && o.report ? (
+      <DraftEditor observation={o} onChanged={setO} />
+    ) : (
+      <>
+        {o.sentAt && (
+          <p className="rounded-xl bg-mint-tint/40 px-4 py-3 text-sm text-forest">
+            Sent to {o.teacherName} on {new Date(o.sentAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}.
+          </p>
+        )}
+        {o.report && <ObservationReportView observation={o} report={o.report} />}
+      </>
     )
-  }
   return (
-    <Shell back>
+    <Shell back wide>
       {header}
-      {o.sentAt && (
-        <p className="rounded-xl bg-mint-tint/40 px-4 py-3 text-sm text-forest">
-          Sent to {o.teacherName} on {new Date(o.sentAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}.
-        </p>
-      )}
-      {o.report && <ObservationReportView observation={o} report={o.report} />}
+      <WithLessonTabs sessionId={o.sessionStatus === 'analyzed' ? o.sessionId : null}>
+        <div className="flex flex-col gap-6">{content}</div>
+      </WithLessonTabs>
     </Shell>
+  )
+}
+
+/// The observation report as the first tab, with the recording's Summary,
+/// Insights and Content Specialist beside it (the teacher's own report
+/// components). Without an analyzed lesson, the observation alone.
+function WithLessonTabs({ sessionId, children }: { sessionId: string | null; children: ReactNode }) {
+  const [lesson, setLesson] = useState<AudioSessionWithSegments | null>(null)
+  useEffect(() => {
+    if (!sessionId) return
+    getAudioSession(sessionId)
+      .then(setLesson)
+      .catch(() => setLesson(null))
+  }, [sessionId])
+  if (!sessionId || !lesson) return <>{children}</>
+  return <ObservationLessonReport session={lesson} onUpdate={setLesson} observationContent={children} />
+}
+
+/// After Stop, once transcribed: which voice is the teacher's. The same
+/// choice a teacher makes on their own recording, so the lesson's numbers
+/// (talk, questions, wait time) are counted for the right person.
+function VoicePicker({ sessionId, onDone }: { sessionId: string; onDone: () => void }) {
+  const [voices, setVoices] = useState<SpeakerSample[] | null>(null)
+  const [picked, setPicked] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    getSpeakerSamples(sessionId)
+      .then(({ speakers }) => {
+        const sorted = [...speakers].sort((a, b) => (b.totalSec ?? 0) - (a.totalSec ?? 0))
+        setVoices(sorted)
+        // The voice that speaks longest is usually the teacher: chosen to start.
+        if (sorted[0]) setPicked([sorted[0].rawSpeakerTag])
+      })
+      .catch((e: Error) => setError(e.message))
+  }, [sessionId])
+  return (
+    <section className="flex flex-col gap-4 rounded-2xl border border-gold/50 bg-gold-tint/30 p-6">
+      <div>
+        <h2 className="font-heading text-xl font-bold text-forest">Which voice is the teacher?</h2>
+        <p className="mt-1 text-sm text-ink-soft">
+          So the lesson&rsquo;s numbers count the teacher, not a student. If the teacher was split into two voices (moving around the room), pick both.
+        </p>
+      </div>
+      {!voices && !error && <p className="text-sm text-ink-soft">Loading the voices...</p>}
+      {voices && (
+        <div className="flex flex-col gap-2">
+          {voices.map((v) => {
+            const on = picked.includes(v.rawSpeakerTag)
+            return (
+              <button
+                key={v.rawSpeakerTag}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setPicked(on ? picked.filter((t) => t !== v.rawSpeakerTag) : [...picked, v.rawSpeakerTag])}
+                className={`rounded-xl border p-3 text-left ${on ? 'border-forest bg-white ring-2 ring-forest/30' : 'border-hairline bg-white hover:border-forest'}`}
+              >
+                <p className="text-sm text-ink">&ldquo;{v.sample}&rdquo;</p>
+                <p className="mt-1 text-xs text-ink-soft">
+                  {on ? 'Teacher · ' : ''}
+                  {v.totalSec != null ? `speaks about ${Math.max(1, Math.round(v.totalSec / 60))} min` : ''}
+                  {v.utteranceCount != null ? ` in ${v.utteranceCount} turns` : ''}
+                </p>
+              </button>
+            )
+          })}
+        </div>
+      )}
+      {error && <p className="text-sm text-terracotta-600">{error}</p>}
+      <div>
+        <button
+          type="button"
+          disabled={busy || picked.length === 0}
+          className={btnPrimary}
+          onClick={async () => {
+            setBusy(true)
+            setError(null)
+            try {
+              await tagSpeakers(sessionId, picked)
+              onDone()
+            } catch (e) {
+              setError((e as Error).message)
+              setBusy(false)
+            }
+          }}
+        >
+          {busy ? 'Saving...' : 'This is the teacher'}
+        </button>
+      </div>
+    </section>
   )
 }
 
@@ -573,7 +683,10 @@ function Recorder({ observation, notes, onNotes, onDone }: { observation: Observ
     if (!blob.current) return
     setPhase('uploading')
     try {
-      await uploadObservationAudio(observation.id, blob.current, seconds)
+      // Into the recording's lesson, transcribed like a teacher's own; an
+      // observation from before lessons existed uploads the old way.
+      if (observation.sessionId) await startTranscription(observation.sessionId, blob.current, seconds)
+      else await uploadObservationAudio(observation.id, blob.current, seconds)
       await onDone()
     } catch (e) {
       setError((e as Error).message || 'The recording couldn’t be sent.')
@@ -735,14 +848,22 @@ function Questions({
   const [error, setError] = useState<string | null>(null)
   const answered = Object.keys(answers).length
   const lastNote = notes.length ? notes[notes.length - 1].atSec : 0
+  // Recorded = the audio reached the server, into the lesson (sessionStatus)
+  // or, for an observation from before lessons existed, the old way.
+  const ls = observation.sessionStatus
+  const recorded = (ls != null && ls !== 'recording') || observation.status !== 'recording'
   const recordingLine =
-    observation.status === 'transcribing'
+    ls === 'transcribing' || observation.status === 'transcribing'
       ? 'Wivoza is transcribing the recording while you answer.'
-      : observation.status === 'transcribed'
-        ? 'The recording is ready.'
-        : observation.status === 'no_recording'
-          ? `${observation.failureReason ?? 'No recording.'} The report will rest on your answers, notes and the plan.`
-          : 'No recording. The report will rest on your answers, notes and the plan.'
+      : ls === 'tagging'
+        ? 'The recording is transcribed. Pick the teacher’s voice above.'
+        : ls === 'analyzing'
+          ? 'Wivoza is analyzing the lesson while you answer.'
+          : ls === 'analyzed' || observation.status === 'transcribed'
+            ? 'The recording is ready.'
+            : ls === 'failed' || observation.status === 'no_recording'
+              ? `${observation.failureReason ?? 'The recording could not be transcribed.'} The report will rest on your answers, notes and the plan.`
+              : 'No recording. The report will rest on your answers, notes and the plan.'
 
   return (
     <div className="flex flex-col gap-6">
@@ -807,7 +928,7 @@ function Questions({
                 lessonTitle: details.lesson.trim() || null,
                 gradeLevel: details.grade || null,
               })
-              onChanged(await submitObservationAnswers(observation.id, { answers, notes, closingNote: closing, recording: observation.status !== 'recording' }))
+              onChanged(await submitObservationAnswers(observation.id, { answers, notes, closingNote: closing, recording: recorded }))
             } catch (e) {
               setError((e as Error).message)
               setBusy(false)

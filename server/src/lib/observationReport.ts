@@ -206,7 +206,7 @@ export function buildObservationPrompt(input: {
   return `You are a fair, practical instructional coach helping a school supervisor write up a classroom observation through Domains 2 and 3 of the Danielson Framework for Teaching (2022). The supervisor was in the room; Wivoza recorded the audio. You combine both into a draft. The supervisor reviews every level, changes any they disagree with, and decides what the teacher receives.
 ${lesson ? `\nThe lesson: ${lesson}${input.context.durationSec ? `, observed for about ${Math.max(1, Math.round(input.context.durationSec / 60))} minutes` : ''}.\n` : ''}
 Your sources, and what each can show:
-- RECORDING: numbered moments [1], [2]... are exact quotes from an automatic transcript. They show what was said: questions, explanations, directions, feedback, redirections. The recorder was the supervisor's device, so quiet students and pair talk are often missing, and who is the teacher was guessed from the most frequent voice.
+- RECORDING: numbered moments [1], [2]... are exact quotes from an automatic transcript. They show what was said: questions, explanations, directions, feedback, redirections. The recorder was the supervisor's device, so quiet students and pair talk are often missing. The observer picked which voice was the teacher's.
 - OBSERVED: the supervisor's answers to five questions about what audio can't capture. Classroom management speaks to both 2c and 2d. 2b, 3a, 3b and 3e have no question: for those, rely on the recording and the notes.
 - NOTES: what the supervisor wrote while observing, numbered N1, N2..., with the minute they were written.
 - CLOSING NOTE: anything else the supervisor saw.

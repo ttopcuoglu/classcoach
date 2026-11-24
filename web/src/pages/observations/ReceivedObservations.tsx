@@ -1,7 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ObservationReportView, observationHeading } from '../../components/ObservationReportView'
-import { getReceivedObservation, getReceivedObservations, type ReceivedObservation } from '../../lib/api'
+import { ObservationLessonReport } from '../AudioCoaching'
+import {
+  getReceivedObservation,
+  getReceivedObservationLesson,
+  getReceivedObservations,
+  type AudioSessionWithSegments,
+  type ReceivedObservation,
+} from '../../lib/api'
 
 // The teacher's side of Observations: what a supervisor observed in their
 // class and sent them. Read-only; drafts never appear here.
@@ -65,7 +72,7 @@ function One({ id }: { id: string }) {
       .catch((e: Error) => setError(e.message))
   }, [id])
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 sm:px-8">
+    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 sm:px-8">
       <Link to="/observations" className="text-sm text-ink-soft hover:text-forest">
         ← All observations
       </Link>
@@ -78,9 +85,26 @@ function One({ id }: { id: string }) {
             Each level was set by your observer. The evidence shows where it came from: what they observed, the notes they took, and what Wivoza heard in the
             recording.
           </p>
-          <ObservationReportView observation={o} report={o.report} />
+          <LessonTabs id={o.id} hasLesson={!!o.hasLesson}>
+            <ObservationReportView observation={o} report={o.report} />
+          </LessonTabs>
         </>
       )}
     </div>
   )
+}
+
+/// The observation, with the observed lesson's Summary, Insights and Content
+/// Specialist beside it, read-only: the lesson comes back locked, so nothing
+/// on those tabs asks the server for anything.
+function LessonTabs({ id, hasLesson, children }: { id: string; hasLesson: boolean; children: ReactNode }) {
+  const [lesson, setLesson] = useState<AudioSessionWithSegments | null>(null)
+  useEffect(() => {
+    if (!hasLesson) return
+    getReceivedObservationLesson(id)
+      .then(setLesson)
+      .catch(() => setLesson(null))
+  }, [id, hasLesson])
+  if (!lesson) return <>{children}</>
+  return <ObservationLessonReport session={lesson} onUpdate={() => {}} observationContent={<div className="flex flex-col gap-6">{children}</div>} />
 }

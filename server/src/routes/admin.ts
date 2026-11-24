@@ -289,7 +289,7 @@ async function computePriorityTally(
 ): Promise<Record<string, TallyEntry>> {
   const relatedUserScope = organizationId ? { user: { organizationId } } : {}
   const sessions = await prisma.audioSession.findMany({
-    where: { status: { in: ['analyzed', 'locked'] }, ...relatedUserScope },
+    where: { status: { in: ['analyzed', 'locked'] }, observationId: null, ...relatedUserScope },
     select: {
       userId: true,
       teacherTalkPct: true,
@@ -346,6 +346,8 @@ async function computeThemeWindow(
   const allSessions = await prisma.audioSession.findMany({
     where: {
       status: { in: ['analyzed', 'locked'] },
+      // A supervisor's observation recording is not a lesson they taught.
+      observationId: null,
       user: { organizationId },
       sessionDate: { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) },
     },
@@ -535,7 +537,7 @@ async function computeOverview(req: Request, res: Response) {
   // actual recording, transcript, or notes, only which of five fixed
   // themes its measured metrics land on.
   const audioSessions = await prisma.audioSession.findMany({
-    where: { status: { in: ['analyzed', 'locked'] }, ...relatedUserScope },
+    where: { status: { in: ['analyzed', 'locked'] }, observationId: null, ...relatedUserScope },
     select: {
       userId: true,
       teacherTalkPct: true,
@@ -993,7 +995,7 @@ adminRouter.get('/overview/breakdown', async (req, res) => {
   const relatedUserScope = organizationId ? { user: { organizationId } } : {}
 
   const sessions = await prisma.audioSession.findMany({
-    where: { status: { in: ['analyzed', 'locked'] }, ...relatedUserScope },
+    where: { status: { in: ['analyzed', 'locked'] }, observationId: null, ...relatedUserScope },
     select: {
       userId: true,
       teacherTalkPct: true,

@@ -29,6 +29,9 @@ import {
 } from '../lib/observationReport.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { prisma } from '../lib/prisma.ts'
+import { buildRubricEvidence } from '../lib/rubricLens.ts'
+import { parseLevelTrace } from '../lib/settleTime.ts'
+import { buildSoundTimeline } from '../lib/soundTimeline.ts'
 import { buildPlanningPrompt, parsePlanning, planSections, PLAN_TEXT_MAX, type PlanSection } from '../lib/selfEvalReport.ts'
 import { maskStudentNames } from '../lib/studentNames.ts'
 import { checkAndLogUsage } from '../lib/usageLimit.ts'
@@ -61,7 +64,7 @@ async function observer(req: { user?: { userId: string } }, res: Response) {
 }
 
 async function mine(id: string, observerId: string) {
-  return prisma.observation.findFirst({ where: { id, observerId } })
+  return prisma.observation.findFirst({ where: { id, observerId }, include: { session: { select: { id: true, status: true } } } })
 }
 
 /// A teacher at the observer's own school, never themselves.
@@ -88,11 +91,15 @@ const LIST_SELECT = {
 
 /// What the observer's page reads. The transcript stays on the server.
 function forObserver(o: NonNullable<Awaited<ReturnType<typeof mine>>>) {
-  const { transcript, plan, ...rest } = o
+  const { transcript, plan, session, ...rest } = o
   const p = plan as { label?: string; sections?: PlanSection[] } | null
   return {
     ...rest,
-    hasRecording: Array.isArray(transcript) && transcript.length > 0,
+    // The recording, as a lesson (Summary, Insights, Content Specialist):
+    // its id, and where its transcription and analysis have got to.
+    sessionId: session?.id ?? null,
+    sessionStatus: session?.status ?? null,
+    hasRecording: (Array.isArray(transcript) && transcript.length > 0) || session?.status === 'analyzed',
     plan: p ? { label: p.label ?? 'Lesson plan', sections: p.sections?.length ?? 0 } : null,
   }
 }
@@ -118,7 +125,31 @@ observationsRouter.get('/received/:id', async (req, res) => {
     return
   }
   const { observer: by, ...rest } = o
-  res.json({ ...rest, observerName: by.name ?? by.email })
+  const lesson = await prisma.audioSession.findFirst({ where: { observationId: o.id, status: { in: ['analyzed', 'locked'] } }, select: { id: true } })
+  res.json({ ...rest, observerName: by.name ?? by.email, hasLesson: !!lesson })
+})
+
+// The recording as a lesson, read-only, for the teacher it was sent to: what
+// the Summary, Insights and Content Specialist tabs draw. Only once sent, and
+// only the analyzed lesson (it is the teacher's own class).
+observationsRouter.get('/received/:id/lesson', async (req, res) => {
+  const o = await prisma.observation.findFirst({
+    where: { id: String(req.params.id), teacherId: req.user!.userId, sentAt: { not: null } },
+    select: { id: true },
+  })
+  const lesson = o
+    ? await prisma.audioSession.findFirst({
+        where: { observationId: o.id, status: { in: ['analyzed', 'locked'] } },
+        include: { segments: { where: { speakerLabel: { not: 'Video' } }, orderBy: { startSec: 'asc' } } },
+      })
+    : null
+  if (!lesson) {
+    res.status(404).json({ error: 'Not found.' })
+    return
+  }
+  const soundTimeline = buildSoundTimeline(parseLevelTrace(lesson.levelTrace), lesson.segments, lesson.durationSec)
+  // Read-only on the teacher's side: nothing there may write to it.
+  res.json({ ...lesson, soundTimeline, status: 'locked' })
 })
 
 // ---- the supervisor's side ----
@@ -189,9 +220,26 @@ observationsRouter.post('/', async (req, res) => {
       lessonTitle: text(req.body?.lessonTitle, 160),
       subject: text(req.body?.subject, 80) ?? firstOf(teacher?.subjects),
       gradeLevel: text(req.body?.gradeLevel, 40) ?? firstOf(teacher?.gradeLevels),
+      // The recording goes through the same pipeline as a teacher's own
+      // lesson (transcribe, the observer picks the teacher's voice, analyze),
+      // so the report can carry Summary, Insights and the Content Specialist.
+      // Owned by the observer; hidden from their own Lesson Debrief list and
+      // from every school count by observationId.
+      session: {
+        create: {
+          userId: me.id,
+          teacherName: teacherName || null,
+          classSubject: text(req.body?.subject, 80) ?? firstOf(teacher?.subjects) ?? text(req.body?.lessonTitle, 160),
+          gradeLevel: text(req.body?.gradeLevel, 40) ?? firstOf(teacher?.gradeLevels),
+          sessionDate: new Date(),
+          // The observer is told on the recording screen to let the teacher
+          // know; there is no teacher recording notice to point to here.
+          consentConfirmed: true,
+        },
+      },
     },
   })
-  res.status(201).json(forObserver(created))
+  res.status(201).json(forObserver((await mine(created.id, me.id))!))
 })
 
 observationsRouter.get('/:id', async (req, res) => {
@@ -202,6 +250,9 @@ observationsRouter.get('/:id', async (req, res) => {
     res.status(404).json({ error: 'Observation not found.' })
     return
   }
+  // Answered and waiting: start the draft if the recording has finished since
+  // (or failed). Safe to repeat: generateWhenReady claims the row first.
+  if (o.answeredAt && !o.sentAt && !o.report && o.status !== 'generating') void generateWhenReady(o.id)
   res.json(forObserver(o))
 })
 
@@ -243,8 +294,20 @@ observationsRouter.patch('/:id', async (req, res) => {
     const d = new Date(req.body.observedAt)
     if (!Number.isNaN(d.getTime())) data.observedAt = d
   }
-  const updated = await prisma.observation.update({ where: { id: o.id }, data })
-  res.json(forObserver(updated))
+  const saved = await prisma.observation.update({ where: { id: o.id }, data })
+  // The recording's own lesson header follows: who, what, grade, when.
+  if (o.session) {
+    await prisma.audioSession.update({
+      where: { id: o.session.id },
+      data: {
+        teacherName: saved.teacherName || null,
+        classSubject: saved.subject ?? saved.lessonTitle,
+        gradeLevel: saved.gradeLevel,
+        sessionDate: saved.observedAt,
+      },
+    })
+  }
+  res.json(forObserver((await mine(o.id, me.id))!))
 })
 
 // The recording, handed over when the supervisor presses Stop. Transcribed in
@@ -331,8 +394,8 @@ observationsRouter.post('/:id/plan', planUpload.single('file'), async (req, res)
     res.status(400).json({ error: 'That plan is too short to read.' })
     return
   }
-  const updated = await prisma.observation.update({ where: { id: o.id }, data: { plan: { label: label.slice(0, 120), sections } } })
-  res.json(forObserver(updated))
+  await prisma.observation.update({ where: { id: o.id }, data: { plan: { label: label.slice(0, 120), sections } } })
+  res.json(forObserver((await mine(o.id, me.id))!))
 })
 
 observationsRouter.delete('/:id/plan', async (req, res) => {
@@ -343,8 +406,8 @@ observationsRouter.delete('/:id/plan', async (req, res) => {
     res.status(o ? 400 : 404).json({ error: o ? 'This observation was already sent.' : 'Observation not found.' })
     return
   }
-  const updated = await prisma.observation.update({ where: { id: o.id }, data: { plan: Prisma.DbNull } })
-  res.json(forObserver(updated))
+  await prisma.observation.update({ where: { id: o.id }, data: { plan: Prisma.DbNull } })
+  res.json(forObserver((await mine(o.id, me.id))!))
 })
 
 // The ten answers, the notes taken while observing and the closing note. The
@@ -366,7 +429,7 @@ observationsRouter.post('/:id/answers', async (req, res) => {
   // Supervisors are asked not to name students; names that slip in are masked
   // the same way the transcript's are.
   const masked = maskStudentNames([...notes.map((n) => n.text), closing ?? '']).texts
-  const updated = await prisma.observation.update({
+  await prisma.observation.update({
     where: { id: o.id },
     data: {
       answers: readAnswers(req.body?.answers),
@@ -377,7 +440,7 @@ observationsRouter.post('/:id/answers', async (req, res) => {
       ...(o.status === 'recording' && req.body?.recording === false ? { status: 'no_recording', failureReason: 'This observation has no recording.' } : {}),
     },
   })
-  res.status(202).json(forObserver(updated))
+  res.status(202).json(forObserver((await mine(o.id, me.id))!))
   void generateWhenReady(o.id)
 })
 
@@ -391,9 +454,8 @@ observationsRouter.post('/:id/generate', async (req, res) => {
     res.status(o ? 400 : 404).json({ error: o ? 'This observation can’t be written again now.' : 'Observation not found.' })
     return
   }
-  const hasRecording = Array.isArray(o.transcript) && o.transcript.length > 0
-  const updated = await prisma.observation.update({ where: { id: o.id }, data: { status: hasRecording ? 'transcribed' : 'no_recording' } })
-  res.status(202).json(forObserver(updated))
+  await prisma.observation.update({ where: { id: o.id }, data: { status: 'pending' } })
+  res.status(202).json(forObserver((await mine(o.id, me.id))!))
   void generateWhenReady(o.id)
 })
 
@@ -415,8 +477,8 @@ observationsRouter.put('/:id/report', async (req, res) => {
     planning: report.planning?.map((c) => (levelOf(levels[c.code]) === undefined ? c : { ...c, level: levelOf(levels[c.code])! })) ?? null,
     comments: 'comments' in (req.body ?? {}) ? text(req.body.comments, OBSERVATION_COMMENTS_MAX) : report.comments,
   }
-  const updated = await prisma.observation.update({ where: { id: o.id }, data: { report: next } })
-  res.json(forObserver(updated))
+  await prisma.observation.update({ where: { id: o.id }, data: { report: next } })
+  res.json(forObserver((await mine(o.id, me.id))!))
 })
 
 observationsRouter.post('/:id/send', async (req, res) => {
@@ -436,8 +498,8 @@ observationsRouter.post('/:id/send', async (req, res) => {
     res.status(400).json({ error: 'That teacher is no longer at your school.' })
     return
   }
-  const updated = await prisma.observation.update({ where: { id: o.id }, data: { status: 'sent', sentAt: new Date() } })
-  res.json(forObserver(updated))
+  await prisma.observation.update({ where: { id: o.id }, data: { status: 'sent', sentAt: new Date() } })
+  res.json(forObserver((await mine(o.id, me.id))!))
 })
 
 observationsRouter.delete('/:id', async (req, res) => {
@@ -462,8 +524,21 @@ observationsRouter.delete('/:id', async (req, res) => {
 /// (transcribed, or known to be missing). Claimed with a conditional update so
 /// the transcription finishing and the answers arriving can't both start it.
 export async function generateWhenReady(id: string): Promise<void> {
+  const waiting = await prisma.observation.findUnique({ where: { id }, include: { session: { select: { id: true, status: true } } } })
+  if (!waiting?.answeredAt || waiting.sentAt) return
+  // The recording is ready when its lesson has been analyzed, or when there
+  // is none to wait for: never recorded, transcription failed, or no speech
+  // (that lesson is deleted). A lesson still transcribing, waiting for the
+  // teacher's voice to be picked, or analyzing is not ready.
+  const s = waiting.session
+  const recordingDone =
+    !s ||
+    ['analyzed', 'locked', 'failed'].includes(s.status) ||
+    (s.status === 'recording' && waiting.status === 'no_recording') ||
+    (Array.isArray(waiting.transcript) && waiting.transcript.length > 0)
+  if (!recordingDone) return
   const claimed = await prisma.observation.updateMany({
-    where: { id, answeredAt: { not: null }, sentAt: null, status: { in: ['transcribed', 'no_recording'] } },
+    where: { id, answeredAt: { not: null }, sentAt: null, status: { notIn: ['generating', 'draft', 'sent', 'failed'] } },
     data: { status: 'generating', failureReason: null },
   })
   if (claimed.count === 0) return
@@ -477,8 +552,26 @@ export async function generateWhenReady(id: string): Promise<void> {
     return
   }
   try {
+    // Evidence from the analyzed lesson, where the observer picked the
+    // teacher's voice, so its counts are the ones its Summary and Insights
+    // show. An observation from before lessons existed reads its own transcript.
+    const lesson = s
+      ? await prisma.audioSession.findFirst({
+          where: { id: s.id, status: { in: ['analyzed', 'locked'] } },
+          include: { segments: { where: { speakerLabel: { not: 'Video' } }, orderBy: { startSec: 'asc' } } },
+        })
+      : null
     const transcript = (Array.isArray(o.transcript) ? o.transcript : null) as ObservationUtterance[] | null
-    const evidence = observationEvidence(transcript)
+    const evidence = lesson
+      ? (() => {
+          const e = buildRubricEvidence({ ...lesson, segments: lesson.segments.map((x) => ({ speakerLabel: x.speakerLabel, startSec: x.startSec, endSec: x.endSec, text: x.text })) })
+          return { items: e.items.slice(0, 45), facts: e.facts }
+        })()
+      : observationEvidence(transcript)
+    if (lesson?.durationSec && lesson.durationSec !== o.durationSec) {
+      await prisma.observation.update({ where: { id }, data: { durationSec: lesson.durationSec } })
+      o.durationSec = lesson.durationSec
+    }
     const plan = (o.plan as { sections?: PlanSection[] } | null)?.sections ?? null
     const rules = `${INSTRUCTION_PRIORITY_NOTICE}\n${PRIVACY_NOTICE}\n${TRANSCRIPT_RELIABILITY_NOTICE}`
 
