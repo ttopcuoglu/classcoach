@@ -175,6 +175,12 @@ test('who can observe, who they can pick, and who reads what', async () => {
   assert.equal(lesson.body.segments.length, 1)
   assert.equal((await call(`/api/observations/received/${id}/lesson`, colleague)).status, 404)
   assert.equal((await call(`/api/audio-sessions/${sessionId}`, teacher)).status, 404, 'the teacher reads it only through the observation')
-  assert.equal((await call(`/api/observations/${id}`, supervisor, { method: 'DELETE' })).status, 400)
   assert.equal((await call(`/api/observations/${id}/report`, supervisor, { method: 'PUT', body: JSON.stringify({ comments: 'x' }) })).status, 400)
+
+  // The supervisor can delete any of their observations, a sent one too:
+  // only theirs, and it leaves the teacher's Observations with its lesson.
+  assert.equal((await call(`/api/observations/${id}`, colleague, { method: 'DELETE' })).status, 403)
+  assert.equal((await call(`/api/observations/${id}`, supervisor, { method: 'DELETE' })).status, 200)
+  assert.equal((await call(`/api/observations/received/${id}`, teacher)).status, 404)
+  assert.equal(await ctx!.prisma.audioSession.count({ where: { id: sessionId } }), 0, 'its recording goes with it')
 })

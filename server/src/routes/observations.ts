@@ -510,10 +510,9 @@ observationsRouter.delete('/:id', async (req, res) => {
     res.status(404).json({ error: 'Observation not found.' })
     return
   }
-  if (o.sentAt) {
-    res.status(400).json({ error: 'A sent observation stays with the teacher.' })
-    return
-  }
+  // Any of the supervisor's own observations, sent or not (the user's call,
+  // 2026-11-24). A sent one also leaves the teacher's Observations; the page
+  // says so before deleting. Its recording's lesson goes with it (cascade).
   await prisma.observation.delete({ where: { id: o.id } })
   res.json({ ok: true })
 })
@@ -534,7 +533,7 @@ export async function generateWhenReady(id: string): Promise<void> {
   const recordingDone =
     !s ||
     ['analyzed', 'locked', 'failed'].includes(s.status) ||
-    (s.status === 'recording' && waiting.status === 'no_recording') ||
+    (['setup', 'recording'].includes(s.status) && waiting.status === 'no_recording') ||
     (Array.isArray(waiting.transcript) && waiting.transcript.length > 0)
   if (!recordingDone) return
   const claimed = await prisma.observation.updateMany({

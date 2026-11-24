@@ -108,17 +108,35 @@ function ObservationsList() {
       {rows && rows.length > 0 && (
         <section className="overflow-hidden rounded-2xl border border-hairline bg-white">
           {rows.map((o) => (
-            <Link
-              key={o.id}
-              to={`/admin/observations/${o.id}`}
-              className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline/70 px-5 py-4 last:border-0 hover:bg-cream/40"
-            >
-              <div className="min-w-0">
-                <p className="font-semibold text-ink">{o.teacherName || "Untitled observation"}</p>
-                <p className="text-sm text-ink-soft">{observationHeading({ ...o, teacherName: '' }).replace(/^ · /, '')}</p>
-              </div>
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_LABEL[o.status].tone}`}>{STATUS_LABEL[o.status].label}</span>
-            </Link>
+            <div key={o.id} className="flex items-center gap-2 border-b border-hairline/70 pr-3 last:border-0 hover:bg-cream/40">
+              <Link to={`/admin/observations/${o.id}`} className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 px-5 py-4">
+                <div className="min-w-0">
+                  <p className="font-semibold text-ink">{o.teacherName || 'Untitled observation'}</p>
+                  <p className="text-sm text-ink-soft">{observationHeading({ ...o, teacherName: '' })}</p>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_LABEL[o.status].tone}`}>{STATUS_LABEL[o.status].label}</span>
+              </Link>
+              <button
+                type="button"
+                aria-label={`Delete the observation of ${o.teacherName || 'an untitled lesson'}`}
+                className="shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-terracotta-600 hover:bg-terracotta/10"
+                onClick={async () => {
+                  const who = o.teacherName || 'this observation'
+                  const ask = o.sentAt
+                    ? `Delete the observation sent to ${who}? It will also disappear from their Observations. This can’t be undone.`
+                    : `Delete the observation of ${who}? Its recording, answers and notes go with it. This can’t be undone.`
+                  if (!window.confirm(ask)) return
+                  try {
+                    await deleteObservation(o.id)
+                    setRows((r) => (r ? r.filter((x) => x.id !== o.id) : r))
+                  } catch (e) {
+                    setError((e as Error).message)
+                  }
+                }}
+              >
+                Delete
+              </button>
+            </div>
           ))}
         </section>
       )}
@@ -367,7 +385,7 @@ function ObservationFlow({ id }: { id: string }) {
   )
   const voiceStep = o.sessionId && o.sessionStatus === 'tagging' ? <VoicePicker sessionId={o.sessionId} onDone={() => void reload()} /> : null
 
-  if (o.status === 'recording' && !o.answeredAt && !stopped && (o.sessionStatus == null || o.sessionStatus === 'recording')) {
+  if (o.status === 'recording' && !o.answeredAt && !stopped && (o.sessionStatus == null || ['setup', 'recording'].includes(o.sessionStatus))) {
     return (
       <Shell back>
         {header}
@@ -851,7 +869,7 @@ function Questions({
   // Recorded = the audio reached the server, into the lesson (sessionStatus)
   // or, for an observation from before lessons existed, the old way.
   const ls = observation.sessionStatus
-  const recorded = (ls != null && ls !== 'recording') || observation.status !== 'recording'
+  const recorded = (ls != null && !['setup', 'recording'].includes(ls)) || observation.status !== 'recording'
   const recordingLine =
     ls === 'transcribing' || observation.status === 'transcribing'
       ? 'Wivoza is transcribing the recording while you answer.'
