@@ -210,15 +210,19 @@ function TeacherBox({ value, onChange }: { value: TeacherPick; onChange: (t: Tea
 
 // ---- start screen ----
 
+const GRADES = ['6', '7', '8', '9', '10', '11', '12']
+
 function NewObservation() {
   const navigate = useNavigate()
   const [teacher, setTeacher] = useState<TeacherPick>({ id: null, name: '' })
+  // Only the teacher is required (the user's call, 2026-11-24). Subject and
+  // lesson are one free-text field; grade is a 6–12 dropdown.
   const [lesson, setLesson] = useState('')
-  const [subject, setSubject] = useState('')
   const [grade, setGrade] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const now = new Date()
+  const optional = <span className="font-normal text-ink-soft"> (optional)</span>
 
   return (
     <Shell back>
@@ -231,24 +235,29 @@ function NewObservation() {
             onChange={(t) => {
               setTeacher(t)
               if (t.id) {
-                setSubject(t.subject ?? '')
-                setGrade(t.gradeLevel ?? '')
+                // Filled from the teacher's profile only where still empty.
+                if (!lesson.trim() && t.subject) setLesson(t.subject)
+                const g = (t.gradeLevel ?? '').replace(/(st|nd|rd|th)$/i, '')
+                if (!grade && GRADES.includes(g)) setGrade(g)
               }
             }}
           />
         </label>
-        <label className="flex flex-col gap-1.5 text-sm font-semibold text-forest">
-          Lesson
-          <input value={lesson} onChange={(e) => setLesson(e.target.value)} placeholder="For example: Chemical reactions, 3rd period" className={input} />
-        </label>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
           <label className="flex flex-col gap-1.5 text-sm font-semibold text-forest">
-            Subject
-            <input value={subject} onChange={(e) => setSubject(e.target.value)} className={input} />
+            <span>Subject/Lesson{optional}</span>
+            <input value={lesson} onChange={(e) => setLesson(e.target.value)} placeholder="For example: Science, chemical reactions" className={input} />
           </label>
           <label className="flex flex-col gap-1.5 text-sm font-semibold text-forest">
-            Grade
-            <input value={grade} onChange={(e) => setGrade(e.target.value)} className={input} />
+            <span>Grade{optional}</span>
+            <select value={grade} onChange={(e) => setGrade(e.target.value)} className={input}>
+              <option value="">Choose a grade</option>
+              {GRADES.map((g) => (
+                <option key={g} value={g}>
+                  Grade {g}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
         <div className="text-sm">
@@ -272,8 +281,7 @@ function NewObservation() {
                   teacherId: teacher.id,
                   teacherName: teacher.name.trim(),
                   lessonTitle: lesson.trim() || undefined,
-                  subject: subject.trim() || undefined,
-                  gradeLevel: grade.trim() || undefined,
+                  gradeLevel: grade || undefined,
                 })
                 navigate(`/admin/observations/${o.id}`)
               } catch (e) {

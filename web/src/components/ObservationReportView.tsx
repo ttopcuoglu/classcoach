@@ -104,10 +104,13 @@ function ComponentCard({ c, onLevel }: { c: ObservationComponent; onLevel?: (lev
 }
 
 export function observationHeading(o: Pick<ObservationSummary, 'teacherName' | 'lessonTitle' | 'subject' | 'gradeLevel' | 'observedAt' | 'durationSec'>): string {
+  // Subject and lesson are one field on the start screen; the subject from the
+  // teacher's profile is shown only when the lesson doesn't already name it.
+  const subject = o.subject && !(o.lessonTitle ?? '').toLowerCase().includes(o.subject.toLowerCase()) ? o.subject : null
   return [
     o.teacherName,
     o.lessonTitle,
-    [o.gradeLevel ? `Grade ${o.gradeLevel.replace(/(st|nd|rd|th)$/i, '')}` : null, o.subject].filter(Boolean).join(' ') || null,
+    [o.gradeLevel ? `Grade ${o.gradeLevel.replace(/(st|nd|rd|th)$/i, '')}` : null, subject].filter(Boolean).join(' ') || null,
     new Date(o.observedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
     o.durationSec ? `${Math.max(1, Math.round(o.durationSec / 60))} min` : null,
   ]
