@@ -158,6 +158,16 @@ test('who can observe, who they can pick, and who reads what', async () => {
   const set = await call(`/api/observations/${id}/report`, supervisor, { method: 'PUT', body: JSON.stringify({ levels: { '3b': 4 }, comments: 'Strong pairs work.' }) })
   assert.equal(set.body.report.components[0].level, 4)
   assert.equal(set.body.report.components[0].suggestedLevel, 3, 'Wivoza’s suggestion is kept beside the supervisor’s level')
+
+  // Back to the notes and answers from a draft: resubmitting them sends the
+  // report to be written again (its recording isn't ready here, so it waits).
+  const redo = (await call('/api/observations', supervisor, post({ teacherId: teacher }))).body
+  await ctx!.prisma.observation.update({ where: { id: redo.id }, data: { status: 'draft', answeredAt: new Date(), report: { components: [] } } })
+  const resubmitted = await call(`/api/observations/${redo.id}/answers`, supervisor, post({ answers: { climate: 'warm' }, notes: [{ atSec: 30, text: 'Changed note', code: '2a' }] }))
+  assert.equal(resubmitted.status, 202)
+  assert.equal(resubmitted.body.status, 'pending')
+  assert.deepEqual(resubmitted.body.answers, { climate: 'warm' })
+  assert.equal(resubmitted.body.notes[0].text, 'Changed note')
   assert.equal((await call(`/api/observations/${typed.id}/send`, supervisor, post({}))).status, 400, 'a typed name can’t receive it')
   assert.equal((await call(`/api/observations/${id}/send`, supervisor, post({}))).status, 200)
 

@@ -342,6 +342,7 @@ function ObservationFlow({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null)
   const [notes, setNotesState] = useState<ObservationNote[]>(() => loadNotes(id))
   const [stopped, setStopped] = useState(false)
+  const [editing, setEditing] = useState(false)
   const setNotes = (n: ObservationNote[]) => {
     setNotesState(n)
     storeNotes(id, n)
@@ -401,14 +402,32 @@ function ObservationFlow({ id }: { id: string }) {
       </Shell>
     )
   }
-  if (!o.answeredAt) {
+  // Back from a draft (or a failed one) to change notes and answers, then
+  // write the report again. Not once sent.
+  if (!o.answeredAt || (editing && !o.sentAt)) {
     return (
       <Shell back>
         {header}
         {voiceStep}
-        <Questions observation={o} notes={notes} onNotes={setNotes} onChanged={setO} />
+        <Questions
+          observation={o}
+          notes={notes}
+          onNotes={setNotes}
+          rerun={editing}
+          onCancel={editing ? () => setEditing(false) : undefined}
+          onChanged={(next) => {
+            setEditing(false)
+            setO(next)
+          }}
+        />
       </Shell>
     )
+  }
+  const startEditing = () => {
+    // The notes as saved with the observation, which is what the report used.
+    setNotes(o.notes ?? [])
+    setEditing(true)
+    window.scrollTo({ top: 0 })
   }
   if (preparing) {
     const line =
@@ -437,16 +456,21 @@ function ObservationFlow({ id }: { id: string }) {
         <section className="rounded-2xl border border-terracotta/30 bg-white p-6">
           <p className="font-heading text-lg font-bold text-forest">The report couldn&rsquo;t be written</p>
           <p className="mt-1 text-sm text-ink-soft">{o.failureReason ?? 'Something went wrong.'} Your answers and notes are saved.</p>
-          <button type="button" className={`${btnPrimary} mt-4`} onClick={() => regenerateObservation(o.id).then(setO).catch((e: Error) => setError(e.message))}>
-            Try again
-          </button>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button type="button" className={btnPrimary} onClick={() => regenerateObservation(o.id).then(setO).catch((e: Error) => setError(e.message))}>
+              Try again
+            </button>
+            <button type="button" className={btnSecondary} onClick={startEditing}>
+              Edit notes and answers
+            </button>
+          </div>
         </section>
       </Shell>
     )
   }
   const content =
     o.status === 'draft' && o.report ? (
-      <DraftEditor observation={o} onChanged={setO} />
+      <DraftEditor observation={o} onChanged={setO} onEdit={startEditing} />
     ) : (
       <>
         {o.sentAt && (
@@ -850,11 +874,16 @@ function Questions({
   notes,
   onNotes,
   onChanged,
+  rerun = false,
+  onCancel,
 }: {
   observation: Observation
   notes: ObservationNote[]
   onNotes: (n: ObservationNote[]) => void
   onChanged: (o: Observation) => void
+  /** Back from a draft: the button rewrites the report from what changed. */
+  rerun?: boolean
+  onCancel?: () => void
 }) {
   const [details, setDetails] = useState<ObservationDetailsValue>(() => detailsFrom(observation))
   const [answers, setAnswers] = useState<Record<string, string>>(observation.answers ?? {})
@@ -938,6 +967,7 @@ function Questions({
           disabled={busy || !named}
           className={btnPrimary}
           onClick={async () => {
+            if (rerun && !window.confirm('Write the report again from these notes and answers? The levels and comments you set on the draft will be replaced.')) return
             setBusy(true)
             setError(null)
             try {
@@ -953,8 +983,13 @@ function Questions({
             }
           }}
         >
-          {busy ? 'Sending...' : 'Prepare the report'}
+          {busy ? 'Sending...' : rerun ? 'Rerun the report' : 'Prepare the report'}
         </button>
+        {onCancel && (
+          <button type="button" disabled={busy} className={btnSecondary} onClick={onCancel}>
+            Back to the draft
+          </button>
+        )}
         {!named && <span className="text-sm text-ink-soft">Add the teacher&rsquo;s name above first.</span>}
       </div>
     </div>
@@ -963,7 +998,7 @@ function Questions({
 
 // ---- the draft: levels, comments, send ----
 
-function DraftEditor({ observation, onChanged }: { observation: Observation; onChanged: (o: Observation) => void }) {
+function DraftEditor({ observation, onChanged, onEdit }: { observation: Observation; onChanged: (o: Observation) => void; onEdit: () => void }) {
   const navigate = useNavigate()
   const report = observation.report!
   const [comments, setComments] = useState(report.comments ?? '')
@@ -996,9 +1031,12 @@ function DraftEditor({ observation, onChanged }: { observation: Observation; onC
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="rounded-xl border border-dashed border-hairline px-4 py-3 text-sm text-ink-soft">
-        Draft. Only you can see it until you send it. Wivoza suggested each level; set your own where you disagree.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-hairline px-4 py-3">
+        <p className="min-w-0 flex-1 text-sm text-ink-soft">Draft. Only you can see it until you send it. Wivoza suggested each level; set your own where you disagree.</p>
+        <button type="button" className={`${btnSecondary} shrink-0`} onClick={onEdit}>
+          Edit notes and answers
+        </button>
+      </div>
 
       {!observation.teacherId && (
         <section className="flex flex-col gap-3 rounded-2xl border border-gold/50 bg-gold-tint/30 p-5">

@@ -438,6 +438,9 @@ observationsRouter.post('/:id/answers', async (req, res) => {
       answeredAt: new Date(),
       // Stopped without a recording (the microphone failed or was refused).
       ...(o.status === 'recording' && req.body?.recording === false ? { status: 'no_recording', failureReason: 'This observation has no recording.' } : {}),
+      // Back from a draft (or a failed one) with changed notes and answers:
+      // the report is written again from them (the user's call, 2026-11-24).
+      ...(['draft', 'failed'].includes(o.status) ? { status: 'pending', failureReason: null } : {}),
     },
   })
   res.status(202).json(forObserver((await mine(o.id, me.id))!))
