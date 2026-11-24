@@ -3161,6 +3161,10 @@ export type SharedSelfEvalSummary = {
   sharedAt: string
   /** awaiting = no feedback from me since the teacher last shared it. */
   status: 'awaiting' | 'replied'
+  /** Shared (or shared again) since I last opened it. */
+  isNew?: boolean
+  /** My own Reviewed checkmark. */
+  reviewed?: boolean
 }
 
 export type SharedSelfEvalDetail = SharedSelfEvalSummary & {
@@ -3426,6 +3430,11 @@ export function getReceivedPlanReview(id: string): Promise<ReceivedPlanReview> {
 /** Everything the supervisor's Overview, My Teachers and Reports draw from. */
 export function getSupervisorWorkspace(): Promise<SupervisorWorkspace> {
   return request('/api/self-eval-shares/workspace')
+}
+
+/** The supervisor's own Reviewed checkmark on a shared Self Evaluation. */
+export function setSelfEvalReviewed(sessionId: string, reviewed: boolean): Promise<{ reviewed: boolean }> {
+  return request(`/api/self-eval-shares/${sessionId}/reviewed`, { method: 'PUT', body: JSON.stringify({ reviewed }) })
 }
 
 export function getSupervisedTeachers(): Promise<SupervisedTeacher[]> {

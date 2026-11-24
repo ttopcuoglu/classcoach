@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { SelfEvalReportView } from '../components/SelfEvalReportView'
 import { getSharedSelfEval, saveSelfEvalFeedback, type SharedSelfEvalDetail, type UserProfile } from '../lib/api'
-import { formatDate, lessonMeta, StatusChip } from './evaluations/common'
+import { formatDate, lessonMeta } from './evaluations/common'
 import { EvaluationsHome } from './evaluations/Workspace'
 
 // The supervisor's side of Self Evaluation sharing, in the School Workspace:
@@ -48,7 +48,7 @@ function EvaluationDetail({ sessionId, school }: { sessionId: string; school: st
 
   const back = (
     <Link to="/admin/evaluations" className="text-sm text-ink-soft hover:text-forest">
-      ← Supervisor workspace
+      ← Self Evaluations
     </Link>
   )
 
@@ -130,7 +130,7 @@ function FeedbackCard({
     <section className="rounded-2xl border border-hairline bg-white p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-heading text-lg font-bold text-forest">Your feedback to {data.teacherName}</h2>
-        <StatusChip status={data.status} />
+
       </div>
       {editing ? (
         <div className="mt-3 flex flex-col gap-2">

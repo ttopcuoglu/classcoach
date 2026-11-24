@@ -70,6 +70,8 @@ const SHARE_SELECT = {
   selfEvalFeedback: true,
   selfEvalFeedbackById: true,
   selfEvalFeedbackAt: true,
+  selfEvalSeenAt: true,
+  selfEvalReviewedAt: true,
   lessonContent: true,
   user: { select: { id: true, name: true, email: true, subjects: true, gradeLevels: true } },
 } as const
@@ -100,6 +102,10 @@ function summaryOf(s: ShareRow, viewerId: string) {
     sessionDate: s.sessionDate,
     sharedAt: s.selfEvalSharedAt,
     status: statusFor(s, viewerId),
+    // Shared (or shared again) since I last opened it.
+    isNew: s.selfEvalSeenAt == null || (s.selfEvalSharedAt != null && s.selfEvalSeenAt < s.selfEvalSharedAt),
+    // My own checkmark.
+    reviewed: s.selfEvalReviewedAt != null,
   }
 }
 
@@ -264,14 +270,30 @@ selfEvalSharesRouter.get('/:sessionId', async (req, res) => {
     res.status(404).json({ error: 'This Self Evaluation is not shared with you.' })
     return
   }
+  // Opened: no longer New on my Self Evaluations page.
+  await prisma.audioSession.update({ where: { id: session.id }, data: { selfEvalSeenAt: new Date() } })
   const mine = session.selfEvalFeedbackById === viewerId
   res.json({
     ...summaryOf(session, viewerId),
+    isNew: false,
     report,
     // Only my own feedback: a previous supervisor's words are the teacher's.
     feedback: mine ? session.selfEvalFeedback : null,
     feedbackAt: mine ? session.selfEvalFeedbackAt : null,
   })
+})
+
+// My "reviewed" checkmark on a shared Self Evaluation, a note to myself.
+selfEvalSharesRouter.put('/:sessionId/reviewed', async (req, res) => {
+  const viewerId = req.user!.userId
+  const session = await prisma.audioSession.findFirst({ where: { id: String(req.params.sessionId), ...visibleShareWhere(viewerId) }, select: { id: true } })
+  if (!session) {
+    res.status(404).json({ error: 'This Self Evaluation is not shared with you.' })
+    return
+  }
+  const reviewed = req.body?.reviewed === true
+  await prisma.audioSession.update({ where: { id: session.id }, data: { selfEvalReviewedAt: reviewed ? new Date() : null } })
+  res.json({ reviewed })
 })
 
 // Write (or clear, with an empty string) my feedback for the teacher.

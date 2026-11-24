@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import type { UserProfile } from '../lib/api'
 import { ADMIN_GROUP_LABEL, ADMIN_NAV, adminPageFor, adminPath, type AdminGroup, type AdminPage } from '../lib/adminNav'
+import { WORKSPACE_VIEWS_ON } from '../pages/evaluations/workspaceFlags'
 import {
   ChartBarIcon,
   ChatBubbleIcon,
@@ -247,7 +248,7 @@ export function AdminNav({ user, onPick }: { user: UserProfile | null; onPick?: 
 // (pages/evaluations/Workspace.tsx), told apart by ?view=.
 type SupervisorLink = { to: string; label: string; icon: IconComponent; active: (path: string, view: string | null) => boolean }
 
-const SUPERVISOR_GROUPS: { heading: string; links: SupervisorLink[] }[] = [
+const SUPERVISOR_GROUPS_ALL: { heading: string; links: SupervisorLink[] }[] = [
   {
     heading: 'Supervision',
     links: [
@@ -269,6 +270,16 @@ const SUPERVISOR_GROUPS: { heading: string; links: SupervisorLink[] }[] = [
     ],
   },
 ]
+
+// Overview, My Teachers and Reports are off for now (the user's call,
+// 2026-11-24); Self Evaluations opens /admin/evaluations instead, and a
+// shared Self Evaluation lights it.
+const SUPERVISOR_GROUPS = WORKSPACE_VIEWS_ON
+  ? SUPERVISOR_GROUPS_ALL
+  : SUPERVISOR_GROUPS_ALL.filter((g) => g.heading !== 'Supervision').map((g) => ({
+      ...g,
+      links: g.links.map((l) => (l.label === 'Self Evaluations' ? { ...l, to: '/admin/evaluations', active: (p: string) => p.startsWith('/admin/evaluations') } : l)),
+    }))
 
 function SupervisorNav({ onPick }: { onPick?: () => void }) {
   const location = useLocation()

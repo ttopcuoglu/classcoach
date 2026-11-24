@@ -163,6 +163,7 @@ test('the whole share lifecycle, and who can read what', async (t) => {
   assert.ok(shared.sharedAt)
   const list = JSON.parse((await call('/api/self-eval-shares', supervisor)).text) as { sessionId: string }[]
   assert.deepEqual(list.map((s) => s.sessionId), [ids.session])
+  assert.equal((list[0] as unknown as { isNew: boolean }).isNew, true, 'new until the supervisor opens it')
   const detail = await call(`/api/self-eval-shares/${ids.session}`, supervisor)
   assert.equal(detail.status, 200)
   assert.ok(detail.text.includes('My pairs talked off mic.'))
@@ -174,6 +175,13 @@ test('the whole share lifecycle, and who can read what', async (t) => {
   const inbox = JSON.parse((await call('/api/self-eval-shares', supervisor)).text) as { status: string; lessonTitle: string }[]
   assert.equal(inbox[0].status, 'awaiting')
   assert.ok(!JSON.stringify(inbox).includes(TRANSCRIPT_MARKER))
+
+  // Opened above, so no longer new; the Reviewed checkmark is the supervisor's alone.
+  const afterOpen = JSON.parse((await call('/api/self-eval-shares', supervisor)).text) as { isNew: boolean; reviewed: boolean }[]
+  assert.equal(afterOpen[0].isNew, false, 'opened: no longer new')
+  assert.equal((await call(`/api/self-eval-shares/${ids.session}/reviewed`, principal, put({ reviewed: true }))).status, 404, 'only the supervisor it is shared with')
+  assert.equal((await call(`/api/self-eval-shares/${ids.session}/reviewed`, supervisor, put({ reviewed: true }))).status, 200)
+  assert.equal((JSON.parse((await call('/api/self-eval-shares', supervisor)).text) as { reviewed: boolean }[])[0].reviewed, true)
   assert.equal((await call(`/api/self-eval-shares/${ids.unshared}/feedback`, supervisor, put({ feedback: 'x' }))).status, 404)
   assert.equal((await call(`/api/self-eval-shares/${ids.session}/feedback`, principal, put({ feedback: 'x' }))).status, 404)
   assert.equal((await call(`/api/self-eval-shares/${ids.session}/feedback`, supervisor, put({ feedback: 'Strong pairs work.' }))).status, 200)

@@ -4,6 +4,7 @@ import { RUBRIC_LEVEL_LOOKS_LIKE } from '../../components/RubricLevel'
 import {
   getSelfEvalReport,
   getSupervisorWorkspace,
+  setSelfEvalReviewed,
   RUBRIC_LEVEL_NAMES,
   type SelfEvalReport,
   type SupervisorWorkspace,
@@ -26,6 +27,7 @@ import {
   termOptions,
   type DateRange,
 } from './common'
+import { WORKSPACE_VIEWS_ON } from './workspaceFlags'
 
 // The supervisor's workspace in the School Workspace (from the user's
 // mockups, 2026-11-19): Overview, My Teachers and Reports (Danielson
@@ -117,7 +119,10 @@ function domainsLabel(s: WorkspaceShare): string {
 
 export function EvaluationsHome() {
   const [params, setParams] = useSearchParams()
-  const view: View = VIEWS.find((v) => v.key === params.get('view'))?.key ?? 'overview'
+  // Overview, My Teachers and Reports are switched off for now (the user's
+  // call, 2026-11-24): the page opens on Self Evaluations, with no tab bar.
+  const requested = VIEWS.find((v) => v.key === params.get('view'))?.key
+  const view: View = requested && (WORKSPACE_VIEWS_ON || requested === 'selfevals') ? requested : 'selfevals'
   const terms = termOptions()
   const term = terms.find((t) => t.key === params.get('term'))?.key ?? defaultTerm()
   const fromParam = params.get('from')
@@ -226,7 +231,7 @@ export function EvaluationsHome() {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 sm:px-8">
-      {tabs}
+      {WORKSPACE_VIEWS_ON && tabs}
       {error && <p className="text-sm text-terracotta-600">{error}</p>}
       {!error && !data && <p className="text-sm text-ink-soft">Loading...</p>}
       {body}
@@ -889,16 +894,26 @@ function EvidenceOverTime({
 }
 
 // ---- Self Evaluations: who has shared, and everything each one shared ----
-// Not limited to the period: from a teacher's first share to now.
+// Not limited to the period: from a teacher's first share to now. No
+// "awaiting feedback" here (the user's call, 2026-11-24): a share is New until
+// the supervisor opens it, and the supervisor can tick one Reviewed for
+// themselves.
+
+function NewBadge() {
+  return <span className="rounded-full bg-gold px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-forest">New</span>
+}
 
 function SelfEvaluationsView({ data, teacherId, setParam }: { data: SupervisorWorkspace; teacherId: string | null; setParam: SetParam }) {
+  // The checkmarks, changed here at once and saved behind.
+  const [reviewed, setReviewed] = useState<Record<string, boolean>>({})
+  const isReviewed = (s: WorkspaceShare) => reviewed[s.sessionId] ?? !!s.reviewed
   const sharers = data.teachers
     .map((t) => {
       const shares = data.shares.filter((s) => s.teacherId === t.teacherId).sort(byShared)
-      return { t, shares, awaiting: shares.filter((s) => s.status === 'awaiting').length }
+      return { t, shares, fresh: shares.filter((s) => s.isNew).length }
     })
     .filter((x) => x.shares.length > 0)
-    .sort((a, b) => (a.awaiting !== b.awaiting ? b.awaiting - a.awaiting : byShared(a.shares[0], b.shares[0])))
+    .sort((a, b) => (a.fresh !== b.fresh ? b.fresh - a.fresh : byShared(a.shares[0], b.shares[0])))
 
   const picked = teacherId ? sharers.find((x) => x.t.teacherId === teacherId) : null
   if (picked) {
@@ -916,7 +931,43 @@ function SelfEvaluationsView({ data, teacherId, setParam }: { data: SupervisorWo
           title={picked.t.teacherName}
           blurb={`${teacherMeta(picked.t) ? `${teacherMeta(picked.t)}. ` : ''}${picked.shares.length} Self ${picked.shares.length === 1 ? 'Evaluation' : 'Evaluations'} shared with you, newest first.`}
         />
-        <SharesTable title="Shared with you" rows={picked.shares} empty="Nothing shared yet." />
+        <section className="overflow-hidden rounded-2xl border border-hairline bg-white">
+          {picked.shares.map((s) => {
+            const done = isReviewed(s)
+            return (
+              <div
+                key={s.sessionId}
+                className={`flex flex-wrap items-center gap-4 border-b border-hairline/70 px-5 py-4 last:border-0 ${s.isNew ? 'border-l-4 border-l-gold bg-gold-tint/30' : ''}`}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-center gap-2 text-base text-ink">
+                    <span className={s.isNew ? 'font-semibold' : ''}>{s.lessonTitle}</span>
+                    {s.isNew && <NewBadge />}
+                  </p>
+                  <p className="mt-0.5 text-sm text-ink-soft">
+                    Taught {formatDate(s.sessionDate)} · shared {formatDate(s.sharedAt)} · {domainsLabel(s)}
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-ink">
+                  <input
+                    type="checkbox"
+                    checked={done}
+                    onChange={(e) => {
+                      const on = e.target.checked
+                      setReviewed((r) => ({ ...r, [s.sessionId]: on }))
+                      void setSelfEvalReviewed(s.sessionId, on).catch(() => setReviewed((r) => ({ ...r, [s.sessionId]: !on })))
+                    }}
+                    className="h-4 w-4 accent-forest"
+                  />
+                  Reviewed
+                </label>
+                <Link to={`/admin/evaluations/${s.sessionId}`} className="rounded-xl border border-hairline bg-white px-4 py-2 text-sm font-semibold text-forest hover:border-forest">
+                  Open
+                </Link>
+              </div>
+            )
+          })}
+        </section>
       </>
     )
   }
@@ -928,30 +979,29 @@ function SelfEvaluationsView({ data, teacherId, setParam }: { data: SupervisorWo
         <Empty>No teacher has shared a Self Evaluation with you yet. When one does, they appear here.</Empty>
       ) : (
         <section className="overflow-hidden rounded-2xl border border-hairline bg-white">
-          {sharers.map(({ t, shares, awaiting }) => (
-            <button
-              key={t.teacherId}
-              type="button"
-              onClick={() => setParam({ teacher: t.teacherId })}
-              className="flex w-full flex-wrap items-center gap-4 border-b border-hairline/70 px-5 py-4 text-left last:border-0 hover:bg-cream/40"
-            >
-              <Avatar name={t.teacherName} />
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-ink">{t.teacherName}</p>
-                <p className="text-sm text-ink-soft">
-                  {[teacherMeta(t), `${shares.length} shared`, `latest ${formatDate(shares[0].sharedAt)}`].filter(Boolean).join(' · ')}
-                </p>
-              </div>
-              {awaiting > 0 ? (
-                <span className="rounded-lg bg-gold-tint px-2.5 py-1.5 text-sm text-ink">{awaiting} awaiting</span>
-              ) : (
-                <span className="text-sm text-ink-soft">All replied</span>
-              )}
-              <span className="text-sm font-semibold text-forest" aria-hidden="true">
-                ›
-              </span>
-            </button>
-          ))}
+          {sharers.map(({ t, shares, fresh }) => {
+            const doneCount = shares.filter(isReviewed).length
+            return (
+              <button
+                key={t.teacherId}
+                type="button"
+                onClick={() => setParam({ teacher: t.teacherId })}
+                className={`flex w-full flex-wrap items-center gap-4 border-b border-hairline/70 px-5 py-4 text-left last:border-0 hover:bg-cream/40 ${fresh > 0 ? 'border-l-4 border-l-gold bg-gold-tint/30' : ''}`}
+              >
+                <Avatar name={t.teacherName} />
+                <div className="min-w-0 flex-1">
+                  <p className={`text-ink ${fresh > 0 ? 'font-bold' : 'font-semibold'}`}>{t.teacherName}</p>
+                  <p className="text-sm text-ink-soft">
+                    {[teacherMeta(t), `${shares.length} shared`, `latest ${formatDate(shares[0].sharedAt)}`, doneCount > 0 ? `${doneCount} reviewed` : null].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
+                {fresh > 0 && <span className="rounded-full bg-gold px-2.5 py-1 text-xs font-bold text-forest">{fresh} new</span>}
+                <span className="text-sm font-semibold text-forest" aria-hidden="true">
+                  ›
+                </span>
+              </button>
+            )
+          })}
         </section>
       )}
     </>

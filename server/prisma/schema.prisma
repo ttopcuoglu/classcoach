@@ -869,6 +869,12 @@ model AudioSession {
   selfEvalFeedback     String?
   selfEvalFeedbackById String?
   selfEvalFeedbackAt   DateTime?
+  // When the supervisor it is shared with last opened it: a share newer than
+  // this is "New" on their Self Evaluations page (2026-11-24).
+  selfEvalSeenAt       DateTime?
+  // The supervisor's own "reviewed" checkmark, a note to themselves; the
+  // teacher never sees it.
+  selfEvalReviewedAt   DateTime?
 
   // The Hard Look: the least generous honest reading of the same evidence
   // (see lib/hardLook.ts's HardLookResult). Null until the teacher asks for

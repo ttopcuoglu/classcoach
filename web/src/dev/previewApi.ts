@@ -2491,6 +2491,11 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
       lessons: [...lessons].reverse(),
     }
   }
+  const sharedReviewed = path.match(/^\/api\/self-eval-shares\/([A-Za-z0-9-]+)\/reviewed$/)
+  if (sharedReviewed && method === 'PUT') {
+    previewReviewedShares[sharedReviewed[1]] = body.reviewed === true
+    return { reviewed: body.reviewed === true }
+  }
   const sharedFeedback = path.match(/^\/api\/self-eval-shares\/([A-Za-z0-9-]+)\/feedback$/)
   if (sharedFeedback && method === 'PUT') {
     const text = String(body.feedback ?? '').trim()
@@ -2499,6 +2504,7 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
   }
   const sharedOne = path.match(/^\/api\/self-eval-shares\/([A-Za-z0-9-]+)$/)
   if (sharedOne) {
+    previewSeenShares.add(sharedOne[1])
     const lens = previewScoredLens()
     lens.components[5].teacherNote = 'Most of my reasoning questions were in pairs, away from the microphone.'
     const summary = previewShareSummaries().find((x) => x.sessionId === sharedOne[1]) ?? previewShareSummaries()[0]
@@ -2915,6 +2921,9 @@ const previewShareFeedback: Record<string, { text: string; at: string } | null> 
   'preview-shared-2': { text: 'Your source comparison was strong. Let us talk about the discussion piece on Thursday.', at: daysAgo(3) },
 }
 
+const previewSeenShares = new Set<string>()
+const previewReviewedShares: Record<string, boolean> = {}
+
 function previewShareSummaries() {
   const base = [
     { sessionId: 'preview-shared-1', teacherId: 'u4', teacherName: 'Maya Chen', lessonTitle: 'Salt, sugar, and conductivity', classSubject: 'Science', period: '3', gradeLevel: '8th', sessionDate: daysAgo(2), sharedAt: daysAgo(1) },
@@ -2936,6 +2945,9 @@ function previewShareSummaries() {
   return base.map((x) => ({
     ...x,
     status: previewShareFeedback[x.sessionId] || x.sessionId === 'preview-shared-3' || x.sessionId.startsWith('preview-shared-m') ? ('replied' as const) : ('awaiting' as const),
+    // The two newest are New until opened; the oldest few are ticked Reviewed.
+    isNew: (x.sessionId === 'preview-shared-1' || x.sessionId === 'preview-shared-2') && !previewSeenShares.has(x.sessionId),
+    reviewed: previewReviewedShares[x.sessionId] ?? ['preview-shared-m6', 'preview-shared-m7'].includes(x.sessionId),
   }))
 }
 
