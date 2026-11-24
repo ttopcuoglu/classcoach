@@ -13,6 +13,7 @@
 // `import.meta.env.DEV`, which the build replaces with `false`.
 
 import { focusLineKey } from '../lib/focusLine'
+import { OBSERVATION_QUESTIONS } from '../lib/observationQuestions'
 
 type Json = Record<string, unknown>
 
@@ -2668,9 +2669,11 @@ function previewObservationOut(o: PreviewObservation) {
 function previewObservationReport(o: Pick<PreviewObservation, 'answers' | 'notes' | 'hasRecording'>) {
   const env = 'Domain 2: Learning Environments'
   const exp = 'Domain 3: Learning Experiences'
-  const answer = (code: string, question: string, labels: Record<string, string>) => {
-    const key = o.answers?.[code]
-    return key && labels[key] ? { question, answer: labels[key] } : null
+  // The five questions: a component's answer is its question's, if it has one.
+  const answer = (code: string, ..._legacy: unknown[]) => {
+    const q = OBSERVATION_QUESTIONS.find((x) => x.codes.includes(code))
+    const opt = q?.options.find((x) => x.key === o.answers?.[q.id])
+    return q && opt ? { question: q.text, answer: opt.label } : null
   }
   const notesFor = (code: string) => (o.notes ?? []).filter((n) => n.code === code)
   const rec = (t: number, kind: string, text: string) => (o.hasRecording ? [{ timestampSec: t, kind, text }] : [])
@@ -2718,7 +2721,7 @@ const previewObservations: PreviewObservation[] = (() => {
     status,
     sentAt,
     failureReason: null,
-    answers: { '2a': 'warm', '2b': 'most', '2c': 'mostly', '2d': 'cues', '2e': 'yes', '3a': 'clearly', '3b': 'most', '3c': 'most', '3d': 'some', '3e': 'no_need' },
+    answers: { management: 'some', climate: 'warm', understanding: 'some', physical: 'yes', engagement: 'most' },
     notes,
     closingNote: null,
     answeredAt: daysAgo(3),

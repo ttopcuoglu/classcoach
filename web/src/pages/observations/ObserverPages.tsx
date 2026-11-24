@@ -21,7 +21,7 @@ import {
   type ObservationStatus,
   type ObservationSummary,
 } from '../../lib/api'
-import { OBSERVATION_QUESTIONS } from '../../lib/observationQuestions'
+import { NOTE_PROMPTS, NOTE_TAGS, OBSERVATION_QUESTIONS } from '../../lib/observationQuestions'
 import { PageHeader } from '../evaluations/common'
 
 // A supervisor's classroom observations (School Workspace > Observations):
@@ -431,21 +431,46 @@ function ObservationFlow({ id }: { id: string }) {
 
 // ---- recording, with notes ----
 
-const COMPONENT_TAGS = OBSERVATION_QUESTIONS.map((q) => ({ code: q.code, label: `${q.code} · ${q.component}` }))
+const TAG_LABEL = Object.fromEntries(NOTE_TAGS.map((t) => [t.code, t.label]))
 
-function NotesEditor({ notes, onNotes, elapsed }: { notes: ObservationNote[]; onNotes: (n: ObservationNote[]) => void; elapsed: () => number }) {
+/// Notes while observing and after Stop. With `prompts`, starters for what
+/// the five questions don't ask (2b, 3a, 3b, 3e): each begins a note already
+/// tagged with its component.
+function NotesEditor({ notes, onNotes, elapsed, prompts = false }: { notes: ObservationNote[]; onNotes: (n: ObservationNote[]) => void; elapsed: () => number; prompts?: boolean }) {
   const [text, setText] = useState('')
   const [code, setCode] = useState('')
+  const field = useRef<HTMLInputElement | null>(null)
+  const prompt = NOTE_PROMPTS.find((p) => p.code === code)
   const add = () => {
     const t = text.trim()
     if (!t) return
     onNotes([...notes, { atSec: Math.round(elapsed()), text: t, code: code || null }].sort((a, b) => a.atSec - b.atSec))
     setText('')
+    setCode('')
   }
   return (
     <div className="flex flex-col gap-3">
+      {prompts && (
+        <div className="flex flex-wrap gap-2">
+          {NOTE_PROMPTS.map((p) => (
+            <button
+              key={p.code}
+              type="button"
+              aria-pressed={code === p.code}
+              onClick={() => {
+                setCode(p.code)
+                field.current?.focus()
+              }}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${code === p.code ? 'bg-forest text-cream' : 'border border-hairline bg-white text-forest hover:border-forest'}`}
+            >
+              + {p.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
+          ref={field}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
@@ -454,13 +479,13 @@ function NotesEditor({ notes, onNotes, elapsed }: { notes: ObservationNote[]; on
               add()
             }
           }}
-          placeholder="What you see: the room, the walls, groups, student work"
+          placeholder={prompt?.placeholder ?? 'What you see: the room, the walls, groups, student work'}
           className={input}
           maxLength={600}
         />
-        <select value={code} onChange={(e) => setCode(e.target.value)} className="rounded-xl border border-hairline bg-white px-3 py-2.5 text-sm text-ink focus:border-forest focus:outline-none" aria-label="Component (optional)">
-          <option value="">No component</option>
-          {COMPONENT_TAGS.map((c) => (
+        <select value={code} onChange={(e) => setCode(e.target.value)} className="rounded-xl border border-hairline bg-white px-3 py-2.5 text-sm text-ink focus:border-forest focus:outline-none" aria-label="About (optional)">
+          <option value="">About anything</option>
+          {NOTE_TAGS.map((c) => (
             <option key={c.code} value={c.code}>
               {c.label}
             </option>
@@ -478,7 +503,7 @@ function NotesEditor({ notes, onNotes, elapsed }: { notes: ObservationNote[]; on
               <span>
                 <span className="text-xs text-ink-soft">
                   {clock(n.atSec)}
-                  {n.code ? ` · ${n.code}` : ''} ·{' '}
+                  {n.code ? ` · ${TAG_LABEL[n.code] ?? n.code}` : ''} ·{' '}
                 </span>
                 {n.text}
               </span>
@@ -702,7 +727,9 @@ function Questions({
 }) {
   const [details, setDetails] = useState<ObservationDetailsValue>(() => detailsFrom(observation))
   const [answers, setAnswers] = useState<Record<string, string>>(observation.answers ?? {})
-  const [closing, setClosing] = useState(observation.closingNote ?? '')
+  // The separate closing box is gone (2026-11-24): a note does the same job.
+  // An older observation keeps the closing note it already has.
+  const closing = observation.closingNote ?? ''
   const named = details.teacher.name.trim().length > 0
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -723,25 +750,24 @@ function Questions({
       <ObservationDetails value={details} onChange={setDetails} observedAt={observation.observedAt} />
       <section className="flex flex-col gap-5 rounded-2xl border border-hairline bg-white p-6">
         <div>
-          <h2 className="font-heading text-xl font-bold text-forest">What you saw</h2>
-          <p className="mt-1 text-sm text-ink-soft">Ten quick questions about what a recording can&rsquo;t capture. {answered} of 10 answered.</p>
+          <h2 className="font-heading text-xl font-bold text-forest">Quick questions</h2>
+          <p className="mt-1 text-sm text-ink-soft">What a recording can&rsquo;t capture. {answered} of {OBSERVATION_QUESTIONS.length} answered.</p>
         </div>
         {OBSERVATION_QUESTIONS.map((q, i) => (
-          <fieldset key={q.code} className="flex flex-col gap-2 border-t border-hairline/70 pt-4 first-of-type:border-0 first-of-type:pt-0">
+          <fieldset key={q.id} className="flex flex-col gap-2 border-t border-hairline/70 pt-4 first-of-type:border-0 first-of-type:pt-0">
             <legend className="text-sm text-ink">
               <span className="mr-2 font-semibold text-ink-soft">{i + 1}.</span>
-              <span className="mr-2 rounded-md bg-gold px-1.5 py-0.5 text-xs font-bold text-forest">{q.code}</span>
-              <span className="font-semibold">{q.component}:</span> {q.text}
+              <span className="font-semibold">{q.title}:</span> {q.text}
             </legend>
             <div className="mt-1 flex flex-wrap gap-2">
               {q.options.map((opt) => {
-                const on = answers[q.code] === opt.key
+                const on = answers[q.id] === opt.key
                 return (
                   <button
                     key={opt.key}
                     type="button"
                     aria-pressed={on}
-                    onClick={() => setAnswers((a) => ({ ...a, [q.code]: opt.key }))}
+                    onClick={() => setAnswers((a) => ({ ...a, [q.id]: opt.key }))}
                     className={`rounded-xl px-3.5 py-2 text-sm font-medium ${on ? 'bg-forest text-cream' : 'border border-hairline bg-white text-ink hover:border-forest'}`}
                   >
                     {opt.label}
@@ -751,15 +777,14 @@ function Questions({
             </div>
           </fieldset>
         ))}
-        <label className="flex flex-col gap-1.5 border-t border-hairline/70 pt-4 text-sm font-semibold text-forest">
-          Anything the recording couldn&rsquo;t hear? <span className="font-normal text-ink-soft">Optional. Use numbers, not student names.</span>
-          <textarea value={closing} onChange={(e) => setClosing(e.target.value)} rows={3} maxLength={1500} className={input} />
-        </label>
       </section>
 
       <section className="flex flex-col gap-3 rounded-2xl border border-hairline bg-white p-6">
-        <h2 className="font-heading text-lg font-bold text-forest">Your notes</h2>
-        <NotesEditor notes={notes} onNotes={onNotes} elapsed={() => lastNote} />
+        <div>
+          <h2 className="font-heading text-xl font-bold text-forest">Observer notes</h2>
+          <p className="mt-1 text-sm text-ink-soft">Notes you took while recording, and anything else you saw. Tap a topic the questions don&rsquo;t ask about to start a note on it.</p>
+        </div>
+        <NotesEditor notes={notes} onNotes={onNotes} elapsed={() => lastNote} prompts />
       </section>
 
       <section className="flex flex-col gap-3 rounded-2xl border border-hairline bg-white p-6">

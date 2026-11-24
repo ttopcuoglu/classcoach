@@ -15,7 +15,7 @@ const lines = file.lessons.find((l) => l.key === lesson.key)!.lines
 const segments = buildSegments(lesson, lines)
 const utterances: ObservationUtterance[] = segments.map((s, i) => ({ speaker: lines[i].s === 'T' ? 0 : Number(lines[i].s.slice(1)), startSec: s.startSec, endSec: s.endSec, text: s.text }))
 const evidence = observationEvidence(utterances)
-const answers = { '2a': 'warm', '2b': 'most', '2c': 'mostly', '2d': 'cues', '2e': 'yes', '3a': 'partly', '3b': 'most', '3c': 'most', '3d': 'some', '3e': 'sometimes' }
+const answers = { management: 'some', climate: 'warm', understanding: 'some', physical: 'yes', engagement: 'most' }
 const notes = [
   { atSec: 60, text: 'Objective on the board; vinegar and baking soda trays already on each table.', code: '2c' },
   { atSec: 400, text: '5 of 7 tables recording observations; back table chatting about weekend.', code: '3c' },

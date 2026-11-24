@@ -13,130 +13,81 @@ import { extractTag } from './extractTag.ts'
 import { buildRubricEvidence, RUBRIC_FRAMEWORKS, RUBRIC_LEVEL_NAMES, stripMomentReferences, type RubricEvidenceItem, type RubricLevel } from './rubricLens.ts'
 import type { PlanSection, PlanningComponent } from './selfEvalReport.ts'
 
-// ---- the ten questions ----
-// One per component of Domains 2 and 3, each about what a recording can't
-// capture. Mirrored in web/src/lib/observationQuestions.ts.
+// ---- the five questions ----
+// The user's five (2026-11-24), each about what a recording can't capture,
+// every one with "Not observed". A question can speak to more than one
+// component (classroom management is 2c and 2d). What they leave out (2b,
+// 3a, 3b, 3e) comes from the recording and the observer's notes. Mirrored in
+// web/src/lib/observationQuestions.ts.
 
 export type ObservationOption = { key: string; label: string; /** Saw nothing to judge: no evidence from this answer. */ noEvidence?: boolean }
-export type ObservationQuestion = { code: string; text: string; options: ObservationOption[] }
+export type ObservationQuestion = { id: string; codes: string[]; title: string; text: string; options: ObservationOption[] }
+
+const NOT_OBSERVED: ObservationOption = { key: 'not_observed', label: 'Not observed', noEvidence: true }
 
 export const OBSERVATION_QUESTIONS: ObservationQuestion[] = [
   {
-    code: '2a',
-    text: 'How did students treat each other and the teacher, including body language and pair work?',
-    options: [
-      { key: 'warm', label: 'Warm and respectful' },
-      { key: 'mostly', label: 'Mostly respectful' },
-      { key: 'unkind', label: 'Some unkind or dismissive moments' },
-    ],
+    id: 'management',
+    codes: ['2c', '2d'],
+    title: 'Classroom management',
+    text: 'How smoothly did routines, transitions, and student behavior support learning?',
+    options: [{ key: 'smooth', label: 'Smoothly' }, { key: 'some', label: 'Some interruptions' }, { key: 'frequent', label: 'Frequent interruptions' }, NOT_OBSERVED],
   },
   {
-    code: '2b',
-    text: 'Did students show effort and care about getting it right (sticking with hard parts, revising work)?',
-    options: [
-      { key: 'most', label: 'Most students' },
-      { key: 'some', label: 'Some students' },
-      { key: 'few', label: 'Few students' },
-    ],
+    id: 'climate',
+    codes: ['2a'],
+    title: 'Classroom climate',
+    text: 'How respectful and supportive were interactions among students and with the teacher?',
+    options: [{ key: 'warm', label: 'Warm and respectful' }, { key: 'mostly', label: 'Mostly respectful' }, { key: 'unkind', label: 'Some unkind or dismissive interactions' }, NOT_OBSERVED],
   },
   {
-    code: '2c',
-    text: 'How did routines, transitions and materials run?',
-    options: [
-      { key: 'smooth', label: 'Smoothly, students ran them' },
-      { key: 'mostly', label: 'Mostly smooth, some lost time' },
-      { key: 'lost', label: 'Frequent lost time' },
-    ],
+    id: 'understanding',
+    codes: ['3d'],
+    title: 'Student understanding',
+    text: 'Among the students whose work or responses you checked, how many showed understanding of the lesson?',
+    options: [{ key: 'most', label: 'Most' }, { key: 'some', label: 'Some' }, { key: 'few', label: 'Few' }, NOT_OBSERVED],
   },
   {
-    code: '2d',
-    text: 'How did students respond to expectations, including nonverbal cues?',
-    options: [
-      { key: 'self', label: 'Students managed themselves' },
-      { key: 'cues', label: 'Responded quickly to cues' },
-      { key: 'repeated', label: 'Needed repeated redirection' },
-    ],
+    id: 'physical',
+    codes: ['2e'],
+    title: 'Physical organization',
+    text: 'Did the room layout, visibility, and access to materials support student participation?',
+    options: [{ key: 'yes', label: 'Yes' }, { key: 'partly', label: 'Partly' }, { key: 'no', label: 'No' }, NOT_OBSERVED],
   },
   {
-    code: '2e',
-    text: 'Did the room support the lesson (layout, visibility, access to materials, walls)?',
-    options: [
-      { key: 'yes', label: 'Yes, clearly' },
-      { key: 'partly', label: 'Partly' },
-      { key: 'no', label: 'Not really' },
-    ],
-  },
-  {
-    code: '3a',
-    text: 'Ask one or two students: “What are you learning, and why?” Could they explain it?',
-    options: [
-      { key: 'clearly', label: 'Clearly' },
-      { key: 'partly', label: 'Partly' },
-      { key: 'no', label: 'Not really' },
-      { key: 'not_asked', label: 'I didn’t ask', noEvidence: true },
-    ],
-  },
-  {
-    code: '3b',
-    text: 'In pairs or groups, were students discussing the content with each other?',
-    options: [
-      { key: 'most', label: 'Most groups' },
-      { key: 'some', label: 'Some groups' },
-      { key: 'few', label: 'Few groups' },
-      { key: 'none', label: 'No pair or group work', noEvidence: true },
-    ],
-  },
-  {
-    code: '3c',
-    text: 'About how many students were actively thinking and working?',
-    options: [
-      { key: 'all', label: 'All or almost all' },
-      { key: 'most', label: 'Most' },
-      { key: 'half', label: 'About half' },
-      { key: 'few', label: 'Few' },
-    ],
-  },
-  {
-    code: '3d',
-    text: 'From the student work and checks you saw (whiteboards, exit tickets, circulating), how many students were getting it?',
-    options: [
-      { key: 'most', label: 'Most' },
-      { key: 'some', label: 'Some' },
-      { key: 'few', label: 'Few' },
-      { key: 'not_seen', label: 'I didn’t see student work', noEvidence: true },
-    ],
-  },
-  {
-    code: '3e',
-    text: 'When students struggled or finished early, did they get help or a next step?',
-    options: [
-      { key: 'yes', label: 'Yes, adjusted for students or groups' },
-      { key: 'sometimes', label: 'Sometimes' },
-      { key: 'no', label: 'No' },
-      { key: 'no_need', label: 'There was no need', noEvidence: true },
-    ],
+    id: 'engagement',
+    codes: ['3c'],
+    title: 'Student engagement',
+    text: 'About how many students were actively participating in the learning task?',
+    options: [{ key: 'all', label: 'All or almost all' }, { key: 'most', label: 'Most' }, { key: 'half', label: 'About half' }, { key: 'few', label: 'Few' }, NOT_OBSERVED],
   },
 ]
+
+/// The question that speaks to a component, if any.
+export function questionFor(code: string): ObservationQuestion | null {
+  return OBSERVATION_QUESTIONS.find((q) => q.codes.includes(code)) ?? null
+}
 
 export const OBSERVATION_NOTE_MAX = 600
 export const OBSERVATION_NOTES_MAX = 60
 export const OBSERVATION_CLOSING_MAX = 1500
 export const OBSERVATION_COMMENTS_MAX = 3000
 
-/// Only answers to the ten questions, each one of its own options.
+/// Only answers to the five questions (keyed by question id), each one of its own options.
 export function readAnswers(raw: unknown): Record<string, string> {
   const out: Record<string, string> = {}
   if (!raw || typeof raw !== 'object') return out
   for (const q of OBSERVATION_QUESTIONS) {
-    const v = (raw as Record<string, unknown>)[q.code]
-    if (typeof v === 'string' && q.options.some((o) => o.key === v)) out[q.code] = v
+    const v = (raw as Record<string, unknown>)[q.id]
+    if (typeof v === 'string' && q.options.some((o) => o.key === v)) out[q.id] = v
   }
   return out
 }
 
 export type ObservationNote = { atSec: number; text: string; code: string | null }
 
-const CODES = new Set(OBSERVATION_QUESTIONS.map((q) => q.code))
+// Notes can be tagged with any component of Domains 2 and 3, asked about or not.
+const CODES = new Set(['2a', '2b', '2c', '2d', '2e', '3a', '3b', '3c', '3d', '3e'])
 
 export function readNotes(raw: unknown): ObservationNote[] {
   if (!Array.isArray(raw)) return []
@@ -245,9 +196,9 @@ export function buildObservationPrompt(input: {
   const defs = componentDefs()
   const levelWords = Object.values(RUBRIC_LEVEL_NAMES).map((w) => w.toLowerCase()).join(', ')
   const answerLines = OBSERVATION_QUESTIONS.map((q) => {
-    const key = input.answers[q.code]
+    const key = input.answers[q.id]
     const option = q.options.find((o) => o.key === key)
-    return `${q.code} — "${q.text}" Observer's answer: ${option ? option.label : 'not answered'}`
+    return `${q.codes.join(' and ')} (${q.title}) — "${q.text}" Observer's answer: ${option ? option.label : 'not answered'}`
   }).join('\n')
   const noteLines = input.notes.map((n, i) => `N${i + 1} (${clock(n.atSec)}${n.code ? `, tagged ${n.code}` : ''}) ${n.text}`).join('\n')
   const lesson = [input.context.grade ? `grade ${input.context.grade}` : null, input.context.subject, input.context.lessonTitle ? `"${input.context.lessonTitle}"` : null].filter(Boolean).join(' ')
@@ -256,7 +207,7 @@ export function buildObservationPrompt(input: {
 ${lesson ? `\nThe lesson: ${lesson}${input.context.durationSec ? `, observed for about ${Math.max(1, Math.round(input.context.durationSec / 60))} minutes` : ''}.\n` : ''}
 Your sources, and what each can show:
 - RECORDING: numbered moments [1], [2]... are exact quotes from an automatic transcript. They show what was said: questions, explanations, directions, feedback, redirections. The recorder was the supervisor's device, so quiet students and pair talk are often missing, and who is the teacher was guessed from the most frequent voice.
-- OBSERVED: the supervisor's answer to one question per component, about what audio can't capture.
+- OBSERVED: the supervisor's answers to five questions about what audio can't capture. Classroom management speaks to both 2c and 2d. 2b, 3a, 3b and 3e have no question: for those, rely on the recording and the notes.
 - NOTES: what the supervisor wrote while observing, numbered N1, N2..., with the minute they were written.
 - CLOSING NOTE: anything else the supervisor saw.
 ${input.plan ? '- PLAN: the teacher\'s lesson plan, used here only to compare what was planned with what happened.\n' : ''}
@@ -264,7 +215,8 @@ How to weigh them:
 - For what can only be seen (2a body language and peer interactions, 2c routines and materials, 2d nonverbal behavior, 2e the room, 3c who was working, 3d student work), the supervisor's answer and notes carry the most weight.
 - For what can be heard (3a explanations, 3b questioning, 3d spoken checks and feedback), the recording carries the most weight, with the supervisor's answer adding what audio missed.
 - When the recording and what the supervisor saw point different ways, do not average them. Say so in <disagreement> in one sentence, and lean the level toward the source that can actually see or hear that part of the component.
-- An answer such as "I didn't ask", "No pair or group work", "I didn't see student work" or "There was no need" is not evidence either way.
+- "Not observed" is not evidence either way.
+- For 3b, pair and group talk rarely reaches the microphone: a quiet recording is not evidence that students weren't discussing. Use the notes when they describe it.
 
 The levels, judged on this one lesson:
 1 ${RUBRIC_LEVEL_NAMES[1]}: what was seen or heard works against this component.
@@ -280,7 +232,7 @@ Rules:
 The components:
 ${defs.map((d) => `${d.code} ${d.name}: from audio, look only at ${d.listensFor}.`).join('\n')}
 
-OBSERVED (one answer per component):
+OBSERVED (the five questions):
 ${answerLines}
 
 NOTES:
@@ -347,8 +299,8 @@ export function parseObservationReport(
   const components: ObservationComponent[] = []
   for (const def of componentDefs()) {
     const block = blocks.get(def.code)
-    const question = OBSERVATION_QUESTIONS.find((q) => q.code === def.code)!
-    const option = question.options.find((o) => o.key === input.answers[def.code])
+    const question = questionFor(def.code)
+    const option = question?.options.find((o) => o.key === input.answers[question.id])
     const recording = block ? parseRefs(extractTag(block, 'recording'), '', input.items.length).map((i) => input.items[i]) : []
     const notes = block ? parseRefs(extractTag(block, 'notes'), 'N', input.notes.length).map((i) => input.notes[i]) : []
     // A note the supervisor tagged with this component always sits with it.
@@ -364,7 +316,7 @@ export function parseObservationReport(
       suggestedLevel: level,
       level,
       reason: noneToNull(block ? extractTag(block, 'reason') : null) ?? 'There was too little from the recording, your answers or your notes to judge this component.',
-      observed: option ? { question: question.text, answer: option.label } : null,
+      observed: question && option ? { question: question.text, answer: option.label } : null,
       notes,
       recording,
       disagreement: block ? noneToNull(extractTag(block, 'disagreement')) : null,

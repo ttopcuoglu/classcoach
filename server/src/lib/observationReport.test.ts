@@ -11,16 +11,15 @@ import {
   readNotes,
 } from './observationReport.ts'
 
-test('ten questions, one per component of Domains 2 and 3', () => {
-  assert.deepEqual(
-    OBSERVATION_QUESTIONS.map((q) => q.code),
-    ['2a', '2b', '2c', '2d', '2e', '3a', '3b', '3c', '3d', '3e'],
-  )
+test('the five questions, each with Not observed; management speaks to 2c and 2d', () => {
+  assert.deepEqual(OBSERVATION_QUESTIONS.map((q) => q.id), ['management', 'climate', 'understanding', 'physical', 'engagement'])
+  assert.deepEqual(OBSERVATION_QUESTIONS.flatMap((q) => q.codes).sort(), ['2a', '2c', '2d', '2e', '3c', '3d'])
+  assert.ok(OBSERVATION_QUESTIONS.every((q) => q.options.some((o) => o.key === 'not_observed' && o.noEvidence)))
   assert.deepEqual(componentDefs().map((d) => d.code), ['2a', '2b', '2c', '2d', '2e', '3a', '3b', '3c', '3d', '3e'])
 })
 
 test('only real answers to real questions are kept', () => {
-  assert.deepEqual(readAnswers({ '2a': 'warm', '3b': 'made-up', '9z': 'most', '3c': 'most' }), { '2a': 'warm', '3c': 'most' })
+  assert.deepEqual(readAnswers({ climate: 'warm', engagement: 'made-up', '2a': 'warm', management: 'not_observed' }), { climate: 'warm', management: 'not_observed' })
   assert.deepEqual(readAnswers(null), {})
 })
 
@@ -72,7 +71,7 @@ test('a level needs a source; tagged notes stay with their component; references
     { kind: 'Student response', timestampSec: 33, text: 'Because the salt breaks into charged pieces.' },
   ]
   const notes = [{ atSec: 200, text: 'Materials took four minutes to hand out', code: null }, { atSec: 400, text: 'Word wall current', code: '2e' }]
-  const report = parseObservationReport(REPLY, { items, answers: { '2a': 'warm', '3b': 'most', '3a': 'not_asked' }, notes, recordingMissing: false, planning: null })
+  const report = parseObservationReport(REPLY, { items, answers: { climate: 'warm', management: 'smooth', understanding: 'not_observed' }, notes, recordingMissing: false, planning: null })
   assert.ok(report)
   const by = Object.fromEntries(report!.components.map((c) => [c.code, c]))
   assert.equal(by['2a'].level, 3, 'an answer is evidence')
@@ -86,7 +85,11 @@ test('a level needs a source; tagged notes stay with their component; references
   assert.ok(!/moment 1/.test(by['3a'].reason))
   assert.equal(by['3b'].disagreement, 'The audio heard little pair talk, but you saw most groups discussing.')
   assert.equal(by['3c'].level, null, 'a component the model skipped is not enough evidence')
-  assert.equal(by['3b'].observed?.answer, 'Most groups')
+  assert.equal(by['3b'].observed, null, '3b has no question')
+  assert.equal(by['2d'].observed?.answer, 'Smoothly', 'one management answer feeds both 2c and 2d')
+  assert.equal(by['2d'].level, 3)
+  assert.equal(by['3d'].observed?.answer, 'Not observed')
+  assert.equal(by['3d'].level, null, 'Not observed is no evidence')
   assert.equal(report!.planVsLesson, null)
 })
 
@@ -97,14 +100,14 @@ test('a reply missing most components is refused', () => {
 test('the prompt carries the answers, notes and plan, and says when there is no recording', () => {
   const prompt = buildObservationPrompt({
     evidence: { items: [], facts: [] },
-    answers: { '3c': 'half' },
+    answers: { engagement: 'half' },
     notes: [{ atSec: 125, text: 'Back table off task', code: '3c' }],
     closingNote: 'Fire drill cut the end short.',
     plan: [{ ref: 'Objective', text: 'Students will explain conductivity.' }],
     context: { subject: 'Science', grade: '8th', lessonTitle: 'Conductivity', durationSec: 1500 },
     sharedRules: '',
   })
-  assert.match(prompt, /3c — .* Observer's answer: About half/)
+  assert.match(prompt, /3c \(Student engagement\) — .* Observer's answer: About half/)
   assert.match(prompt, /N1 \(2:05, tagged 3c\) Back table off task/)
   assert.match(prompt, /Fire drill cut the end short/)
   assert.match(prompt, /\(1\) Objective: Students will explain conductivity/)
