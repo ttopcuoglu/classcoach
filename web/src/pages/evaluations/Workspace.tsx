@@ -34,13 +34,16 @@ import {
 // holds lessons teachers chose to share with this supervisor; the period
 // filter is applied here, by the date the lesson was taught.
 
-type View = 'overview' | 'teachers' | 'reports'
+type View = 'overview' | 'teachers' | 'selfevals' | 'reports'
 type ReportKey = 'danielson' | 'strengths' | 'content' | 'time'
 type Teacher = SupervisorWorkspace['teachers'][number]
 
 const VIEWS: { key: View; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'teachers', label: 'My Teachers' },
+  // Every teacher who has shared a Self Evaluation with me, and each one's
+  // shares from the start (the user's call, 2026-11-24).
+  { key: 'selfevals', label: 'Self Evaluations' },
   { key: 'reports', label: 'Reports' },
 ]
 
@@ -202,6 +205,7 @@ export function EvaluationsHome() {
   let body: ReactNode = null
   if (data && view === 'overview') body = <OverviewView data={data} inPeriod={inPeriod} period={period} list={params.get('list') === 'all' ? 'all' : 'awaiting'} setParam={setParam} />
   if (data && view === 'teachers' && !teacherId) body = <TeachersView data={data} inPeriod={inPeriod} period={period} setParam={setParam} />
+  if (data && view === 'selfevals') body = <SelfEvaluationsView data={data} teacherId={teacherId} setParam={setParam} />
   if (data && view === 'teachers' && teacherId) body = <TeacherHistory data={data} teacherId={teacherId} inPeriod={inPeriod} range={range} period={period} setParam={setParam} />
   if (data && view === 'reports' && !report) body = <ReportsHub period={period} setParam={setParam} />
   if (data && view === 'reports' && report) {
@@ -879,6 +883,76 @@ function EvidenceOverTime({
             )
           })}
         </>
+      )}
+    </>
+  )
+}
+
+// ---- Self Evaluations: who has shared, and everything each one shared ----
+// Not limited to the period: from a teacher's first share to now.
+
+function SelfEvaluationsView({ data, teacherId, setParam }: { data: SupervisorWorkspace; teacherId: string | null; setParam: SetParam }) {
+  const sharers = data.teachers
+    .map((t) => {
+      const shares = data.shares.filter((s) => s.teacherId === t.teacherId).sort(byShared)
+      return { t, shares, awaiting: shares.filter((s) => s.status === 'awaiting').length }
+    })
+    .filter((x) => x.shares.length > 0)
+    .sort((a, b) => (a.awaiting !== b.awaiting ? b.awaiting - a.awaiting : byShared(a.shares[0], b.shares[0])))
+
+  const picked = teacherId ? sharers.find((x) => x.t.teacherId === teacherId) : null
+  if (picked) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setParam({ teacher: null })}
+          className="inline-flex w-fit items-center gap-2 rounded-xl border border-hairline bg-white px-4 py-2.5 text-sm font-semibold text-forest hover:border-forest"
+        >
+          <span aria-hidden="true">←</span> Self Evaluations
+        </button>
+        <PageHeader
+          crumb="Self Evaluations"
+          title={picked.t.teacherName}
+          blurb={`${teacherMeta(picked.t) ? `${teacherMeta(picked.t)}. ` : ''}${picked.shares.length} Self ${picked.shares.length === 1 ? 'Evaluation' : 'Evaluations'} shared with you, newest first.`}
+        />
+        <SharesTable title="Shared with you" rows={picked.shares} empty="Nothing shared yet." />
+      </>
+    )
+  }
+
+  return (
+    <>
+      <PageHeader crumb="Self Evaluations" title="Self Evaluations" blurb="Teachers who have shared a Self Evaluation with you. Open one to see everything they have shared." />
+      {sharers.length === 0 ? (
+        <Empty>No teacher has shared a Self Evaluation with you yet. When one does, they appear here.</Empty>
+      ) : (
+        <section className="overflow-hidden rounded-2xl border border-hairline bg-white">
+          {sharers.map(({ t, shares, awaiting }) => (
+            <button
+              key={t.teacherId}
+              type="button"
+              onClick={() => setParam({ teacher: t.teacherId })}
+              className="flex w-full flex-wrap items-center gap-4 border-b border-hairline/70 px-5 py-4 text-left last:border-0 hover:bg-cream/40"
+            >
+              <Avatar name={t.teacherName} />
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-ink">{t.teacherName}</p>
+                <p className="text-sm text-ink-soft">
+                  {[teacherMeta(t), `${shares.length} shared`, `latest ${formatDate(shares[0].sharedAt)}`].filter(Boolean).join(' · ')}
+                </p>
+              </div>
+              {awaiting > 0 ? (
+                <span className="rounded-lg bg-gold-tint px-2.5 py-1.5 text-sm text-ink">{awaiting} awaiting</span>
+              ) : (
+                <span className="text-sm text-ink-soft">All replied</span>
+              )}
+              <span className="text-sm font-semibold text-forest" aria-hidden="true">
+                ›
+              </span>
+            </button>
+          ))}
+        </section>
       )}
     </>
   )

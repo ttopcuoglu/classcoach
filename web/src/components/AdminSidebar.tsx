@@ -262,7 +262,11 @@ const SUPERVISOR_GROUPS: { heading: string; links: SupervisorLink[] }[] = [
   },
   {
     heading: 'Review',
-    links: [{ to: '/admin/lesson-plan-reviews', label: 'Lesson Plans', icon: LessonPlanIcon, active: (p) => p.startsWith('/admin/lesson-plan-reviews') }],
+    links: [
+      // Teachers who shared a Self Evaluation, and each one's shares.
+      { to: '/admin/evaluations?view=selfevals', label: 'Self Evaluations', icon: ClipboardIcon, active: (p, v) => p === '/admin/evaluations' && v === 'selfevals' },
+      { to: '/admin/lesson-plan-reviews', label: 'Lesson Plans', icon: LessonPlanIcon, active: (p) => p.startsWith('/admin/lesson-plan-reviews') },
+    ],
   },
 ]
 
