@@ -1081,7 +1081,7 @@ adminRouter.get('/members', async (req, res) => {
 
   const members = await prisma.user.findMany({
     where: { organizationId },
-    select: { id: true, name: true, email: true, jobTitle: true, role: true, suspendedAt: true, createdAt: true, supervisorId: true, subjects: true, gradeLevels: true },
+    select: { id: true, name: true, email: true, jobTitle: true, role: true, suspendedAt: true, createdAt: true, supervisorId: true, alsoTeaches: true, subjects: true, gradeLevels: true },
     orderBy: { createdAt: 'asc' },
   })
 
@@ -1198,8 +1198,11 @@ adminRouter.patch('/members/:id', async (req, res) => {
   // Self Evaluation supervisor: a school admin assigns one for their own school's
   // members, always someone else in that same school (findScopedMember has
   // already pinned the target to the school in scope).
-  const { supervisorId } = (req.body ?? {}) as { supervisorId?: unknown }
-  const data: UserEdits & { supervisorId?: string | null } = { ...parsed.edits }
+  const { supervisorId, alsoTeaches } = (req.body ?? {}) as { supervisorId?: unknown; alsoTeaches?: unknown }
+  const data: UserEdits & { supervisorId?: string | null; alsoTeaches?: boolean } = { ...parsed.edits }
+  // A supervisor who also teaches keeps My Coaching beside the supervisor
+  // workspace; one who doesn't sees only the supervisor workspace (2026-11-24).
+  if (typeof alsoTeaches === 'boolean') data.alsoTeaches = alsoTeaches
   if (supervisorId !== undefined) {
     const problem = await supervisorError(target.id, target.organizationId, supervisorId)
     if (problem) {

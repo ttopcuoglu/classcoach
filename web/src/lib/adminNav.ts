@@ -18,6 +18,7 @@ export type AdminPage =
   | 'leadersCorner'
   | 'evaluations'
   | 'observations'
+  | 'planReviews'
   | 'supervisorAssignments'
 
 export type AdminGroup = 'leader' | 'overview' | 'instruction' | 'insights' | 'coaching' | 'manage' | 'settings' | 'internal'
@@ -36,6 +37,8 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // A supervisor's classroom observations (pages/observations/). Same rule as
   // Evaluations: anyone the school made a supervisor.
   { page: 'observations', slug: 'observations', label: 'Observations', group: 'instruction' },
+  // A supervisor's reviews of teachers' lesson plans (pages/planReviews/).
+  { page: 'planReviews', slug: 'lesson-plan-reviews', label: 'Lesson Plans', group: 'instruction' },
   { page: 'engagement', slug: 'usage', label: 'Usage & Engagement', group: 'insights' },
   { page: 'insights', slug: 'insights', label: 'Coaching Insights', group: 'insights' },
   { page: 'professionalLearning', slug: 'professional-learning', label: 'Professional Learning', group: 'insights' },

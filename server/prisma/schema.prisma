@@ -86,6 +86,12 @@ model User {
   supervisees           User[]    @relation("Supervision")
   observationsMade      Observation[] @relation("ObservationsMade")
   observationsReceived  Observation[] @relation("ObservationsReceived")
+  planReviewsMade       LessonPlanReview[] @relation("PlanReviewsMade")
+  planReviewsReceived   LessonPlanReview[] @relation("PlanReviewsReceived")
+  // For a supervisor: whether they also teach. Off (the default) shows only
+  // the supervisor workspace; on keeps My Coaching for their own classes.
+  // Set by the school admin in Supervisor Assignments (2026-11-24).
+  alsoTeaches           Boolean   @default(false)
   // "free" | "plus" — individual self-serve billing. Independent of
   // Organization.plan below; a teacher can be "free" here while still
   // getting Plus-equivalent access through a district (see hasActivePlan
@@ -1175,5 +1181,35 @@ model Observation {
   updatedAt      DateTime  @updatedAt
 
   @@index([observerId, observedAt])
+  @@index([teacherId, sentAt])
+}
+
+// A supervisor's review of a teacher's lesson plan (2026-11-24): the plan's
+// text (never the file), a draft written from it (Danielson Domain 1 with
+// quotes, the school's own lesson plan format, strengths, next steps), the
+// supervisor's levels and comments, and when it was sent. Like an
+// Observation, the teacher reads it only once sent and only when linked.
+model LessonPlanReview {
+  id             String    @id @default(cuid())
+  reviewerId     String
+  reviewer       User      @relation("PlanReviewsMade", fields: [reviewerId], references: [id], onDelete: Cascade)
+  organizationId String?
+  teacherId      String?
+  teacher        User?     @relation("PlanReviewsReceived", fields: [teacherId], references: [id], onDelete: SetNull)
+  teacherName    String
+  lessonTitle    String?
+  gradeLevel     String?
+  planLabel      String
+  // { sections: [{ ref, text }] }: the plan's text in sections.
+  plan           Json
+  // pending → generating → draft → sent; "failed" = could not be written.
+  status         String    @default("pending")
+  failureReason  String?
+  report         Json?
+  sentAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([reviewerId, createdAt])
   @@index([teacherId, sentAt])
 }

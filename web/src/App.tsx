@@ -2,7 +2,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import Layout from './components/Layout'
-import { isLeader, isSupervisor } from './components/AdminSidebar'
+import { isLeader, isSupervisor, isSupervisorOnly } from './components/AdminSidebar'
 import Landing from './pages/Landing'
 import { getMe, type UserProfile } from './lib/api'
 import { applyPageMeta } from './lib/pageMeta'
@@ -25,6 +25,8 @@ const AudioCoachingExport = lazy(() => import('./pages/AudioCoachingExport'))
 const Evaluations = lazy(() => import('./pages/Evaluations'))
 const ObserverPages = lazy(() => import('./pages/observations/ObserverPages'))
 const ReceivedObservations = lazy(() => import('./pages/observations/ReceivedObservations'))
+const PlanReviewPages = lazy(() => import('./pages/planReviews/PlanReviewPages'))
+const ReceivedPlanReview = lazy(() => import('./pages/planReviews/ReceivedPlanReview'))
 const LessonPlanning = lazy(() => import('./pages/LessonPlanning'))
 const AssignmentCoachExport = lazy(() => import('./pages/AssignmentCoachExport'))
 const LessonPlanExport = lazy(() => import('./pages/LessonPlanExport'))
@@ -160,6 +162,10 @@ export default function App() {
       .catch(() => {})
   }
 
+  // The teacher tools, which a supervisor who doesn't teach never sees: they
+  // land on the supervisor Overview instead (2026-11-24).
+  const teacherOnly = (page: React.ReactElement) => (isSupervisorOnly(user) ? <Navigate to="/admin/evaluations" replace /> : page)
+
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <BrowserRouter>
@@ -269,14 +275,14 @@ export default function App() {
                 </RequireAuth>
               }
             >
-              <Route index element={<Home />} />
+              <Route index element={teacherOnly(<Home />)} />
               {/* Inside the Layout, not beside it. The page gave up its own
                   full-screen chrome — the forest bar and the Exit button in it —
                   so out here it had no navigation of any kind. */}
-              <Route path="talk-to-me" element={<TalkToMe />} />
-              <Route path="coach-chat" element={<Practice />} />
-              <Route path="communications" element={<Communications />} />
-              <Route path="audio-coaching" element={<AudioCoaching />} />
+              <Route path="talk-to-me" element={teacherOnly(<TalkToMe />)} />
+              <Route path="coach-chat" element={teacherOnly(<Practice />)} />
+              <Route path="communications" element={teacherOnly(<Communications />)} />
+              <Route path="audio-coaching" element={teacherOnly(<AudioCoaching />)} />
               {/* Self Evaluations teachers shared with this person as their
                   supervisor; the server decides what each person can see. */}
               {/* The supervisor's old page, now Evaluations in the School Workspace. */}
@@ -285,7 +291,8 @@ export default function App() {
               {/* Observations a supervisor sent this teacher (read-only). */}
               <Route path="observations" element={<ReceivedObservations />} />
               <Route path="observations/:id" element={<ReceivedObservations />} />
-              <Route path="lesson-planning" element={<LessonPlanning />} />
+              <Route path="plan-reviews/:id" element={<ReceivedPlanReview />} />
+              <Route path="lesson-planning" element={teacherOnly(<LessonPlanning />)} />
               {/* Assignment Coach is a chip inside Planning Coach now. The
                   route stays as a redirect: it is in the guide, in Home's cards
                   and in teachers' bookmarks. */}
@@ -308,6 +315,15 @@ export default function App() {
               <Route
                 path="admin/evaluations/:sessionId"
                 element={isSupervisor(user) ? <Evaluations user={user} /> : <Navigate to={user != null && user.role !== 'teacher' ? '/admin' : '/'} replace />}
+              />
+              {/* Lesson Plan Eval: only for supervisors (routes/planReviews.ts). */}
+              <Route
+                path="admin/lesson-plan-reviews"
+                element={isSupervisor(user) ? <PlanReviewPages /> : <Navigate to={user != null && user.role !== 'teacher' ? '/admin' : '/'} replace />}
+              />
+              <Route
+                path="admin/lesson-plan-reviews/:id"
+                element={isSupervisor(user) ? <PlanReviewPages /> : <Navigate to={user != null && user.role !== 'teacher' ? '/admin' : '/'} replace />}
               />
               {/* Observations: also only for supervisors (routes/observations.ts). */}
               <Route

@@ -160,6 +160,10 @@ export type UserProfile = {
   supervisesCount?: number
   /** Observations a supervisor sent this person (routes/observations.ts). */
   observationsReceived?: number
+  /** Lesson plan reviews a supervisor sent this person. */
+  planReviewsReceived?: number
+  /** For a supervisor: also teaches, so My Coaching stays (set by the school admin). */
+  alsoTeaches?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -367,6 +371,8 @@ export type OrgMember = {
   lastActiveAt: string | null
   // Self Evaluation supervisor (another member of the same school), or null.
   supervisorId?: string | null
+  // For a supervisor: whether they also teach (keeps My Coaching).
+  alsoTeaches?: boolean
   // From their profile, comma-separated; the Department column.
   subjects?: string | null
   gradeLevels?: string | null
@@ -1555,6 +1561,8 @@ export type MemberEdits = {
   jobTitle?: JobTitle | null
   role?: 'teacher' | 'org_admin'
   supervisorId?: string | null
+  /** For a supervisor: keeps My Coaching beside the supervisor workspace. */
+  alsoTeaches?: boolean
 }
 
 // Removes a teacher from their org (org_admin's own scoped power, or a
@@ -3340,6 +3348,79 @@ export function getReceivedObservation(id: string): Promise<ReceivedObservation>
 /** The observed lesson, read-only (it comes back locked), for its Summary, Insights and Content Specialist tabs. */
 export function getReceivedObservationLesson(id: string): Promise<AudioSessionWithSegments> {
   return request(`/api/observations/received/${id}/lesson`)
+}
+
+// ---- Lesson Plan Eval (routes/planReviews.ts) ----
+
+export type PlanReviewStatus = 'pending' | 'generating' | 'draft' | 'failed' | 'sent'
+export type PlanReviewReport = {
+  version: 1
+  generatedAt: string
+  about: string
+  planning: PlanningComponent[] | null
+  format: { name: string; sections: { title: string; status: 'present' | 'thin' | 'missing'; note: string | null }[] } | null
+  strengths: string[]
+  nextSteps: string[]
+  comments: string | null
+}
+export type PlanReviewSummary = {
+  id: string
+  teacherId: string | null
+  teacherName: string
+  lessonTitle: string | null
+  gradeLevel: string | null
+  planLabel: string
+  status: PlanReviewStatus
+  sentAt: string | null
+  createdAt: string
+}
+export type PlanReview = PlanReviewSummary & {
+  failureReason: string | null
+  plan: PlanSection[]
+  report: PlanReviewReport | null
+}
+export type ReceivedPlanReview = PlanReview & { reviewerName: string }
+
+export function getPlanReviews(): Promise<PlanReviewSummary[]> {
+  return request('/api/plan-reviews')
+}
+export function getPlanReview(id: string): Promise<PlanReview> {
+  return request(`/api/plan-reviews/${id}`)
+}
+/** A new review from a file or pasted text; the draft is written in the background. */
+export async function createPlanReview(data: { teacherId: string | null; teacherName: string; lessonTitle?: string; gradeLevel?: string; file?: File; text?: string }): Promise<PlanReview> {
+  const form = new FormData()
+  if (data.teacherId) form.append('teacherId', data.teacherId)
+  form.append('teacherName', data.teacherName)
+  if (data.lessonTitle) form.append('lessonTitle', data.lessonTitle)
+  if (data.gradeLevel) form.append('gradeLevel', data.gradeLevel)
+  if (data.file) form.append('file', data.file)
+  else form.append('text', data.text ?? '')
+  const res = await fetch(`${API_BASE_URL}/api/plan-reviews`, { method: 'POST', credentials: 'include', body: form })
+  const body = await res.json().catch(() => null)
+  if (!res.ok) throw apiError(body?.error ?? messageForStatus(res.status), res.status)
+  return body
+}
+export function updatePlanReview(id: string, data: { teacherId?: string | null; teacherName?: string; lessonTitle?: string | null; gradeLevel?: string | null }): Promise<PlanReview> {
+  return request(`/api/plan-reviews/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+export function savePlanReviewReport(id: string, data: { levels?: Record<string, 1 | 2 | 3 | 4 | null>; comments?: string }): Promise<PlanReview> {
+  return request(`/api/plan-reviews/${id}/report`, { method: 'PUT', body: JSON.stringify(data) })
+}
+export function regeneratePlanReview(id: string): Promise<PlanReview> {
+  return request(`/api/plan-reviews/${id}/generate`, { method: 'POST' })
+}
+export function sendPlanReview(id: string): Promise<PlanReview> {
+  return request(`/api/plan-reviews/${id}/send`, { method: 'POST' })
+}
+export function deletePlanReview(id: string): Promise<{ ok: true }> {
+  return request(`/api/plan-reviews/${id}`, { method: 'DELETE' })
+}
+export function getReceivedPlanReviews(): Promise<(PlanReviewSummary & { reviewerName: string })[]> {
+  return request('/api/plan-reviews/received')
+}
+export function getReceivedPlanReview(id: string): Promise<ReceivedPlanReview> {
+  return request(`/api/plan-reviews/received/${id}`)
 }
 
 /** Everything the supervisor's Overview, My Teachers and Reports draw from. */

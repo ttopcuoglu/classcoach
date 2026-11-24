@@ -53,7 +53,7 @@ async function discard(filePath: string | undefined) {
 const firstOf = (list: string | null | undefined) => (list ?? '').split(',').map((s) => s.trim()).filter(Boolean)[0] ?? null
 
 /// The signed-in person, if the school made them a supervisor.
-async function observer(req: { user?: { userId: string } }, res: Response) {
+export async function observer(req: { user?: { userId: string } }, res: Response) {
   const me = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { id: true, organizationId: true, role: true } })
   const supervises = me ? await prisma.user.count({ where: { supervisorId: me.id } }) : 0
   if (!me || supervises === 0) {
@@ -68,7 +68,7 @@ async function mine(id: string, observerId: string) {
 }
 
 /// A teacher at the observer's own school, never themselves.
-async function schoolTeacher(teacherId: string, me: { id: string; organizationId: string | null }) {
+export async function schoolTeacher(teacherId: string, me: { id: string; organizationId: string | null }) {
   if (!me.organizationId || teacherId === me.id) return null
   return prisma.user.findFirst({
     where: { id: teacherId, organizationId: me.organizationId },

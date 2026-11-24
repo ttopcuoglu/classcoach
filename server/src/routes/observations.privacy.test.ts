@@ -16,6 +16,9 @@ process.env.STRIPE_SECRET_KEY ??= 'sk_test_privacy_dummy'
 process.env.JWT_SECRET ??= 'privacy-test-only'
 process.env.DATABASE_POOL_MAX = '1'
 process.env.ANTHROPIC_API_KEY ??= 'privacy-test-only'
+// Nothing here may reach Claude: a review written in the background fails at
+// once against a closed local port.
+process.env.ANTHROPIC_BASE_URL = 'http://127.0.0.1:9'
 
 const SERVER_SRC = join(import.meta.dirname, '..')
 const TRANSCRIPT_MARKER = 'OBSERVATION-TRANSCRIPT-NEVER-SENT'
@@ -41,6 +44,7 @@ before(async () => {
   const { prisma } = await import('../lib/prisma.ts')
   const { observationsRouter } = await import('./observations.ts')
   const { audioSessionsRouter } = await import('./audioSessions.ts')
+  const { planReviewsRouter } = await import('./planReviews.ts')
 
   const org = await prisma.organization.create({ data: { name: 'Maple Ridge Academy', joinCode: 'MAPLE4' } })
   const otherOrg = await prisma.organization.create({ data: { name: 'Elm Street School', joinCode: 'ELM444' } })
@@ -58,6 +62,7 @@ before(async () => {
   })
   app.use('/api/observations', observationsRouter)
   app.use('/api/audio-sessions', audioSessionsRouter)
+  app.use('/api/plan-reviews', planReviewsRouter)
   const server = app.listen(0)
   await new Promise<void>((resolve) => server.once('listening', () => resolve()))
   const { port: httpPort } = server.address() as AddressInfo
@@ -193,4 +198,42 @@ test('who can observe, who they can pick, and who reads what', async () => {
   assert.equal((await call(`/api/observations/${id}`, supervisor, { method: 'DELETE' })).status, 200)
   assert.equal((await call(`/api/observations/received/${id}`, teacher)).status, 404)
   assert.equal(await ctx!.prisma.audioSession.count({ where: { id: sessionId } }), 0, 'its recording goes with it')
+})
+
+test('lesson plan reviews: only a supervisor, only their school, and the teacher reads it once sent', async () => {
+  const { supervisor, teacher, colleague, outsider } = ctx!.ids
+  const plan = 'Objective: Students will explain why salt water conducts electricity and sugar water does not.\n\nLab: pairs test four solutions and record results.\n\nExit ticket: two sentences on why.'
+  assert.equal((await call('/api/plan-reviews', teacher, post({ teacherName: 'x', text: plan }))).status, 403, 'only supervisors')
+  assert.equal((await call('/api/plan-reviews', supervisor, post({ teacherId: outsider, text: plan }))).status, 400, 'never another school')
+  assert.equal((await call('/api/plan-reviews', supervisor, post({ teacherId: teacher, text: 'too short' }))).status, 400)
+  const created = await call('/api/plan-reviews', supervisor, post({ teacherId: teacher, lessonTitle: 'Conductivity', text: plan }))
+  assert.equal(created.status, 201)
+  const id = created.body.id as string
+  assert.equal(created.body.teacherName, 'Ms. Rivera')
+  assert.equal(created.body.plan.length, 3)
+  // The background write fails without Claude; let it finish before going on.
+  for (let i = 0; i < 100; i++) {
+    const row = await ctx!.prisma.lessonPlanReview.findUnique({ where: { id }, select: { status: true } })
+    if (row?.status !== 'generating') break
+    await new Promise((r) => setTimeout(r, 200))
+  }
+
+  // Stand in for the written draft (the real one needs Claude).
+  await ctx!.prisma.lessonPlanReview.update({
+    where: { id },
+    data: { status: 'draft', report: { version: 1, generatedAt: 'x', about: 'A lab.', planning: [{ code: '1c', name: 'Outcomes', domain: 'Domain 1', level: 3, explanation: 'e', excerpts: [] }], format: null, strengths: ['Clear goal.'], nextSteps: [], comments: null } },
+  })
+  assert.equal((await call(`/api/plan-reviews/${id}`, colleague)).status, 403)
+  assert.equal((await call(`/api/plan-reviews/received/${id}`, teacher)).status, 404, 'not before it is sent')
+  const set = await call(`/api/plan-reviews/${id}/report`, supervisor, { method: 'PUT', body: JSON.stringify({ levels: { '1c': 4 }, comments: 'Nice build.' }) })
+  assert.equal(set.body.report.planning[0].level, 4)
+  assert.equal((await call(`/api/plan-reviews/${id}/send`, supervisor, post({}))).status, 200)
+  const received = await call(`/api/plan-reviews/received/${id}`, teacher)
+  assert.equal(received.status, 200)
+  assert.equal(received.body.report.comments, 'Nice build.')
+  assert.equal(received.body.reviewerName, 'Assistant Principal')
+  assert.equal((await call(`/api/plan-reviews/received/${id}`, colleague)).status, 404)
+  assert.equal(((await call('/api/plan-reviews/received', teacher)).body as unknown[]).length, 1)
+  assert.equal((await call(`/api/plan-reviews/${id}`, supervisor, { method: 'DELETE' })).status, 200)
+  assert.equal((await call(`/api/plan-reviews/received/${id}`, teacher)).status, 404)
 })

@@ -39,6 +39,7 @@ const ICON: Record<AdminPage, IconComponent> = {
   leadersCorner: ChatBubbleIcon,
   evaluations: ClipboardIcon,
   observations: MicIcon,
+  planReviews: LessonPlanIcon,
   supervisorAssignments: UserIcon,
 }
 
@@ -71,6 +72,13 @@ export function isLeader(user: UserProfile | null): boolean {
 /// alone opens the School Workspace, showing their Evaluations page.
 export function isSupervisor(user: UserProfile | null): boolean {
   return (user?.supervisesCount ?? 0) > 0
+}
+
+/// A supervisor who doesn't teach (the default; the school admin turns on
+/// "Also teaches" in Supervisor Assignments): only the supervisor workspace,
+/// none of the teacher tools (the user's call, 2026-11-24).
+export function isSupervisorOnly(user: UserProfile | null): boolean {
+  return isSupervisor(user) && !user?.alsoTeaches
 }
 
 /// My Coaching | School Workspace. Only for someone who can open School Admin;
@@ -163,16 +171,7 @@ export function AdminNav({ user, onPick }: { user: UserProfile | null; onPick?: 
     </div>
   )
   const supervisor = isSupervisor(user)
-  const instructionGroup = supervisor && (
-    <div>
-      <GroupHeading group="instruction" />
-      <div className="mt-1.5 flex flex-col gap-1">
-        {ADMIN_NAV.filter((i) => i.group === 'instruction').map((i) => (
-          <AdminLink key={i.page} page={i.page} label={i.label} onPick={onPick} />
-        ))}
-      </div>
-    </div>
-  )
+  const instructionGroup = supervisor && <SupervisorNav onPick={onPick} />
   // A leader or supervisor without an admin role (a department head, a
   // coach, an assistant principal) gets their own pages and none of the
   // school's, which would refuse them.
@@ -238,6 +237,56 @@ export function AdminNav({ user, onPick }: { user: UserProfile | null; onPick?: 
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// The supervisor's part of the sidebar (2026-11-24), grouped by what a
+// supervisor does: their teachers and reports, observing, and reviewing.
+// Overview, My Teachers and Reports are views of one page
+// (pages/evaluations/Workspace.tsx), told apart by ?view=.
+type SupervisorLink = { to: string; label: string; icon: IconComponent; active: (path: string, view: string | null) => boolean }
+
+const SUPERVISOR_GROUPS: { heading: string; links: SupervisorLink[] }[] = [
+  {
+    heading: 'Supervision',
+    links: [
+      { to: '/admin/evaluations', label: 'Overview', icon: GridIcon, active: (p, v) => p.startsWith('/admin/evaluations') && (v == null || v === 'overview') },
+      { to: '/admin/evaluations?view=teachers', label: 'My Teachers', icon: UserIcon, active: (p, v) => p === '/admin/evaluations' && v === 'teachers' },
+      { to: '/admin/evaluations?view=reports', label: 'Reports', icon: ChartBarIcon, active: (p, v) => p === '/admin/evaluations' && v === 'reports' },
+    ],
+  },
+  {
+    heading: 'Observe',
+    links: [{ to: '/admin/observations', label: 'Observations', icon: MicIcon, active: (p) => p.startsWith('/admin/observations') }],
+  },
+  {
+    heading: 'Review',
+    links: [{ to: '/admin/lesson-plan-reviews', label: 'Lesson Plans', icon: LessonPlanIcon, active: (p) => p.startsWith('/admin/lesson-plan-reviews') }],
+  },
+]
+
+function SupervisorNav({ onPick }: { onPick?: () => void }) {
+  const location = useLocation()
+  const view = new URLSearchParams(location.search).get('view')
+  return (
+    <div className="flex flex-col gap-5">
+      {SUPERVISOR_GROUPS.map((g) => (
+        <div key={g.heading}>
+          <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-cream/60">{g.heading}</p>
+          <div className="mt-1.5 flex flex-col gap-1">
+            {g.links.map((l) => {
+              const Icon = l.icon
+              return (
+                <NavLink key={l.to} to={l.to} onClick={onPick} className={() => adminNavLinkClasses(l.active(location.pathname, view))}>
+                  <Icon className="h-[18px] w-[18px] shrink-0" />
+                  <span className="truncate">{l.label}</span>
+                </NavLink>
+              )
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

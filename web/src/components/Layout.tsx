@@ -18,7 +18,7 @@ import {
 } from './icons'
 import { PLUS_MONTHLY_PRICE, PLUS_SUMMARY, INDIVIDUAL_PLAN } from '../lib/pricing'
 import { isAdminPath } from '../lib/adminNav'
-import { AdminNav, isAdminRole, isLeader, isSupervisor, WorkspaceSwitch } from './AdminSidebar'
+import { AdminNav, isAdminRole, isLeader, isSupervisor, isSupervisorOnly, WorkspaceSwitch } from './AdminSidebar'
 
 type IconComponent = (props: { className?: string }) => React.ReactElement
 type NavItem = { to: string; label: string; icon: IconComponent; subtitle?: string }
@@ -70,9 +70,9 @@ const NAV_GROUPS: NavGroup[] = [
 // (pages/observations/ReceivedObservations.tsx). Hidden until then: most
 // teachers will never be observed through Wivoza.
 function navGroupsFor(user: UserProfile | null): NavGroup[] {
-  if (!user?.observationsReceived) return NAV_GROUPS
+  if (!user?.observationsReceived && !user?.planReviewsReceived) return NAV_GROUPS
   return NAV_GROUPS.map((g) =>
-    g.label === 'Grow' ? { ...g, items: [...g.items, { to: '/observations', label: 'Observations', icon: ClipboardIcon, subtitle: 'from your supervisor' }] } : g,
+    g.label === 'Grow' ? { ...g, items: [...g.items, { to: '/observations', label: 'From my supervisor', icon: ClipboardIcon, subtitle: 'observations & reviews' }] } : g,
   )
 }
 
@@ -113,7 +113,9 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
   // address, so back, forward and a shared /admin link all keep it right.
   const canAdmin = isAdminRole(user) || isLeader(user) || isSupervisor(user)
   const navGroups = navGroupsFor(user)
-  const admin = canAdmin && isAdminPath(location.pathname)
+  // A supervisor who doesn't teach has no My Coaching side at all (2026-11-24).
+  const supervisorOnly = isSupervisorOnly(user)
+  const admin = canAdmin && (supervisorOnly || isAdminPath(location.pathname))
 
   async function handleLogout() {
     await logout().catch(() => {})
@@ -139,7 +141,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
           <img src="/logo/wivoza-lockup-dark.png" alt="Wivoza" className="h-10 w-auto" />
           <p className="text-[11px] text-cream/50">Practice. Reflect. Grow.</p>
         </div>
-        {canAdmin && (
+        {canAdmin && !supervisorOnly && (
           <div className="px-3 pb-4">
             <WorkspaceSwitch admin={admin} />
           </div>
@@ -259,7 +261,7 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
             <img src="/logo/wivoza-lockup-light.png" alt="Wivoza" className="h-6 w-auto" />
           </div>
           <div className="flex items-center gap-4">
-            {canAdmin && !admin && (
+            {canAdmin && !admin && !supervisorOnly && (
               <Link to="/admin" className="text-sm font-semibold text-forest">
                 School Workspace
               </Link>
@@ -287,9 +289,11 @@ export default function Layout({ user, onLogout }: { user: UserProfile | null; o
                   <CloseIcon className="h-5 w-5" />
                 </button>
               </div>
-              <div className="mb-4">
-                <WorkspaceSwitch admin={admin} onPick={() => setDrawerOpen(false)} />
-              </div>
+              {!supervisorOnly && (
+                <div className="mb-4">
+                  <WorkspaceSwitch admin={admin} onPick={() => setDrawerOpen(false)} />
+                </div>
+              )}
               <AdminNav user={user} onPick={() => setDrawerOpen(false)} />
             </div>
           </div>

@@ -640,7 +640,8 @@ authRouter.get('/me', requireAuth, async (req, res) => {
   // Observations a supervisor has sent this teacher, so the app shows their
   // Observations page only when there is something on it (routes/observations.ts).
   const observationsReceived = await prisma.observation.count({ where: { teacherId: user.id, sentAt: { not: null } } })
-  res.json({ ...(await withPlusAccess(user)), supervisesCount, observationsReceived })
+  const planReviewsReceived = await prisma.lessonPlanReview.count({ where: { teacherId: user.id, sentAt: { not: null } } })
+  res.json({ ...(await withPlusAccess(user)), supervisesCount, observationsReceived, planReviewsReceived })
 })
 
 authRouter.post('/logout', (_req, res) => {

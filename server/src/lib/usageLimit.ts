@@ -63,6 +63,8 @@ export type UsageAction =
   // combined report, and Domain 1 from an attached plan.
   | 'observation_report'
   | 'observation_planning'
+  // A supervisor's lesson plan review (routes/planReviews.ts).
+  | 'plan_review'
   | 'hard_look'
   // Lesson Debrief's on-request idea connected to a school focus the teacher
   // chose (lib/debriefSchoolFocus.ts).

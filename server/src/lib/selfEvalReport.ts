@@ -153,14 +153,18 @@ export function buildPlanningPrompt(
   sections: PlanSection[],
   context: { subject: string | null; grade: string | null },
   sharedRules: string,
-  /// A supervisor's observation (lib/observationReport.ts) rather than the
-  /// teacher's own Self Evaluation: only who attached it and who decides changes.
-  forObservation = false,
+  /// Who asked: a supervisor's observation (lib/observationReport.ts, `true`),
+  /// a supervisor's lesson plan review (lib/planReview.ts, 'review'), or the
+  /// teacher's own Self Evaluation. Only who attached it and who decides change.
+  forObservation: boolean | 'review' = false,
 ): string {
   const levelWords = Object.values(RUBRIC_LEVEL_NAMES).map((w) => w.toLowerCase()).join(', ')
-  const who = forObservation
-    ? 'A supervisor attached this plan to a classroom observation and asked for a suggested level on each Domain 1 component. The supervisor reviews every level and decides what the teacher receives.'
-    : 'The teacher attached this plan to their own Self Evaluation and asked for a suggested level on each Domain 1 component. They see every level first and decide whether to share it.'
+  const who =
+    forObservation === 'review'
+      ? 'A supervisor is reviewing this plan and asked for a suggested level on each Domain 1 component. The supervisor reviews every level and decides what the teacher receives.'
+      : forObservation
+        ? 'A supervisor attached this plan to a classroom observation and asked for a suggested level on each Domain 1 component. The supervisor reviews every level and decides what the teacher receives.'
+        : 'The teacher attached this plan to their own Self Evaluation and asked for a suggested level on each Domain 1 component. They see every level first and decide whether to share it.'
   return `You are a fair, practical instructional coach reading a teacher's lesson plan through Domain 1 (Planning and Preparation) of the Danielson Framework for Teaching (2022). ${who}
 ${context.subject || context.grade ? `\nThe lesson: ${[context.grade ? `grade ${context.grade}` : null, context.subject].filter(Boolean).join(' ')}.\n` : ''}
 The levels, judged on this one plan as written:

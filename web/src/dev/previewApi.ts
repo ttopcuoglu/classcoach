@@ -36,6 +36,9 @@ const PROFILE: Json = {
   // Self Evaluations appears in the sidebar.
   supervisesCount: new URLSearchParams(window.location.search).has('supervisor') ? 2 : 0,
   observationsReceived: new URLSearchParams(window.location.search).has('observed') ? 1 : 0,
+  planReviewsReceived: new URLSearchParams(window.location.search).has('observed') ? 1 : 0,
+  // `?teaches=1` makes the preview supervisor one who also teaches.
+  alsoTeaches: new URLSearchParams(window.location.search).has('teaches'),
   jobTitle: 'Teacher',
   schoolName: 'Preview Middle School',
   teachingGoal: null,
@@ -2251,6 +2254,66 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
   // Observations (`?supervisor=1`): a supervisor's list, the Teacher box, the
   // recording, the questions, a draft written a few seconds after the answers,
   // and sending. `?observed=1` gives the teacher one received observation.
+  // Lesson Plan Eval (`?supervisor=1`): a list, a new review written a few
+  // seconds after it is made, levels, sending. `?observed=1` gives the teacher
+  // one received review too.
+  if (path.startsWith('/api/plan-reviews')) {
+    const route = path.split('?')[0]
+    if (route === '/api/plan-reviews/received') return previewPlanReviews.filter((r) => r.sentAt).map((r) => ({ ...r, reviewerName: 'Preview Dept Head' }))
+    const got = route.match(/^\/api\/plan-reviews\/received\/([\w-]+)$/)
+    if (got) {
+      const r = previewPlanReviews.find((x) => x.id === got[1] && x.sentAt)
+      return r ? { ...r, reviewerName: 'Preview Dept Head' } : null
+    }
+    if (route === '/api/plan-reviews' && method === 'GET') return previewPlanReviews
+    if (route === '/api/plan-reviews' && method === 'POST') {
+      const r: PreviewPlanReview = {
+        id: `preview-plan-${previewPlanReviews.length + 1}`,
+        teacherId: 'u4',
+        teacherName: 'Maya Chen',
+        lessonTitle: 'Science',
+        gradeLevel: '8',
+        planLabel: 'Pasted plan',
+        status: 'generating',
+        sentAt: null,
+        createdAt: new Date().toISOString(),
+        failureReason: null,
+        plan: previewPlanFixture().sections,
+        report: null,
+        since: Date.now(),
+      }
+      previewPlanReviews.unshift(r)
+      return r
+    }
+    const one = route.match(/^\/api\/plan-reviews\/([\w-]+)(?:\/(report|generate|send))?$/)
+    const r = one ? previewPlanReviews.find((x) => x.id === one[1]) : undefined
+    if (!one || !r) return null
+    if (!one[2] && method === 'DELETE') {
+      previewPlanReviews.splice(previewPlanReviews.indexOf(r), 1)
+      return { ok: true }
+    }
+    if (one[2] === 'generate') {
+      r.status = 'generating'
+      r.since = Date.now()
+    }
+    if (one[2] === 'report' && r.report) {
+      const levels = (body.levels ?? {}) as Record<string, number | null>
+      r.report = {
+        ...r.report,
+        planning: r.report.planning.map((c) => (c.code in levels ? { ...c, level: levels[c.code] } : c)),
+        comments: 'comments' in body ? String(body.comments ?? '') || null : r.report.comments,
+      }
+    }
+    if (one[2] === 'send') {
+      r.status = 'sent'
+      r.sentAt = new Date().toISOString()
+    }
+    if (r.status === 'generating' && Date.now() - r.since > 2500) {
+      r.status = 'draft'
+      r.report = previewPlanReviewReport()
+    }
+    return r
+  }
   if (path.startsWith('/api/observations')) {
     const route = path.split('?')[0]
     const q = new URLSearchParams(path.split('?')[1] ?? '').get('q')?.toLowerCase() ?? ''
@@ -2740,6 +2803,63 @@ const previewObservations: PreviewObservation[] = (() => {
   const draft = { ...base('preview-obs-draft', 'draft', null), lessonTitle: 'Comparing primary sources', teacherId: 'u8', teacherName: 'Jordan Ellis', subject: 'Social Studies', gradeLevel: '9th', observedAt: daysAgo(1) }
   draft.report = previewObservationReport(draft)
   return [draft, sent]
+})()
+
+type PreviewPlanReview = {
+  id: string
+  teacherId: string | null
+  teacherName: string
+  lessonTitle: string | null
+  gradeLevel: string | null
+  planLabel: string
+  status: string
+  sentAt: string | null
+  createdAt: string
+  failureReason: string | null
+  plan: { ref: string; text: string }[]
+  report: ReturnType<typeof previewPlanReviewReport> | null
+  since: number
+}
+
+function previewPlanReviewReport() {
+  return {
+    version: 1 as const,
+    generatedAt: new Date().toISOString(),
+    about: 'An 8th grade science lesson on why salt water conducts electricity: a prediction, a pairs lab with four solutions, and a written explanation.',
+    planning: previewPlanningFixture().components as { code: string; name: string; domain: string; level: number | null; explanation: string; excerpts: { ref: string; text: string }[] }[],
+    format: {
+      name: 'Maple Ridge Daily Plan',
+      sections: [
+        { title: 'Objective', status: 'present', note: 'Clear and measurable.' },
+        { title: 'Do Now', status: 'present', note: null },
+        { title: 'Differentiation', status: 'missing', note: 'No supports or extensions are named.' },
+        { title: 'Exit Ticket', status: 'thin', note: 'The prompt is there, but not what a strong answer looks like.' },
+      ],
+    },
+    strengths: ['The objective names what students will explain, not just the activity.', 'The lab builds from a prediction to evidence students collect themselves.'],
+    nextSteps: ['Add one support for students who struggle with the reading, and one extension.', 'Write what a strong exit ticket answer includes, so you can sort them quickly.'],
+    comments: null as string | null,
+  }
+}
+
+const previewPlanReviews: PreviewPlanReview[] = (() => {
+  const sent: PreviewPlanReview = {
+    id: 'preview-plan-sent',
+    teacherId: 'u4',
+    teacherName: 'Maya Chen',
+    lessonTitle: 'Why salt water conducts',
+    gradeLevel: '8',
+    planLabel: 'conductivity-lab.docx',
+    status: 'sent',
+    sentAt: daysAgo(1),
+    createdAt: daysAgo(2),
+    failureReason: null,
+    plan: [],
+    report: null,
+    since: 0,
+  }
+  sent.report = { ...previewPlanReviewReport(), comments: 'A clear, well-sequenced plan. Let us talk about differentiation for the two reading groups.' }
+  return [sent]
 })()
 
 function previewPlanningFixture() {

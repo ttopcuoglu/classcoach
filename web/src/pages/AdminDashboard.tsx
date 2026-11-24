@@ -3211,6 +3211,62 @@ function SupervisorAssignmentsPanel({
         {pickerTitle}
       </div>
 
+      {/* Supervisors and whether each also teaches: off (the default) shows a
+          supervisor only the supervisor workspace; on keeps My Coaching for
+          their own classes (2026-11-24). */}
+      {members && (() => {
+        const supervisorIds = new Set(teachers.map((t) => t.supervisorId).filter(Boolean) as string[])
+        const supervisors = (members ?? []).filter((m) => supervisorIds.has(m.id)).sort((a, b) => (a.name ?? a.email).localeCompare(b.name ?? b.email))
+        if (supervisors.length === 0) return null
+        return (
+          <section className="rounded-2xl border border-hairline bg-white p-5">
+            <h2 className="font-heading text-lg font-bold text-forest">Supervisors</h2>
+            <p className="mt-1 text-sm text-ink-soft">
+              A supervisor sees only the supervisor workspace: observations, reviews and their teachers. Turn on &ldquo;Also teaches&rdquo; for anyone who
+              also has classes of their own, so they keep My Coaching too.
+            </p>
+            <ul className="mt-3 flex flex-col divide-y divide-hairline/70">
+              {supervisors.map((s) => (
+                <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+                  <span className="text-sm text-ink">
+                    <span className="font-semibold">{s.name ?? s.email}</span>
+                    <span className="text-ink-soft">
+                      {' · '}
+                      {(() => {
+                        const n = teachers.filter((t) => t.supervisorId === s.id).length
+                        return `${n} ${n === 1 ? 'teacher' : 'teachers'}`
+                      })()}
+                    </span>
+                  </span>
+                  <label className="flex items-center gap-2 text-sm text-ink">
+                    <input
+                      type="checkbox"
+                      checked={!!s.alsoTeaches}
+                      disabled={rowBusy === s.id}
+                      onChange={async (e) => {
+                        const on = e.target.checked
+                        setRowBusy(s.id)
+                        setMessage(null)
+                        try {
+                          await updateMember(s.id, { alsoTeaches: on }, organizationId)
+                          setMembers((list) => (list ?? []).map((m) => (m.id === s.id ? { ...m, alsoTeaches: on } : m)))
+                        } catch (err) {
+                          setMessage((err as Error).message || 'Could not save that.')
+                        } finally {
+                          setRowBusy(null)
+                        }
+                      }}
+                      className="h-4 w-4 accent-forest"
+                    />
+                    Also teaches
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      })()}
+
       {!overview ? (
         <p className="text-sm text-ink-soft">Loading...</p>
       ) : !scoped ? (

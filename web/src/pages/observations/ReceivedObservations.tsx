@@ -6,6 +6,7 @@ import {
   getReceivedObservation,
   getReceivedObservationLesson,
   getReceivedObservations,
+  getReceivedPlanReviews,
   type AudioSessionWithSegments,
   type ReceivedObservation,
 } from '../../lib/api'
@@ -30,28 +31,39 @@ function Header({ title, blurb }: { title: string; blurb: string }) {
   )
 }
 
+type FeedbackRow = { kind: 'observation' | 'plan'; id: string; title: string; by: string; at: string; to: string }
+
+/// Everything a supervisor sent this teacher, newest first: observations and
+/// lesson plan reviews ("From my supervisor", 2026-11-24).
 function List() {
-  const [rows, setRows] = useState<ReceivedObservation[] | null>(null)
+  const [rows, setRows] = useState<FeedbackRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
-    getReceivedObservations()
-      .then(setRows)
+    Promise.all([getReceivedObservations(), getReceivedPlanReviews().catch(() => [])])
+      .then(([obs, plans]) =>
+        setRows(
+          [
+            ...obs.map((o) => ({ kind: 'observation' as const, id: o.id, title: o.lessonTitle || 'Observed lesson', by: o.observerName, at: o.sentAt ?? o.observedAt, to: `/observations/${o.id}` })),
+            ...plans.map((p) => ({ kind: 'plan' as const, id: p.id, title: p.lessonTitle || 'Lesson plan', by: p.reviewerName, at: p.sentAt ?? p.createdAt, to: `/plan-reviews/${p.id}` })),
+          ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()),
+        ),
+      )
       .catch((e: Error) => setError(e.message))
   }, [])
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 sm:px-8">
-      <Header title="Observations" blurb="Lessons a supervisor observed and sent you, with what they saw and what Wivoza heard." />
+      <Header title="From my supervisor" blurb="Observations of your lessons and reviews of your lesson plans that a supervisor sent you." />
       {error && <p className="text-sm text-terracotta-600">{error}</p>}
       {!rows && !error && <p className="text-sm text-ink-soft">Loading...</p>}
-      {rows && rows.length === 0 && <div className="rounded-2xl border border-dashed border-hairline p-6 text-sm text-ink-soft">No observations have been sent to you yet.</div>}
+      {rows && rows.length === 0 && <div className="rounded-2xl border border-dashed border-hairline p-6 text-sm text-ink-soft">Nothing has been sent to you yet.</div>}
       {rows && rows.length > 0 && (
         <section className="overflow-hidden rounded-2xl border border-hairline bg-white">
-          {rows.map((o) => (
-            <Link key={o.id} to={`/observations/${o.id}`} className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline/70 px-5 py-4 last:border-0 hover:bg-cream/40">
+          {rows.map((r) => (
+            <Link key={`${r.kind}-${r.id}`} to={r.to} className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline/70 px-5 py-4 last:border-0 hover:bg-cream/40">
               <div className="min-w-0">
-                <p className="font-semibold text-ink">{o.lessonTitle || 'Observed lesson'}</p>
+                <p className="font-semibold text-ink">{r.title}</p>
                 <p className="text-sm text-ink-soft">
-                  Observed by {o.observerName} · {new Date(o.observedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {r.kind === 'observation' ? 'Observation' : 'Lesson plan review'} · from {r.by} · {new Date(r.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                 </p>
               </div>
               <span className="text-sm font-semibold text-forest">Open</span>
@@ -74,7 +86,7 @@ function One({ id }: { id: string }) {
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 sm:px-8">
       <Link to="/observations" className="text-sm text-ink-soft hover:text-forest">
-        ← All observations
+        ← From my supervisor
       </Link>
       {error && <p className="text-sm text-terracotta-600">{error}</p>}
       {!o && !error && <p className="text-sm text-ink-soft">Loading...</p>}
