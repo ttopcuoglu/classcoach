@@ -25,15 +25,20 @@ test('only real answers to real questions are kept', () => {
 
 test('notes are trimmed, capped, sorted, and tags must be real components', () => {
   const notes = readNotes([
-    { atSec: 300, text: '  Anchor chart from this unit  ', code: '2e' },
+    { atSec: 300, text: '  Anchor chart from this unit  ', code: '2e', id: 'keepme12' },
     { atSec: 60, text: 'Pairs on task', code: 'zz' },
     { atSec: 10, text: '   ' },
     'nonsense',
   ])
-  assert.deepEqual(notes, [
-    { atSec: 60, text: 'Pairs on task', code: null },
-    { atSec: 300, text: 'Anchor chart from this unit', code: '2e' },
-  ])
+  assert.deepEqual(
+    notes.map(({ id: _id, ...n }) => n),
+    [
+      { atSec: 60, text: 'Pairs on task', code: null },
+      { atSec: 300, text: 'Anchor chart from this unit', code: '2e' },
+    ],
+  )
+  assert.equal(notes[1].id, 'keepme12', 'a note keeps its id')
+  assert.match(notes[0].id ?? '', /^[a-z0-9]{4,16}$/, 'one without gets one')
 })
 
 test('the voice with the most words is taken as the teacher', () => {

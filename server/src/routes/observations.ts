@@ -23,6 +23,9 @@ import {
   OBSERVATION_COMMENTS_MAX,
   parseObservationReport,
   readAnswers,
+  newNoteId,
+  NOTE_CODES,
+  OBSERVATION_NOTE_MAX,
   readNotes,
   type ObservationReport,
   type ObservationUtterance,
@@ -294,7 +297,12 @@ observationsRouter.patch('/:id', async (req, res) => {
     const d = new Date(req.body.observedAt)
     if (!Number.isNaN(d.getTime())) data.observedAt = d
   }
+  // A device started recording: dated now, and the lesson marked recording
+  // so another device opening it shows the notes-only view (2026-11-24).
+  const startedRecording = req.body?.recording === true && !!o.session && ['setup', 'recording'].includes(o.session.status)
+  if (startedRecording) data.observedAt = new Date()
   const saved = await prisma.observation.update({ where: { id: o.id }, data })
+  if (startedRecording) await prisma.audioSession.update({ where: { id: o.session!.id }, data: { status: 'recording' } })
   // The recording's own lesson header follows: who, what, grade, when.
   if (o.session) {
     await prisma.audioSession.update({
@@ -410,6 +418,52 @@ observationsRouter.delete('/:id/plan', async (req, res) => {
   res.json(forObserver((await mine(o.id, me.id))!))
 })
 
+// One note, saved as it is written, from whichever device: its time is how
+// far into the recording it was written (from when recording started).
+observationsRouter.post('/:id/notes', async (req, res) => {
+  const me = await observer(req, res)
+  if (!me) return
+  const o = await mine(String(req.params.id), me.id)
+  if (!o || o.sentAt) {
+    res.status(o ? 400 : 404).json({ error: o ? 'This observation was already sent.' : 'Observation not found.' })
+    return
+  }
+  const raw = text(req.body?.text, OBSERVATION_NOTE_MAX)
+  if (!raw) {
+    res.status(400).json({ error: 'Write the note first.' })
+    return
+  }
+  const sinceStart = Math.max(0, Math.round((Date.now() - o.observedAt.getTime()) / 1000))
+  const atSec = o.durationSec != null && o.session?.status !== 'recording' ? Math.min(sinceStart, o.durationSec) : sinceStart
+  const code = typeof req.body?.code === 'string' && NOTE_CODES.has(req.body.code) ? req.body.code : null
+  const note = { id: newNoteId(), atSec, text: maskStudentNames([raw]).texts[0], code }
+  // Read and written in one step, so two devices adding at once keep both.
+  const notes = await prisma.$transaction(async (tx) => {
+    const row = await tx.observation.findUnique({ where: { id: o.id }, select: { notes: true } })
+    const next = readNotes([...readNotes(row?.notes), note])
+    await tx.observation.update({ where: { id: o.id }, data: { notes: next } })
+    return next
+  })
+  res.status(201).json({ notes })
+})
+
+observationsRouter.delete('/:id/notes/:noteId', async (req, res) => {
+  const me = await observer(req, res)
+  if (!me) return
+  const o = await mine(String(req.params.id), me.id)
+  if (!o || o.sentAt) {
+    res.status(o ? 400 : 404).json({ error: o ? 'This observation was already sent.' : 'Observation not found.' })
+    return
+  }
+  const notes = await prisma.$transaction(async (tx) => {
+    const row = await tx.observation.findUnique({ where: { id: o.id }, select: { notes: true } })
+    const next = readNotes(row?.notes).filter((n) => n.id !== String(req.params.noteId))
+    await tx.observation.update({ where: { id: o.id }, data: { notes: next } })
+    return next
+  })
+  res.json({ notes })
+})
+
 // The ten answers, the notes taken while observing and the closing note. The
 // report starts as soon as the recording is also ready.
 observationsRouter.post('/:id/answers', async (req, res) => {
@@ -424,7 +478,10 @@ observationsRouter.post('/:id/answers', async (req, res) => {
     res.status(400).json({ error: 'Choose or type the teacher’s name.' })
     return
   }
-  const notes = readNotes(req.body?.notes)
+  // Notes are saved one at a time as they are written (/notes), from any
+  // device; a client that still sends the whole list replaces them.
+  const sentNotes = Array.isArray(req.body?.notes)
+  const notes = sentNotes ? readNotes(req.body.notes) : readNotes(o.notes)
   const closing = text(req.body?.closingNote, OBSERVATION_CLOSING_MAX)
   // Supervisors are asked not to name students; names that slip in are masked
   // the same way the transcript's are.

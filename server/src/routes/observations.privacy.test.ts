@@ -237,3 +237,31 @@ test('lesson plan reviews: only a supervisor, only their school, and the teacher
   assert.equal((await call(`/api/plan-reviews/${id}`, supervisor, { method: 'DELETE' })).status, 200)
   assert.equal((await call(`/api/plan-reviews/received/${id}`, teacher)).status, 404)
 })
+
+test('two devices: recording on one, notes from either, kept when the questions are sent', async () => {
+  const { supervisor, teacher, colleague } = ctx!.ids
+  const o = (await call('/api/observations', supervisor, post({}))).body
+  assert.equal(o.sessionStatus, 'setup', 'not recording anywhere yet')
+  const started = (await call(`/api/observations/${o.id}`, supervisor, { method: 'PATCH', body: JSON.stringify({ recording: true }) })).body
+  assert.equal(started.sessionStatus, 'recording', 'the other device can see it is recording')
+
+  const a = await call(`/api/observations/${o.id}/notes`, supervisor, post({ text: 'Objective on the board', code: '3a' }))
+  assert.equal(a.status, 201)
+  const b = await call(`/api/observations/${o.id}/notes`, supervisor, post({ text: 'Back table off task', code: 'zz' }))
+  assert.equal(b.body.notes.length, 2, 'notes from either device add up')
+  assert.equal(b.body.notes.find((n: { text: string }) => n.text === 'Back table off task').code, null, 'only real components')
+  assert.equal((await call(`/api/observations/${o.id}/notes`, colleague, post({ text: 'x' }))).status, 403)
+  assert.equal((await call(`/api/observations/${o.id}/notes`, supervisor, post({ text: '   ' }))).status, 400)
+
+  const gone = await call(`/api/observations/${o.id}/notes/${a.body.notes[0].id}`, supervisor, { method: 'DELETE' })
+  assert.deepEqual(gone.body.notes.map((n: { text: string }) => n.text), ['Back table off task'])
+
+  // The questions, sent without the notes: the saved notes stay.
+  await call(`/api/observations/${o.id}`, supervisor, { method: 'PATCH', body: JSON.stringify({ teacherId: teacher }) })
+  const answered = await call(`/api/observations/${o.id}/answers`, supervisor, post({ answers: { climate: 'warm' } }))
+  assert.equal(answered.status, 202)
+  assert.deepEqual(answered.body.notes.map((n: { text: string }) => n.text), ['Back table off task'])
+  // The draft check it starts in the background (still recording: it waits)
+  // finishes before the database closes.
+  await new Promise((r) => setTimeout(r, 300))
+})

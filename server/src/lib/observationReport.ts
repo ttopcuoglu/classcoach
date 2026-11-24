@@ -84,10 +84,16 @@ export function readAnswers(raw: unknown): Record<string, string> {
   return out
 }
 
-export type ObservationNote = { atSec: number; text: string; code: string | null }
+/// `id` lets one note be removed while another device adds its own
+/// (2026-11-24); notes saved before it existed get one when next read.
+export type ObservationNote = { id?: string; atSec: number; text: string; code: string | null }
 
 // Notes can be tagged with any component of Domains 2 and 3, asked about or not.
-const CODES = new Set(['2a', '2b', '2c', '2d', '2e', '3a', '3b', '3c', '3d', '3e'])
+export const NOTE_CODES = new Set(['2a', '2b', '2c', '2d', '2e', '3a', '3b', '3c', '3d', '3e'])
+
+export function newNoteId(): string {
+  return Math.random().toString(36).slice(2, 10)
+}
 
 export function readNotes(raw: unknown): ObservationNote[] {
   if (!Array.isArray(raw)) return []
@@ -98,7 +104,13 @@ export function readNotes(raw: unknown): ObservationNote[] {
     if (!text) continue
     const at = Number((n as { atSec?: unknown }).atSec)
     const code = (n as { code?: unknown }).code
-    out.push({ atSec: Number.isFinite(at) && at >= 0 ? Math.round(at) : 0, text, code: typeof code === 'string' && CODES.has(code) ? code : null })
+    const id = (n as { id?: unknown }).id
+    out.push({
+      id: typeof id === 'string' && /^[a-z0-9]{4,16}$/.test(id) ? id : newNoteId(),
+      atSec: Number.isFinite(at) && at >= 0 ? Math.round(at) : 0,
+      text,
+      code: typeof code === 'string' && NOTE_CODES.has(code) ? code : null,
+    })
     if (out.length >= OBSERVATION_NOTES_MAX) break
   }
   return out.sort((a, b) => a.atSec - b.atSec)

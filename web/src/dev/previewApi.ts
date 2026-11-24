@@ -2359,6 +2359,18 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
       previewObservations.unshift(o)
       return previewObservationOut(o)
     }
+    // One note at a time, from either device.
+    const noteRoute = route.match(/^\/api\/observations\/([\w-]+)\/notes(?:\/([\w-]+))?$/)
+    if (noteRoute) {
+      const target = previewObservations.find((x) => x.id === noteRoute[1])
+      if (!target) return null
+      const list = target.notes ?? []
+      if (method === 'POST') {
+        const atSec = Math.max(0, Math.round((Date.now() - new Date(target.observedAt).getTime()) / 1000))
+        target.notes = [...list, { id: Math.random().toString(36).slice(2, 10), atSec, text: String(body.text ?? ''), code: (body.code as string) ?? null }].sort((a, b) => a.atSec - b.atSec)
+      } else if (method === 'DELETE') target.notes = list.filter((x) => x.id !== noteRoute[2])
+      return { notes: target.notes ?? [] }
+    }
     const one = route.match(/^\/api\/observations\/([\w-]+)(?:\/(audio|plan|answers|generate|report|send))?$/)
     const o = one ? previewObservations.find((x) => x.id === one[1]) : undefined
     if (!one || !o) return null
@@ -2378,8 +2390,13 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
       if ('lessonTitle' in body) o.lessonTitle = (body.lessonTitle as string | null) ?? null
       if ('gradeLevel' in body) o.gradeLevel = (body.gradeLevel as string | null) ?? null
       if (typeof body.observedAt === 'string') o.observedAt = body.observedAt
+      if (body.recording === true) {
+        o.observedAt = new Date().toISOString()
+        o.recordingLive = true
+      }
     }
     if (action === 'audio') {
+      o.recordingLive = false
       o.status = 'transcribed'
       o.hasRecording = true
       o.durationSec = 1260
@@ -2722,13 +2739,14 @@ type PreviewObservation = {
   sentAt: string | null
   failureReason: string | null
   answers: Record<string, string> | null
-  notes: { atSec: number; text: string; code: string | null }[] | null
+  notes: { id?: string; atSec: number; text: string; code: string | null }[] | null
   closingNote: string | null
   answeredAt: string | null
   hasRecording: boolean
   plan: { label: string; sections: number } | null
   report: ReturnType<typeof previewObservationReport> | null
   generatingSince: number
+  recordingLive?: boolean
 }
 
 function previewObservationOut(o: PreviewObservation) {
@@ -2737,7 +2755,7 @@ function previewObservationOut(o: PreviewObservation) {
   // Insights and Content Specialist tabs can be looked at; a new one has none.
   const seeded = o.id === 'preview-obs-sent' || o.id === 'preview-obs-draft'
   // A new one's lesson starts in "setup", as in production.
-  return { ...rest, sessionId: seeded ? 'preview-report' : null, sessionStatus: seeded ? 'analyzed' : o.hasRecording ? 'analyzed' : 'setup', hasLesson: seeded }
+  return { ...rest, sessionId: seeded ? 'preview-report' : null, sessionStatus: seeded ? 'analyzed' : o.recordingLive ? 'recording' : o.hasRecording ? 'analyzed' : 'setup', hasLesson: seeded }
 }
 
 function previewObservationReport(o: Pick<PreviewObservation, 'answers' | 'notes' | 'hasRecording'>) {

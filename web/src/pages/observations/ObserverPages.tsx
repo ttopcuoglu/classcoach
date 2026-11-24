@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ObservationReportView, observationHeading } from '../../components/ObservationReportView'
 import { ObservationLessonReport } from '../AudioCoaching'
 import { TeacherBox, type TeacherPick } from '../../components/SchoolTeacherBox'
+import { MicIcon } from '../../components/icons'
 import {
+  addObservationNote,
   attachObservationPlan,
   createObservation,
   deleteObservation,
@@ -14,6 +16,7 @@ import {
   getObservation,
   getObservations,
   regenerateObservation,
+  removeObservationNote,
   removeObservationPlan,
   saveObservationReport,
   sendObservation,
@@ -38,7 +41,8 @@ import { PageHeader } from '../evaluations/common'
 
 export default function ObserverPages() {
   const { id } = useParams()
-  if (id === 'new') return <NewObservation />
+  // The old start page: recording now starts from the Observations page.
+  if (id === 'new') return <Navigate to="/admin/observations" replace />
   return id ? <ObservationFlow id={id} /> : <ObservationsList />
 }
 
@@ -78,6 +82,7 @@ const STATUS_LABEL: Record<ObservationStatus, { label: string; tone: string }> =
 // ---- the list ----
 
 function ObservationsList() {
+  const navigate = useNavigate()
   const [rows, setRows] = useState<ObservationSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -91,19 +96,12 @@ function ObservationsList() {
         crumb="Observations"
         title="Observations"
         blurb="Observe a lesson with Wivoza. You watch the room; Wivoza listens. Together they make one report you review and send."
-        aside={
-          <Link to="/admin/observations/new" className={btnPrimary}>
-            New Observation
-          </Link>
-        }
       />
+      {/* Record straight from here, like Lesson Debrief (2026-11-24). */}
+      <Recorder observation={null} onDone={(o) => navigate(`/admin/observations/${o.id}`)} />
       {error && <p className="text-sm text-terracotta-600">{error}</p>}
       {!rows && !error && <p className="text-sm text-ink-soft">Loading...</p>}
-      {rows && rows.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-hairline p-6 text-sm text-ink-soft">
-          No observations yet. Press New Observation when you walk into a class.
-        </div>
-      )}
+      {rows && rows.length > 0 && <h2 className="mt-2 font-heading text-xl font-bold text-forest">Past observations</h2>}
       {rows && rows.length > 0 && (
         <section className="overflow-hidden rounded-2xl border border-hairline bg-white">
           {rows.map((o) => (
@@ -143,31 +141,12 @@ function ObservationsList() {
   )
 }
 
-// ---- New Observation: straight to the recorder ----
-// Like a teacher recording a lesson (the user's call, 2026-11-24): press New
-// Observation and the Record button is there. Who and what was observed is
-// filled in after Stop, above the ten questions (ObservationDetails).
+// ---- Who was observed ----
+// Recording starts from the Observations page's record card (the user's call,
+// 2026-11-24), like Lesson Debrief. Who and what was observed is filled in
+// after Stop, above the five questions (ObservationDetails).
 
 const GRADES = ['6', '7', '8', '9', '10', '11', '12']
-
-function NewObservation() {
-  const navigate = useNavigate()
-  const [error, setError] = useState<string | null>(null)
-  const started = useRef(false)
-  useEffect(() => {
-    // Once, even when React runs effects twice in development.
-    if (started.current) return
-    started.current = true
-    createObservation({})
-      .then((o) => navigate(`/admin/observations/${o.id}`, { replace: true }))
-      .catch((e: Error) => setError(e.message))
-  }, [navigate])
-  return (
-    <Shell back>
-      {error ? <p className="text-sm text-terracotta-600">{error}</p> : <p className="text-sm text-ink-soft">Starting...</p>}
-    </Shell>
-  )
-}
 
 type ObservationDetailsValue = { teacher: TeacherPick; lesson: string; grade: string }
 
@@ -230,40 +209,21 @@ function ObservationDetails({ value, onChange, observedAt }: { value: Observatio
 
 // ---- one observation, whatever step it is at ----
 
-const notesKey = (id: string) => `wivoza-observation-notes-${id}`
-function loadNotes(id: string): ObservationNote[] {
-  try {
-    return JSON.parse(localStorage.getItem(notesKey(id)) ?? '[]') as ObservationNote[]
-  } catch {
-    return []
-  }
-}
-function storeNotes(id: string, notes: ObservationNote[]) {
-  try {
-    localStorage.setItem(notesKey(id), JSON.stringify(notes))
-  } catch {
-    // A private window: the notes still live in this page.
-  }
-}
-
 function ObservationFlow({ id }: { id: string }) {
   const [o, setO] = useState<Observation | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [notes, setNotesState] = useState<ObservationNote[]>(() => loadNotes(id))
   const [stopped, setStopped] = useState(false)
   const [editing, setEditing] = useState(false)
-  const setNotes = (n: ObservationNote[]) => {
-    setNotesState(n)
-    storeNotes(id, n)
-  }
+  // "Record here instead", when the other device's recording was abandoned.
+  const [recordHere, setRecordHere] = useState(false)
   const reload = useCallback(() => getObservation(id).then(setO).catch((e: Error) => setError(e.message)), [id])
   useEffect(() => {
     void reload()
   }, [reload])
 
-  // Watch while the recording is being transcribed or analyzed, and while
-  // the draft is being written.
-  const busyLesson = !!o && ['transcribing', 'analyzing'].includes(o.sessionStatus ?? '')
+  // Watch while another device records, while the recording is transcribed
+  // or analyzed, and while the draft is being written.
+  const busyLesson = !!o && ['recording', 'transcribing', 'analyzing'].includes(o.sessionStatus ?? '')
   const preparing = !!o && !!o.answeredAt && ['recording', 'transcribing', 'transcribed', 'no_recording', 'pending', 'generating'].includes(o.status)
   useEffect(() => {
     if (!preparing && !busyLesson) return
@@ -294,15 +254,23 @@ function ObservationFlow({ id }: { id: string }) {
     />
   )
   const voiceStep = o.sessionId && o.sessionStatus === 'tagging' ? <VoicePicker sessionId={o.sessionId} onDone={() => void reload()} /> : null
+  const notRecordedYet = o.status === 'recording' && !o.answeredAt && !stopped
 
-  if (o.status === 'recording' && !o.answeredAt && !stopped && (o.sessionStatus == null || ['setup', 'recording'].includes(o.sessionStatus))) {
+  // Recording on another device (the phone, say): this one takes notes.
+  if (notRecordedYet && o.sessionStatus === 'recording' && !recordHere) {
+    return (
+      <Shell back>
+        {header}
+        <RemoteRecording observation={o} onRecordHere={() => setRecordHere(true)} />
+      </Shell>
+    )
+  }
+  if (notRecordedYet && (o.sessionStatus == null || ['setup', 'recording'].includes(o.sessionStatus))) {
     return (
       <Shell back>
         {header}
         <Recorder
           observation={o}
-          notes={notes}
-          onNotes={setNotes}
           onDone={async () => {
             setStopped(true)
             await reload()
@@ -320,8 +288,6 @@ function ObservationFlow({ id }: { id: string }) {
         {voiceStep}
         <Questions
           observation={o}
-          notes={notes}
-          onNotes={setNotes}
           rerun={editing}
           onCancel={editing ? () => setEditing(false) : undefined}
           onChanged={(next) => {
@@ -333,8 +299,6 @@ function ObservationFlow({ id }: { id: string }) {
     )
   }
   const startEditing = () => {
-    // The notes as saved with the observation, which is what the report used.
-    setNotes(o.notes ?? [])
     setEditing(true)
     window.scrollTo({ top: 0 })
   }
@@ -494,20 +458,40 @@ function VoicePicker({ sessionId, onDone }: { sessionId: string; onDone: () => v
 
 const TAG_LABEL = Object.fromEntries(NOTE_TAGS.map((t) => [t.code, t.label]))
 
-/// Notes while observing and after Stop. With `prompts`, starters for what
-/// the five questions don't ask (2b, 3a, 3b, 3e): each begins a note already
-/// tagged with its component.
-function NotesEditor({ notes, onNotes, elapsed, prompts = false }: { notes: ObservationNote[]; onNotes: (n: ObservationNote[]) => void; elapsed: () => number; prompts?: boolean }) {
+/// Notes while observing and after Stop. Each note is saved the moment it is
+/// added, so another device on the same observation shows it too
+/// (2026-11-24). With `prompts`, starters for what the five questions don't
+/// ask (2b, 3a, 3b, 3e): each begins a note already tagged with its component.
+function NotesEditor({
+  notes,
+  onAdd,
+  onRemove,
+  prompts = false,
+}: {
+  notes: ObservationNote[]
+  onAdd: (text: string, code: string | null) => Promise<void>
+  onRemove: (note: ObservationNote) => Promise<void>
+  prompts?: boolean
+}) {
   const [text, setText] = useState('')
   const [code, setCode] = useState('')
+  const [saving, setSaving] = useState(false)
   const field = useRef<HTMLInputElement | null>(null)
   const prompt = NOTE_PROMPTS.find((p) => p.code === code)
-  const add = () => {
+  const add = async () => {
     const t = text.trim()
-    if (!t) return
-    onNotes([...notes, { atSec: Math.round(elapsed()), text: t, code: code || null }].sort((a, b) => a.atSec - b.atSec))
-    setText('')
-    setCode('')
+    if (!t || saving) return
+    setSaving(true)
+    try {
+      await onAdd(t, code || null)
+      setText('')
+      setCode('')
+    } catch {
+      // The note stays in the box; LiveNotes says why.
+    } finally {
+      setSaving(false)
+      field.current?.focus()
+    }
   }
   return (
     <div className="flex flex-col gap-3">
@@ -537,7 +521,7 @@ function NotesEditor({ notes, onNotes, elapsed, prompts = false }: { notes: Obse
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
-              add()
+              void add()
             }
           }}
           placeholder={prompt?.placeholder ?? 'What you see: the room, the walls, groups, student work'}
@@ -552,15 +536,15 @@ function NotesEditor({ notes, onNotes, elapsed, prompts = false }: { notes: Obse
             </option>
           ))}
         </select>
-        <button type="button" className={`${btnSecondary} shrink-0 whitespace-nowrap`} onClick={add} disabled={!text.trim()}>
-          Add note
+        <button type="button" className={`${btnSecondary} shrink-0 whitespace-nowrap`} onClick={() => void add()} disabled={!text.trim() || saving}>
+          {saving ? 'Saving...' : 'Add note'}
         </button>
       </div>
       <p className="text-xs text-ink-soft">Use numbers, not student names (&ldquo;3 of 5 groups&rdquo;). Your notes appear in the report the teacher receives.</p>
       {notes.length > 0 && (
         <ul className="flex flex-col gap-1.5">
           {notes.map((n, i) => (
-            <li key={i} className="flex items-start justify-between gap-3 rounded-lg bg-cream/60 px-3 py-2 text-sm text-ink">
+            <li key={n.id ?? i} className="flex items-start justify-between gap-3 rounded-lg bg-cream/60 px-3 py-2 text-sm text-ink">
               <span>
                 <span className="text-xs text-ink-soft">
                   {clock(n.atSec)}
@@ -568,7 +552,7 @@ function NotesEditor({ notes, onNotes, elapsed, prompts = false }: { notes: Obse
                 </span>
                 {n.text}
               </span>
-              <button type="button" className="shrink-0 text-xs font-semibold text-terracotta-600 hover:underline" onClick={() => onNotes(notes.filter((_, j) => j !== i))}>
+              <button type="button" className="shrink-0 text-xs font-semibold text-terracotta-600 hover:underline" onClick={() => void onRemove(n)}>
                 Remove
               </button>
             </li>
@@ -579,8 +563,97 @@ function NotesEditor({ notes, onNotes, elapsed, prompts = false }: { notes: Obse
   )
 }
 
-function Recorder({ observation, notes, onNotes, onDone }: { observation: Observation; notes: ObservationNote[]; onNotes: (n: ObservationNote[]) => void; onDone: () => Promise<void> }) {
-  const [phase, setPhase] = useState<'idle' | 'recording' | 'uploading' | 'upload_failed'>('idle')
+/// The observation's notes, kept on the server: added and removed there, and
+/// with `live`, refreshed every few seconds so notes typed on another device
+/// appear here too.
+function LiveNotes({ observationId, initial, live = false, prompts = false }: { observationId: string; initial: ObservationNote[]; live?: boolean; prompts?: boolean }) {
+  const [notes, setNotes] = useState<ObservationNote[]>(initial)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!live) return
+    const t = window.setInterval(() => {
+      getObservation(observationId)
+        .then((o) => setNotes(o.notes ?? []))
+        .catch(() => {})
+    }, 5000)
+    return () => window.clearInterval(t)
+  }, [live, observationId])
+  return (
+    <div className="flex flex-col gap-2">
+      <NotesEditor
+        notes={notes}
+        prompts={prompts}
+        onAdd={async (text, code) => {
+          setError(null)
+          try {
+            setNotes((await addObservationNote(observationId, { text, code })).notes)
+          } catch (e) {
+            setError((e as Error).message || 'The note couldn’t be saved.')
+            throw e
+          }
+        }}
+        onRemove={async (n) => {
+          if (!n.id) return
+          setError(null)
+          try {
+            setNotes((await removeObservationNote(observationId, n.id)).notes)
+          } catch (e) {
+            setError((e as Error).message || 'The note couldn’t be removed.')
+          }
+        }}
+      />
+      {error && <p className="text-sm text-terracotta-600">{error}</p>}
+    </div>
+  )
+}
+
+/// Another device is recording this observation (the phone in the room): this
+/// one takes notes, with the recording's clock, and no second Record button.
+function RemoteRecording({ observation, onRecordHere }: { observation: Observation; onRecordHere: () => void }) {
+  const started = new Date(observation.observedAt).getTime()
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(t)
+  }, [])
+  return (
+    <div className="flex flex-col gap-4">
+      <section className="rounded-3xl bg-forest p-7 text-cream sm:p-8">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">Recording on your other device</p>
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-terracotta opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-terracotta" />
+            </span>
+            <span className="font-mono text-5xl font-semibold text-cream">{clock(Math.max(0, (now - started) / 1000))}</span>
+          </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cream/70">
+            Started {new Date(started).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+          </p>
+          <p className="max-w-md text-center text-sm text-cream/80">
+            Take your notes here. Press Stop on the device that is recording; this page moves on to the questions by itself.
+          </p>
+          <button type="button" onClick={onRecordHere} className="mt-1 text-xs font-semibold text-cream/70 underline hover:text-cream">
+            That recording stopped? Record here instead
+          </button>
+        </div>
+      </section>
+      <section className="rounded-2xl border border-hairline bg-white p-6">
+        <p className="mb-3 font-heading text-base font-bold text-forest">Your notes</p>
+        <LiveNotes observationId={observation.id} initial={observation.notes ?? []} live />
+      </section>
+    </div>
+  )
+}
+
+/// The record card, like Lesson Debrief's (2026-11-24): a mic button that
+/// starts recording at once. On the Observations page there is no observation
+/// yet; it is made the moment recording starts (the microphone is asked for
+/// first, while the tap still counts as the user's). Stop sends the audio and
+/// hands over to the after-Stop page.
+function Recorder({ observation, onDone }: { observation: Observation | null; onDone: (o: Observation) => void | Promise<void> }) {
+  const [phase, setPhase] = useState<'idle' | 'starting' | 'recording' | 'uploading' | 'upload_failed'>('idle')
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const recorder = useRef<MediaRecorder | null>(null)
@@ -588,6 +661,9 @@ function Recorder({ observation, notes, onNotes, onDone }: { observation: Observ
   const startedAt = useRef<number | null>(null)
   const blob = useRef<Blob | null>(null)
   const wakeLock = useRef<WakeLockSentinel | null>(null)
+  const obs = useRef<Observation | null>(observation)
+  // The observation once it exists, for its live notes.
+  const [current, setCurrent] = useState<Observation | null>(observation)
   const elapsed = () => (startedAt.current ? (Date.now() - startedAt.current) / 1000 : 0)
 
   useEffect(() => {
@@ -603,42 +679,62 @@ function Recorder({ observation, notes, onNotes, onDone }: { observation: Observ
     }
   }, [phase])
 
+  async function ensureObservation(): Promise<Observation> {
+    if (!obs.current) obs.current = await createObservation({})
+    return obs.current
+  }
+
   async function start() {
     setError(null)
+    setPhase('starting')
+    let stream: MediaStream
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const type = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].find((t) => MediaRecorder.isTypeSupported(t))
-      const r = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream)
-      chunks.current = []
-      r.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.current.push(e.data)
-      }
-      r.start(1000)
-      recorder.current = r
-      startedAt.current = Date.now()
-      setSeconds(0)
-      setPhase('recording')
-      try {
-        wakeLock.current = (await navigator.wakeLock?.request('screen')) ?? null
-      } catch {
-        // The screen may dim; the recording continues.
-      }
-      // The observation is dated by when recording began.
-      void updateObservation(observation.id, { observedAt: new Date().toISOString() }).catch(() => {})
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     } catch {
-      setError('Wivoza couldn’t use the microphone. Allow microphone access, or continue without a recording.')
+      setError('Wivoza couldn’t use the microphone. Allow microphone access in the browser and try again.')
+      setPhase('idle')
+      return
+    }
+    try {
+      const o = await ensureObservation()
+      setCurrent(o)
+      // Dated now, and marked recording, so the same observation opened on
+      // another device (a laptop, for notes) shows notes only (2026-11-24).
+      void updateObservation(o.id, { recording: true }).catch(() => {})
+    } catch (e) {
+      stream.getTracks().forEach((t) => t.stop())
+      setError((e as Error).message || 'Could not start the observation.')
+      setPhase('idle')
+      return
+    }
+    const type = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].find((t) => MediaRecorder.isTypeSupported(t))
+    const r = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream)
+    chunks.current = []
+    r.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.current.push(e.data)
+    }
+    r.start(1000)
+    recorder.current = r
+    startedAt.current = Date.now()
+    setSeconds(0)
+    setPhase('recording')
+    try {
+      wakeLock.current = (await navigator.wakeLock?.request('screen')) ?? null
+    } catch {
+      // The screen may dim; the recording continues.
     }
   }
 
   async function upload() {
-    if (!blob.current) return
+    const o = obs.current
+    if (!blob.current || !o) return
     setPhase('uploading')
     try {
       // Into the recording's lesson, transcribed like a teacher's own; an
       // observation from before lessons existed uploads the old way.
-      if (observation.sessionId) await startTranscription(observation.sessionId, blob.current, seconds)
-      else await uploadObservationAudio(observation.id, blob.current, seconds)
-      await onDone()
+      if (o.sessionId) await startTranscription(o.sessionId, blob.current, seconds)
+      else await uploadObservationAudio(o.id, blob.current, seconds)
+      await onDone(o)
     } catch (e) {
       setError((e as Error).message || 'The recording couldn’t be sent.')
       setPhase('upload_failed')
@@ -658,55 +754,72 @@ function Recorder({ observation, notes, onNotes, onDone }: { observation: Observ
     await upload()
   }
 
+  const status =
+    phase === 'recording' ? 'Recording' : phase === 'uploading' ? 'Sending the recording…' : phase === 'starting' ? 'Starting…' : phase === 'upload_failed' ? 'Not sent' : 'Ready to record'
+
   return (
-    <section className="flex flex-col gap-5 rounded-2xl border border-hairline bg-white p-6">
-      {phase === 'idle' && (
-        <>
-          <p className="text-sm text-ink">
-            Press <b>Record</b> when you&rsquo;re in the room. Take notes on what you see while Wivoza listens. When you press <b>Stop</b>, you&rsquo;ll add
-            who you observed, answer ten quick questions, and Wivoza will prepare the report.
-          </p>
-          <p className="text-xs text-ink-soft">Let the teacher know the lesson is being recorded. The audio is deleted once it is transcribed, and student names are masked.</p>
-          <div className="flex flex-wrap gap-3">
-            <button type="button" className={btnPrimary} onClick={start}>
+    <div className="flex flex-col gap-4">
+      <section className="rounded-3xl bg-forest p-7 text-cream sm:p-8">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">Record an observation</p>
+        <div className="mt-6 flex flex-col items-center gap-4">
+          <div className="flex items-center gap-2.5">
+            {phase === 'recording' && (
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-terracotta opacity-75" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-terracotta" />
+              </span>
+            )}
+            <span className="font-mono text-5xl font-semibold text-cream">{clock(seconds)}</span>
+          </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cream/70">{status}</p>
+          {(phase === 'idle' || phase === 'starting') && (
+            <button
+              type="button"
+              onClick={start}
+              disabled={phase === 'starting'}
+              className="mt-2 inline-flex items-center gap-2.5 rounded-full bg-terracotta px-8 py-4 text-base font-semibold text-cream shadow-lg transition-transform hover:scale-[1.02] disabled:opacity-70"
+            >
+              <MicIcon className="h-5 w-5" />
               Record
             </button>
-            <button type="button" className={btnSecondary} onClick={() => void onDone()}>
-              Continue without recording
+          )}
+          {phase === 'recording' && (
+            <button
+              type="button"
+              onClick={stop}
+              className="mt-2 inline-flex items-center gap-2.5 rounded-full bg-cream px-8 py-4 text-base font-semibold text-forest shadow-lg transition-transform hover:scale-[1.02]"
+            >
+              <span className="h-3.5 w-3.5 rounded-sm bg-terracotta" aria-hidden="true" />
+              Stop
             </button>
-          </div>
-        </>
-      )}
-      {phase === 'recording' && (
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <p className="flex items-center gap-3 font-heading text-2xl font-bold text-forest">
-            <span className="h-3 w-3 animate-pulse rounded-full bg-terracotta" aria-hidden="true" />
-            Recording {clock(seconds)}
-          </p>
-          <button type="button" className={btnPrimary} onClick={stop}>
-            Stop
-          </button>
+          )}
+          {phase === 'upload_failed' && (
+            <div className="mt-2 flex flex-wrap justify-center gap-3">
+              <button type="button" className="rounded-full bg-cream px-6 py-3 text-sm font-semibold text-forest" onClick={upload}>
+                Try sending again
+              </button>
+              <button type="button" className="rounded-full px-4 py-3 text-sm font-semibold text-cream/80 hover:text-cream" onClick={() => obs.current && void onDone(obs.current)}>
+                Continue without the recording
+              </button>
+            </div>
+          )}
+          {error && <p className="max-w-md text-center text-sm text-gold">{error}</p>}
+          {phase === 'idle' && (
+            <p className="max-w-md text-center text-xs text-cream/70">
+              Let the teacher know the lesson is being recorded. After Stop you&rsquo;ll add who you observed and answer five quick questions. Audio is
+              deleted once it&rsquo;s transcribed, and student names are masked.
+            </p>
+          )}
         </div>
-      )}
-      {phase === 'uploading' && <p className="text-sm text-ink-soft">Sending the recording...</p>}
-      {phase === 'upload_failed' && (
-        <div className="flex flex-wrap gap-3">
-          <button type="button" className={btnPrimary} onClick={upload}>
-            Try sending again
-          </button>
-          <button type="button" className={btnSecondary} onClick={() => void onDone()}>
-            Continue without the recording
-          </button>
-        </div>
-      )}
-      {error && <p className="text-sm text-terracotta-600">{error}</p>}
-      {(phase === 'recording' || notes.length > 0) && (
-        <div className="border-t border-hairline pt-5">
+      </section>
+      {phase === 'recording' && current && (
+        <section className="rounded-2xl border border-hairline bg-white p-6">
           <p className="mb-3 font-heading text-base font-bold text-forest">Your notes</p>
-          <NotesEditor notes={notes} onNotes={onNotes} elapsed={elapsed} />
-        </div>
+          <p className="-mt-2 mb-3 text-xs text-ink-soft">You can also open this observation on another device (a laptop, say) and take notes there while this one records.</p>
+          <LiveNotes observationId={current.id} initial={current.notes ?? []} live />
+        </section>
       )}
-    </section>
+    </div>
   )
 }
 
@@ -780,15 +893,11 @@ function PlanBox({ observation, onChanged }: { observation: Observation; onChang
 
 function Questions({
   observation,
-  notes,
-  onNotes,
   onChanged,
   rerun = false,
   onCancel,
 }: {
   observation: Observation
-  notes: ObservationNote[]
-  onNotes: (n: ObservationNote[]) => void
   onChanged: (o: Observation) => void
   /** Back from a draft: the button rewrites the report from what changed. */
   rerun?: boolean
@@ -803,7 +912,6 @@ function Questions({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const answered = Object.keys(answers).length
-  const lastNote = notes.length ? notes[notes.length - 1].atSec : 0
   // Recorded = the audio reached the server, into the lesson (sessionStatus)
   // or, for an observation from before lessons existed, the old way.
   const ls = observation.sessionStatus
@@ -861,7 +969,7 @@ function Questions({
           <h2 className="font-heading text-xl font-bold text-forest">Observer notes</h2>
           <p className="mt-1 text-sm text-ink-soft">Notes you took while recording, and anything else you saw. Tap a topic the questions don&rsquo;t ask about to start a note on it.</p>
         </div>
-        <NotesEditor notes={notes} onNotes={onNotes} elapsed={() => lastNote} prompts />
+        <LiveNotes observationId={observation.id} initial={observation.notes ?? []} live prompts />
       </section>
 
       <section className="flex flex-col gap-3 rounded-2xl border border-hairline bg-white p-6">
@@ -885,7 +993,7 @@ function Questions({
                 lessonTitle: details.lesson.trim() || null,
                 gradeLevel: details.grade || null,
               })
-              onChanged(await submitObservationAnswers(observation.id, { answers, notes, closingNote: closing, recording: recorded }))
+              onChanged(await submitObservationAnswers(observation.id, { answers, closingNote: closing, recording: recorded }))
             } catch (e) {
               setError((e as Error).message)
               setBusy(false)

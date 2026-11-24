@@ -3226,7 +3226,7 @@ export type SupervisorWorkspace = {
 // ---- Observations (routes/observations.ts) ----
 
 export type ObservationStatus = 'recording' | 'transcribing' | 'transcribed' | 'no_recording' | 'pending' | 'generating' | 'draft' | 'failed' | 'sent'
-export type ObservationNote = { atSec: number; text: string; code: string | null }
+export type ObservationNote = { id?: string; atSec: number; text: string; code: string | null }
 export type ObservationEvidenceMoment = { kind: string; timestampSec: number; text: string }
 export type ObservationComponent = {
   code: string
@@ -3296,7 +3296,7 @@ export function createObservation(data: { teacherId?: string | null; teacherName
 }
 export function updateObservation(
   id: string,
-  data: { teacherId?: string | null; teacherName?: string; lessonTitle?: string | null; subject?: string | null; gradeLevel?: string | null; observedAt?: string },
+  data: { teacherId?: string | null; teacherName?: string; lessonTitle?: string | null; subject?: string | null; gradeLevel?: string | null; observedAt?: string; recording?: boolean },
 ): Promise<Observation> {
   return request(`/api/observations/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 }
@@ -3327,9 +3327,16 @@ export function removeObservationPlan(id: string): Promise<Observation> {
 }
 export function submitObservationAnswers(
   id: string,
-  data: { answers: Record<string, string>; notes: ObservationNote[]; closingNote: string; recording?: boolean },
+  data: { answers: Record<string, string>; notes?: ObservationNote[]; closingNote: string; recording?: boolean },
 ): Promise<Observation> {
   return request(`/api/observations/${id}/answers`, { method: 'POST', body: JSON.stringify(data) })
+}
+/** One note, saved at once so every device shows it; its time is counted from when recording started. */
+export function addObservationNote(id: string, note: { text: string; code: string | null }): Promise<{ notes: ObservationNote[] }> {
+  return request(`/api/observations/${id}/notes`, { method: 'POST', body: JSON.stringify(note) })
+}
+export function removeObservationNote(id: string, noteId: string): Promise<{ notes: ObservationNote[] }> {
+  return request(`/api/observations/${id}/notes/${noteId}`, { method: 'DELETE' })
 }
 export function regenerateObservation(id: string): Promise<Observation> {
   return request(`/api/observations/${id}/generate`, { method: 'POST' })
