@@ -176,11 +176,10 @@ observationsRouter.post('/', async (req, res) => {
       return
     }
   }
-  const teacherName = teacher ? (teacher.name ?? teacher.email) : text(req.body?.teacherName, 120)
-  if (!teacherName) {
-    res.status(400).json({ error: 'Choose or type the teacher’s name.' })
-    return
-  }
+  // Since 2026-11-24 a supervisor can press New Observation and record at
+  // once, like a teacher recording a lesson: who was observed is filled in
+  // after Stop, and required only before the report is prepared (/answers).
+  const teacherName = teacher ? (teacher.name ?? teacher.email) : (text(req.body?.teacherName, 120) ?? '')
   const created = await prisma.observation.create({
     data: {
       observerId: me.id,
@@ -226,6 +225,9 @@ observationsRouter.patch('/:id', async (req, res) => {
       }
       data.teacherId = t.id
       data.teacherName = t.name ?? t.email
+      // Subject and grade from the teacher's profile, where not given.
+      if (!o.subject && !('subject' in req.body)) data.subject = firstOf(t.subjects)
+      if (!o.gradeLevel && !('gradeLevel' in req.body)) data.gradeLevel = firstOf(t.gradeLevels)
     } else {
       data.teacherId = null
       const typed = text(req.body.teacherName, 120)
@@ -353,6 +355,10 @@ observationsRouter.post('/:id/answers', async (req, res) => {
   const o = await mine(String(req.params.id), me.id)
   if (!o || o.sentAt) {
     res.status(o ? 400 : 404).json({ error: o ? 'This observation was already sent.' : 'Observation not found.' })
+    return
+  }
+  if (!o.teacherName.trim()) {
+    res.status(400).json({ error: 'Choose or type the teacher’s name.' })
     return
   }
   const notes = readNotes(req.body?.notes)

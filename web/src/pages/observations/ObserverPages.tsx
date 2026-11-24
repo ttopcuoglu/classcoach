@@ -106,7 +106,7 @@ function ObservationsList() {
               className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline/70 px-5 py-4 last:border-0 hover:bg-cream/40"
             >
               <div className="min-w-0">
-                <p className="font-semibold text-ink">{o.teacherName}</p>
+                <p className="font-semibold text-ink">{o.teacherName || "Untitled observation"}</p>
                 <p className="text-sm text-ink-soft">{observationHeading({ ...o, teacherName: '' }).replace(/^ · /, '')}</p>
               </div>
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_LABEL[o.status].tone}`}>{STATUS_LABEL[o.status].label}</span>
@@ -208,93 +208,88 @@ function TeacherBox({ value, onChange }: { value: TeacherPick; onChange: (t: Tea
   )
 }
 
-// ---- start screen ----
+// ---- New Observation: straight to the recorder ----
+// Like a teacher recording a lesson (the user's call, 2026-11-24): press New
+// Observation and the Record button is there. Who and what was observed is
+// filled in after Stop, above the ten questions (ObservationDetails).
 
 const GRADES = ['6', '7', '8', '9', '10', '11', '12']
 
 function NewObservation() {
   const navigate = useNavigate()
-  const [teacher, setTeacher] = useState<TeacherPick>({ id: null, name: '' })
-  // Only the teacher is required (the user's call, 2026-11-24). Subject and
-  // lesson are one free-text field; grade is a 6–12 dropdown.
-  const [lesson, setLesson] = useState('')
-  const [grade, setGrade] = useState('')
-  const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const now = new Date()
-  const optional = <span className="font-normal text-ink-soft"> (optional)</span>
-
+  const started = useRef(false)
+  useEffect(() => {
+    // Once, even when React runs effects twice in development.
+    if (started.current) return
+    started.current = true
+    createObservation({})
+      .then((o) => navigate(`/admin/observations/${o.id}`, { replace: true }))
+      .catch((e: Error) => setError(e.message))
+  }, [navigate])
   return (
     <Shell back>
-      <PageHeader crumb="Observations" title="New Observation" blurb="Who and what you are observing. The date and time are set when you press Record." />
-      <section className="flex flex-col gap-5 rounded-2xl border border-hairline bg-white p-6">
-        <label className="flex flex-col gap-1.5 text-sm font-semibold text-forest">
-          Teacher
-          <TeacherBox
-            value={teacher}
-            onChange={(t) => {
-              setTeacher(t)
-              if (t.id) {
-                // Filled from the teacher's profile only where still empty.
-                if (!lesson.trim() && t.subject) setLesson(t.subject)
-                const g = (t.gradeLevel ?? '').replace(/(st|nd|rd|th)$/i, '')
-                if (!grade && GRADES.includes(g)) setGrade(g)
-              }
-            }}
-          />
-        </label>
-        <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
-          <label className="flex flex-col gap-1.5 text-sm font-semibold text-forest">
-            <span>Subject/Lesson{optional}</span>
-            <input value={lesson} onChange={(e) => setLesson(e.target.value)} placeholder="For example: Science, chemical reactions" className={input} />
-          </label>
-          <label className="flex flex-col gap-1.5 text-sm font-semibold text-forest">
-            <span>Grade{optional}</span>
-            <select value={grade} onChange={(e) => setGrade(e.target.value)} className={input}>
-              <option value="">Choose a grade</option>
-              {GRADES.map((g) => (
-                <option key={g} value={g}>
-                  Grade {g}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="text-sm">
-          <p className="font-semibold text-forest">Date</p>
-          <p className="mt-1 text-ink">
-            {now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-            <span className="text-ink-soft"> · set automatically</span>
-          </p>
-        </div>
-        {error && <p className="text-sm text-terracotta-600">{error}</p>}
-        <div>
-          <button
-            type="button"
-            disabled={busy || !teacher.name.trim()}
-            className={btnPrimary}
-            onClick={async () => {
-              setBusy(true)
-              setError(null)
-              try {
-                const o = await createObservation({
-                  teacherId: teacher.id,
-                  teacherName: teacher.name.trim(),
-                  lessonTitle: lesson.trim() || undefined,
-                  gradeLevel: grade || undefined,
-                })
-                navigate(`/admin/observations/${o.id}`)
-              } catch (e) {
-                setError((e as Error).message)
-                setBusy(false)
-              }
-            }}
-          >
-            {busy ? 'Starting...' : 'Continue to recording'}
-          </button>
-        </div>
-      </section>
+      {error ? <p className="text-sm text-terracotta-600">{error}</p> : <p className="text-sm text-ink-soft">Starting...</p>}
     </Shell>
+  )
+}
+
+type ObservationDetailsValue = { teacher: TeacherPick; lesson: string; grade: string }
+
+function detailsFrom(o: Observation): ObservationDetailsValue {
+  const g = (o.gradeLevel ?? '').replace(/(st|nd|rd|th)$/i, '')
+  return { teacher: { id: o.teacherId, name: o.teacherName }, lesson: o.lessonTitle ?? '', grade: GRADES.includes(g) ? g : '' }
+}
+
+/// Who and what was observed. Only the teacher is required; subject and lesson
+/// are one free-text field, grade a 6–12 dropdown, and the date is when
+/// recording began.
+function ObservationDetails({ value, onChange, observedAt }: { value: ObservationDetailsValue; onChange: (v: ObservationDetailsValue) => void; observedAt: string }) {
+  const optional = <span className="font-normal text-ink-soft"> (optional)</span>
+  return (
+    <section className="flex flex-col gap-5 rounded-2xl border border-hairline bg-white p-6">
+      <h2 className="font-heading text-xl font-bold text-forest">Who you observed</h2>
+      <label className="flex flex-col gap-1.5 text-sm font-semibold text-forest">
+        Teacher
+        <TeacherBox
+          value={value.teacher}
+          onChange={(t) => {
+            const next = { ...value, teacher: t }
+            if (t.id) {
+              // Filled from the teacher's profile only where still empty.
+              if (!value.lesson.trim() && t.subject) next.lesson = t.subject
+              const g = (t.gradeLevel ?? '').replace(/(st|nd|rd|th)$/i, '')
+              if (!value.grade && GRADES.includes(g)) next.grade = g
+            }
+            onChange(next)
+          }}
+        />
+      </label>
+      <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold text-forest">
+          <span>Subject/Lesson{optional}</span>
+          <input value={value.lesson} onChange={(e) => onChange({ ...value, lesson: e.target.value })} placeholder="For example: Science, chemical reactions" className={input} />
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm font-semibold text-forest">
+          <span>Grade{optional}</span>
+          <select value={value.grade} onChange={(e) => onChange({ ...value, grade: e.target.value })} className={input}>
+            <option value="">Choose a grade</option>
+            {GRADES.map((g) => (
+              <option key={g} value={g}>
+                Grade {g}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="text-sm">
+        <p className="font-semibold text-forest">Date</p>
+        <p className="mt-1 text-ink">
+          {new Date(observedAt).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+          <span className="text-ink-soft"> · set automatically</span>
+        </p>
+      </div>
+    </section>
   )
 }
 
@@ -352,7 +347,13 @@ function ObservationFlow({ id }: { id: string }) {
     )
   }
 
-  const header = <PageHeader crumb="Observations" title={o.teacherName} blurb={observationHeading({ ...o, teacherName: '' }).replace(/^ · /, '') || 'Observation'} />
+  const header = (
+    <PageHeader
+      crumb="Observations"
+      title={o.teacherName || 'New Observation'}
+      blurb={o.teacherName ? observationHeading({ ...o, teacherName: '' }) : 'Record first. You’ll add who you observed after Stop.'}
+    />
+  )
 
   if (o.status === 'recording' && !o.answeredAt && !stopped) {
     return (
@@ -573,8 +574,8 @@ function Recorder({ observation, notes, onNotes, onDone }: { observation: Observ
       {phase === 'idle' && (
         <>
           <p className="text-sm text-ink">
-            Press <b>Record</b> when you&rsquo;re in the room. Take notes on what you see while Wivoza listens. When you press <b>Stop</b>, you&rsquo;ll answer ten
-            quick questions and Wivoza will prepare the report.
+            Press <b>Record</b> when you&rsquo;re in the room. Take notes on what you see while Wivoza listens. When you press <b>Stop</b>, you&rsquo;ll add
+            who you observed, answer ten quick questions, and Wivoza will prepare the report.
           </p>
           <p className="text-xs text-ink-soft">Let the teacher know the lesson is being recorded. The audio is deleted once it is transcribed, and student names are masked.</p>
           <div className="flex flex-wrap gap-3">
@@ -699,8 +700,10 @@ function Questions({
   onNotes: (n: ObservationNote[]) => void
   onChanged: (o: Observation) => void
 }) {
+  const [details, setDetails] = useState<ObservationDetailsValue>(() => detailsFrom(observation))
   const [answers, setAnswers] = useState<Record<string, string>>(observation.answers ?? {})
   const [closing, setClosing] = useState(observation.closingNote ?? '')
+  const named = details.teacher.name.trim().length > 0
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const answered = Object.keys(answers).length
@@ -717,6 +720,7 @@ function Questions({
   return (
     <div className="flex flex-col gap-6">
       <p className="rounded-xl bg-mint-tint/40 px-4 py-3 text-sm text-forest">{recordingLine}</p>
+      <ObservationDetails value={details} onChange={setDetails} observedAt={observation.observedAt} />
       <section className="flex flex-col gap-5 rounded-2xl border border-hairline bg-white p-6">
         <div>
           <h2 className="font-heading text-xl font-bold text-forest">What you saw</h2>
@@ -764,15 +768,20 @@ function Questions({
       </section>
 
       {error && <p className="text-sm text-terracotta-600">{error}</p>}
-      <div>
+      <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || !named}
           className={btnPrimary}
           onClick={async () => {
             setBusy(true)
             setError(null)
             try {
+              await updateObservation(observation.id, {
+                ...(details.teacher.id ? { teacherId: details.teacher.id } : { teacherId: null, teacherName: details.teacher.name.trim() }),
+                lessonTitle: details.lesson.trim() || null,
+                gradeLevel: details.grade || null,
+              })
               onChanged(await submitObservationAnswers(observation.id, { answers, notes, closingNote: closing, recording: observation.status !== 'recording' }))
             } catch (e) {
               setError((e as Error).message)
@@ -782,6 +791,7 @@ function Questions({
         >
           {busy ? 'Sending...' : 'Prepare the report'}
         </button>
+        {!named && <span className="text-sm text-ink-soft">Add the teacher&rsquo;s name above first.</span>}
       </div>
     </div>
   )

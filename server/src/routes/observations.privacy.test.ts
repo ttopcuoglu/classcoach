@@ -103,6 +103,15 @@ test('who can observe, who they can pick, and who reads what', async () => {
   const typed = (await call('/api/observations', supervisor, post({ teacherName: 'Substitute in Room 12', lessonTitle: 'Fractions' }))).body
   assert.equal(typed.teacherId, null)
 
+  // Record first, say who later: no details needed to start, but the report
+  // can't be prepared until the teacher is named.
+  const blank = (await call('/api/observations', supervisor, post({}))).body
+  assert.equal(blank.teacherName, '')
+  assert.equal((await call(`/api/observations/${blank.id}/answers`, supervisor, post({ answers: {}, notes: [], recording: false }))).status, 400)
+  const linked = (await call(`/api/observations/${blank.id}`, supervisor, { method: 'PATCH', body: JSON.stringify({ teacherId: teacher }) })).body
+  assert.equal(linked.teacherName, 'Ms. Rivera')
+  assert.equal(linked.gradeLevel, '8th', 'grade from the teacher’s profile when linked later')
+
   const created = await call('/api/observations', supervisor, post({ teacherId: teacher, lessonTitle: 'Conductivity' }))
   assert.equal(created.status, 201)
   const id = created.body.id as string

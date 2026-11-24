@@ -2306,7 +2306,12 @@ function answer(path: string, method: string, body: Json): Json | Json[] | null 
       if (body.teacherId) {
         o.teacherId = String(body.teacherId)
         o.teacherName = { u4: 'Maya Chen', u8: 'Jordan Ellis', u9: 'Michael Tork' }[o.teacherId as 'u4'] ?? o.teacherName
+      } else if ('teacherId' in body) {
+        o.teacherId = null
+        if (typeof body.teacherName === 'string' && body.teacherName.trim()) o.teacherName = body.teacherName.trim()
       }
+      if ('lessonTitle' in body) o.lessonTitle = (body.lessonTitle as string | null) ?? null
+      if ('gradeLevel' in body) o.gradeLevel = (body.gradeLevel as string | null) ?? null
       if (typeof body.observedAt === 'string') o.observedAt = body.observedAt
     }
     if (action === 'audio') {
