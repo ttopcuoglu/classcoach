@@ -2755,7 +2755,7 @@ function previewObservationOut(o: PreviewObservation) {
   // Insights and Content Specialist tabs can be looked at; a new one has none.
   const seeded = o.id === 'preview-obs-sent' || o.id === 'preview-obs-draft'
   // A new one's lesson starts in "setup", as in production.
-  return { ...rest, sessionId: seeded ? 'preview-report' : null, sessionStatus: seeded ? 'analyzed' : o.recordingLive ? 'recording' : o.hasRecording ? 'analyzed' : 'setup', hasLesson: seeded }
+  return { ...rest, sessionId: seeded ? 'preview-report' : null, sessionStatus: seeded ? 'analyzed' : o.recordingLive ? 'recording' : o.hasRecording ? 'analyzed' : 'setup', hasLesson: seeded, recordingNow: !!o.recordingLive }
 }
 
 function previewObservationReport(o: Pick<PreviewObservation, 'answers' | 'notes' | 'hasRecording'>) {

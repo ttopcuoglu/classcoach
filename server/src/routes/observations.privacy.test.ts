@@ -245,6 +245,15 @@ test('two devices: recording on one, notes from either, kept when the questions 
   const started = (await call(`/api/observations/${o.id}`, supervisor, { method: 'PATCH', body: JSON.stringify({ recording: true }) })).body
   assert.equal(started.sessionStatus, 'recording', 'the other device can see it is recording')
 
+  // Record is locked everywhere else: no second observation, no second start.
+  const list = (await call('/api/observations', supervisor)).body as { id: string; recordingNow: boolean }[]
+  assert.equal(list.find((x) => x.id === o.id)?.recordingNow, true)
+  const second = await call('/api/observations', supervisor, post({}))
+  assert.equal(second.status, 409, 'not while another device is recording')
+  assert.equal(second.body.recordingId, o.id, 'and it says which one')
+  assert.equal((await call(`/api/observations/${o.id}`, supervisor, { method: 'PATCH', body: JSON.stringify({ recording: true }) })).status, 409)
+  assert.equal((await call(`/api/observations/${o.id}`, supervisor, { method: 'PATCH', body: JSON.stringify({ recording: true, takeOver: true }) })).status, 200, '"Record here instead" takes it over')
+
   const a = await call(`/api/observations/${o.id}/notes`, supervisor, post({ text: 'Objective on the board', code: '3a' }))
   assert.equal(a.status, 201)
   const b = await call(`/api/observations/${o.id}/notes`, supervisor, post({ text: 'Back table off task', code: 'zz' }))

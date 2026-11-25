@@ -190,10 +190,34 @@ observationsRouter.get('/teachers', async (req, res) => {
   )
 })
 
+/// How long a recording counts as still going: past this, one left behind
+/// (a phone closed mid-lesson) no longer locks Record on other devices.
+const RECORDING_LOCK_MS = 4 * 60 * 60 * 1000
+
+/// My observation being recorded right now on some device, if any.
+async function recordingNow(observerId: string, exceptId?: string) {
+  return prisma.observation.findFirst({
+    where: {
+      observerId,
+      ...(exceptId ? { id: { not: exceptId } } : {}),
+      sentAt: null,
+      answeredAt: null,
+      observedAt: { gt: new Date(Date.now() - RECORDING_LOCK_MS) },
+      session: { status: 'recording' },
+    },
+    select: { id: true, observedAt: true },
+  })
+}
+
 observationsRouter.get('/', async (req, res) => {
   const me = await observer(req, res)
   if (!me) return
-  res.json(await prisma.observation.findMany({ where: { observerId: me.id }, select: LIST_SELECT, orderBy: { observedAt: 'desc' } }))
+  const [rows, live] = await Promise.all([
+    prisma.observation.findMany({ where: { observerId: me.id }, select: LIST_SELECT, orderBy: { observedAt: 'desc' } }),
+    recordingNow(me.id),
+  ])
+  // Which one is being recorded now, so Record is locked on every other device.
+  res.json(rows.map((r) => ({ ...r, recordingNow: r.id === live?.id })))
 })
 
 const text = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null)
@@ -201,6 +225,13 @@ const text = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v
 observationsRouter.post('/', async (req, res) => {
   const me = await observer(req, res)
   if (!me) return
+  // One recording at a time: a second device can't start another while one is
+  // going (the user's call, 2026-11-24), unless it says that one stopped.
+  const live = req.body?.force === true ? null : await recordingNow(me.id)
+  if (live) {
+    res.status(409).json({ error: 'You are already recording an observation on another device.', recordingId: live.id })
+    return
+  }
   const teacherId = typeof req.body?.teacherId === 'string' && req.body.teacherId ? req.body.teacherId : null
   let teacher: Awaited<ReturnType<typeof schoolTeacher>> = null
   if (teacherId) {
@@ -299,6 +330,19 @@ observationsRouter.patch('/:id', async (req, res) => {
   }
   // A device started recording: dated now, and the lesson marked recording
   // so another device opening it shows the notes-only view (2026-11-24).
+  // Already recording on another device: refused unless this one is taking
+  // over a recording that stopped there ("Record here instead").
+  if (req.body?.recording === true && o.session?.status === 'recording' && req.body?.takeOver !== true) {
+    res.status(409).json({ error: 'This observation is already being recorded on another device.', recordingId: o.id })
+    return
+  }
+  if (req.body?.recording === true && req.body?.takeOver !== true) {
+    const other = await recordingNow(me.id, o.id)
+    if (other) {
+      res.status(409).json({ error: 'You are already recording an observation on another device.', recordingId: other.id })
+      return
+    }
+  }
   const startedRecording = req.body?.recording === true && !!o.session && ['setup', 'recording'].includes(o.session.status)
   if (startedRecording) data.observedAt = new Date()
   const saved = await prisma.observation.update({ where: { id: o.id }, data })

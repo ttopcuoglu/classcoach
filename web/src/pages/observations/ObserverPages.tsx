@@ -85,11 +85,20 @@ function ObservationsList() {
   const navigate = useNavigate()
   const [rows, setRows] = useState<ObservationSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // The observation this page itself is recording, which never locks it.
+  const [ownId, setOwnId] = useState<string | null>(null)
+  // Checked every few seconds, so Record locks (and unlocks) as soon as
+  // another device starts (or stops) recording.
   useEffect(() => {
-    getObservations()
-      .then(setRows)
-      .catch((e: Error) => setError(e.message))
+    const load = () =>
+      getObservations()
+        .then(setRows)
+        .catch((e: Error) => setError(e.message))
+    void load()
+    const t = window.setInterval(() => void load(), 5000)
+    return () => window.clearInterval(t)
   }, [])
+  const live = rows?.find((r) => r.recordingNow && r.id !== ownId) ?? null
   return (
     <Shell>
       <PageHeader
@@ -98,7 +107,12 @@ function ObservationsList() {
         blurb="Observe a lesson with Wivoza. You watch the room; Wivoza listens. Together they make one report you review and send."
       />
       {/* Record straight from here, like Lesson Debrief (2026-11-24). */}
-      <Recorder observation={null} onDone={(o) => navigate(`/admin/observations/${o.id}`)} />
+      <Recorder
+        observation={null}
+        lockedBy={live ? { id: live.id, observedAt: live.observedAt } : null}
+        onStarted={(o) => setOwnId(o.id)}
+        onDone={(o) => navigate(`/admin/observations/${o.id}`)}
+      />
       {error && <p className="text-sm text-terracotta-600">{error}</p>}
       {!rows && !error && <p className="text-sm text-ink-soft">Loading...</p>}
       {rows && rows.length > 0 && <h2 className="mt-2 font-heading text-xl font-bold text-forest">Past observations</h2>}
@@ -111,7 +125,7 @@ function ObservationsList() {
                   <p className="font-semibold text-ink">{o.teacherName || 'Untitled observation'}</p>
                   <p className="text-sm text-ink-soft">{observationHeading({ ...o, teacherName: '' })}</p>
                 </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_LABEL[o.status].tone}`}>{STATUS_LABEL[o.status].label}</span>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${o.recordingNow ? 'bg-terracotta/15 text-terracotta-600' : STATUS_LABEL[o.status].tone}`}>{o.recordingNow ? 'Recording now' : STATUS_LABEL[o.status].label}</span>
               </Link>
               <button
                 type="button"
@@ -215,7 +229,8 @@ function ObservationFlow({ id }: { id: string }) {
   const [stopped, setStopped] = useState(false)
   const [editing, setEditing] = useState(false)
   // "Record here instead", when the other device's recording was abandoned.
-  const [recordHere, setRecordHere] = useState(false)
+  // (Also from the Observations page's locked card: ?recordHere=1.)
+  const [recordHere, setRecordHere] = useState(() => new URLSearchParams(window.location.search).has('recordHere'))
   const reload = useCallback(() => getObservation(id).then(setO).catch((e: Error) => setError(e.message)), [id])
   useEffect(() => {
     void reload()
@@ -271,6 +286,7 @@ function ObservationFlow({ id }: { id: string }) {
         {header}
         <Recorder
           observation={o}
+          takeOver={recordHere}
           onDone={async () => {
             setStopped(true)
             await reload()
@@ -652,7 +668,21 @@ function RemoteRecording({ observation, onRecordHere }: { observation: Observati
 /// yet; it is made the moment recording starts (the microphone is asked for
 /// first, while the tap still counts as the user's). Stop sends the audio and
 /// hands over to the after-Stop page.
-function Recorder({ observation, onDone }: { observation: Observation | null; onDone: (o: Observation) => void | Promise<void> }) {
+function Recorder({
+  observation,
+  onDone,
+  lockedBy = null,
+  takeOver = false,
+  onStarted,
+}: {
+  observation: Observation | null
+  onDone: (o: Observation) => void | Promise<void>
+  /** Another device is recording this observation: Record is locked here (2026-11-24). */
+  lockedBy?: { id: string; observedAt: string } | null
+  /** "Record here instead": take over a recording that stopped on the other device. */
+  takeOver?: boolean
+  onStarted?: (o: Observation) => void
+}) {
   const [phase, setPhase] = useState<'idle' | 'starting' | 'recording' | 'uploading' | 'upload_failed'>('idle')
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -697,10 +727,12 @@ function Recorder({ observation, onDone }: { observation: Observation | null; on
     }
     try {
       const o = await ensureObservation()
-      setCurrent(o)
       // Dated now, and marked recording, so the same observation opened on
-      // another device (a laptop, for notes) shows notes only (2026-11-24).
-      void updateObservation(o.id, { recording: true }).catch(() => {})
+      // another device (a laptop, for notes) shows notes only, and Record is
+      // locked there. Refused if another device is already recording.
+      await updateObservation(o.id, { recording: true, takeOver })
+      setCurrent(o)
+      onStarted?.(o)
     } catch (e) {
       stream.getTracks().forEach((t) => t.stop())
       setError((e as Error).message || 'Could not start the observation.')
@@ -755,7 +787,7 @@ function Recorder({ observation, onDone }: { observation: Observation | null; on
   }
 
   const status =
-    phase === 'recording' ? 'Recording' : phase === 'uploading' ? 'Sending the recording…' : phase === 'starting' ? 'Starting…' : phase === 'upload_failed' ? 'Not sent' : 'Ready to record'
+    phase === 'recording' ? 'Recording' : phase === 'uploading' ? 'Sending the recording…' : phase === 'starting' ? 'Starting…' : phase === 'upload_failed' ? 'Not sent' : lockedBy ? 'Locked' : 'Ready to record'
 
   return (
     <div className="flex flex-col gap-4">
@@ -772,16 +804,42 @@ function Recorder({ observation, onDone }: { observation: Observation | null; on
             <span className="font-mono text-5xl font-semibold text-cream">{clock(seconds)}</span>
           </div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cream/70">{status}</p>
-          {(phase === 'idle' || phase === 'starting') && (
-            <button
-              type="button"
-              onClick={start}
-              disabled={phase === 'starting'}
-              className="mt-2 inline-flex items-center gap-2.5 rounded-full bg-terracotta px-8 py-4 text-base font-semibold text-cream shadow-lg transition-transform hover:scale-[1.02] disabled:opacity-70"
-            >
-              <MicIcon className="h-5 w-5" />
-              Record
-            </button>
+          {phase === 'idle' && lockedBy ? (
+            // Another device is recording: no second recording from here.
+            <div className="mt-2 flex flex-col items-center gap-3">
+              <button
+                type="button"
+                disabled
+                aria-disabled="true"
+                className="inline-flex cursor-not-allowed items-center gap-2.5 rounded-full bg-cream/15 px-8 py-4 text-base font-semibold text-cream/60"
+              >
+                <span aria-hidden="true">🔒</span>
+                Record
+              </button>
+              <p className="max-w-md text-center text-sm text-cream/85">
+                Recording on your other device since{' '}
+                {new Date(lockedBy.observedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. Record is locked here so the lesson isn&rsquo;t
+                recorded twice.
+              </p>
+              <Link to={`/admin/observations/${lockedBy.id}`} className="rounded-full bg-cream px-6 py-3 text-sm font-semibold text-forest">
+                Take notes on it
+              </Link>
+              <Link to={`/admin/observations/${lockedBy.id}?recordHere=1`} className="text-xs font-semibold text-cream/70 underline hover:text-cream">
+                That recording stopped? Record here instead
+              </Link>
+            </div>
+          ) : (
+            (phase === 'idle' || phase === 'starting') && (
+              <button
+                type="button"
+                onClick={start}
+                disabled={phase === 'starting'}
+                className="mt-2 inline-flex items-center gap-2.5 rounded-full bg-terracotta px-8 py-4 text-base font-semibold text-cream shadow-lg transition-transform hover:scale-[1.02] disabled:opacity-70"
+              >
+                <MicIcon className="h-5 w-5" />
+                Record
+              </button>
+            )
           )}
           {phase === 'recording' && (
             <button
@@ -804,7 +862,7 @@ function Recorder({ observation, onDone }: { observation: Observation | null; on
             </div>
           )}
           {error && <p className="max-w-md text-center text-sm text-gold">{error}</p>}
-          {phase === 'idle' && (
+          {phase === 'idle' && !lockedBy && (
             <p className="max-w-md text-center text-xs text-cream/70">
               Let the teacher know the lesson is being recorded. After Stop you&rsquo;ll add who you observed and answer five quick questions. Audio is
               deleted once it&rsquo;s transcribed, and student names are masked.

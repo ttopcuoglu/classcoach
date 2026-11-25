@@ -3263,6 +3263,8 @@ export type ObservationSummary = {
   durationSec: number | null
   status: ObservationStatus
   sentAt: string | null
+  /** Being recorded on some device right now (the list only): Record is locked elsewhere. */
+  recordingNow?: boolean
 }
 export type Observation = ObservationSummary & {
   failureReason: string | null
@@ -3291,12 +3293,12 @@ export function getObservation(id: string): Promise<Observation> {
 export function findObservableTeachers(q: string): Promise<ObservableTeacher[]> {
   return request(`/api/observations/teachers${q ? `?q=${encodeURIComponent(q)}` : ''}`)
 }
-export function createObservation(data: { teacherId?: string | null; teacherName?: string; lessonTitle?: string; subject?: string; gradeLevel?: string }): Promise<Observation> {
+export function createObservation(data: { teacherId?: string | null; teacherName?: string; lessonTitle?: string; subject?: string; gradeLevel?: string; force?: boolean }): Promise<Observation> {
   return request('/api/observations', { method: 'POST', body: JSON.stringify(data) })
 }
 export function updateObservation(
   id: string,
-  data: { teacherId?: string | null; teacherName?: string; lessonTitle?: string | null; subject?: string | null; gradeLevel?: string | null; observedAt?: string; recording?: boolean },
+  data: { teacherId?: string | null; teacherName?: string; lessonTitle?: string | null; subject?: string | null; gradeLevel?: string | null; observedAt?: string; recording?: boolean; takeOver?: boolean },
 ): Promise<Observation> {
   return request(`/api/observations/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 }
